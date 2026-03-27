@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.shre.verifone</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/aibot/.local/bin/shre-verifone.sh</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/aibot</string>
+    <key>PATH</key>
+    <string>/Users/aibot/.nvm/versions/node/v24.14.0/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <key>PORT</key>
+    <string>5464</string>
+    <key>NODE_EXTRA_CA_CERTS</key>
+    <string>/Users/aibot/Library/Application Support/mkcert/rootCA.pem</string>
+  </dict>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/aibot/Library/Logs/shre-services/verifone.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/aibot/Library/Logs/shre-services/verifone-error.log</string>
+</dict>
+</plist>

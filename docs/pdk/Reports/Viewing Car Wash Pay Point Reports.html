@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+    <title>Verifone Services - Reports</title>
+    <Head>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    </Head>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+    </style>
+    <body onload="updateURLs()">
+
+        <h1>Viewing Car Wash Pay Point Reports</h1>
+        IP: <input type="text" id="VerifoneIp" value="192.168.31.11" placeholder="Verifone IP" onchange="updateURLs()"/>
+        Cookie: <input type="text" id="Cookie" value="" placeholder="Past cookie here" onchange="updateURLs()"/>
+        <p>
+            File Name: <input type="text" id="id-filename" value="" placeholder="File Name" onchange="updateURLs()"/>
+
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+                varFileName = document.getElementById('id-filename').value;
+            }
+
+            function updateURLs() {
+                getFormData();
+
+                baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+
+                vcwpaypointpdreptCommand = baseUrl + "vcwpaypointpdrept" + "&filename=" + varFileName + "&cookie=" + cookie;
+
+                updateURLForElement("Id_vcwpaypointpdrept",vcwpaypointpdreptCommand);
+
+            }
+
+            function updateURLForElement(elementId, command) {
+                theElement = document.getElementById(elementId)
+                theElement.textContent = "Click here";
+                theElement.href = command;
+            }
+
+        </script>
+
+        <p>
+        <table>
+            <tr>
+                <th>Command</th><th>Inpunt data</th><th>Link</th><th>Description</th>
+            </tr>
+            <tr>
+                <td>vcwpaypointpdrept</td>
+                <td>File Name</td>
+                <td><a href="invalid" id="Id_vcwpaypointpdrept"  target="_blank">vcwpaypointpdrept</a></td>
+                <td>View the car wash pay point reconciliation data.</td>
+            </tr>
+        </table>
+    </body>
+</html>

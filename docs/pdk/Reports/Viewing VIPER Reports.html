@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+    <title>Verifone Services - Reports</title>
+    <Head>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    </Head>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+    </style>
+    <body onload="updateURLs()">
+
+        <h1>Viewing VIPER Reports</h1>
+        IP: <input type="text" id="VerifoneIp" value="192.168.31.11" placeholder="Verifone IP" onchange="updateURLs()"/>
+        Cookie: <input type="text" id="Cookie" value="" placeholder="Past cookie here" onchange="updateURLs()"/>
+        <p>
+            Fepname: <input type="text" id="id-fepname" value="" placeholder="E.g testFEP" onchange="updateURLs()"/>
+            Terminalbatch: <input type="text" id="id-terminalbatch" value="" placeholder="Terminal batch number" onchange="updateURLs()"/>
+
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+            var varFepname = ""
+            var varTerminalbatch = ""
+
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+                varFepname = document.getElementById('id-fepname').value;
+                varTerminalbatch = document.getElementById('id-terminalbatch').value;
+            }
+
+            function updateURLs() {
+                getFormData();
+
+                baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+
+                vviperrept_batchTotalsCommand = baseUrl + "vviperrept&reptname=batchTotals&fepname=" + varFepname + "&terminalbatchnum=" + varTerminalbatch + "&cookie=" + cookie;
+                vviperrept_loyaltyTotalsCommand = baseUrl + "vviperrept&reptname=loyaltyTotals&fepname=" + varFepname + "&terminalbatchnum=" + varTerminalbatch + "&cookie=" + cookie;
+                vviperrept_paymentTotalsCommand = baseUrl + "vviperrept&reptname=paymentTotals&fepname=" + varFepname + "&terminalbatchnum=" + varTerminalbatch + "&cookie=" + cookie;
+                vviperrept_prepaidTotalsCommand = baseUrl + "vviperrept&reptname=prepaidTotals&fepname=" + varFepname + "&terminalbatchnum=" + varTerminalbatch + "&cookie=" + cookie;
+
+
+
+                updateURLForElement("Id_vviperrept/batchTotals", vviperrept_batchTotalsCommand);
+                updateURLForElement("Id_vviperrept/loyaltyTotals", vviperrept_loyaltyTotalsCommand);
+                updateURLForElement("Id_vviperrept/paymentTotals", vviperrept_paymentTotalsCommand);
+                updateURLForElement("Id_vviperrept/prepaidTotals", vviperrept_prepaidTotalsCommand);
+
+            }
+
+            function updateURLForElement(elementId, command) {
+                theElement = document.getElementById(elementId)
+                theElement.textContent = "Click here";
+                theElement.href = command;
+
+            }
+
+        </script>
+
+        <p>
+        <table>
+            <tr>
+                <th>Command</th><th>Inpunt data</th><th>Link</th><th>Description</th>
+            </tr>
+            <tr>
+                <td>Batch Totals</td>
+                <td>Fepname, Terminalbatch</td>
+                <td><a href="invalid" id="Id_vviperrept/batchTotals"  target="_blank">Batch Totals</a></td>
+                <td>View viper batch totals for a specific terminal batch and FEP. Only use the vs:period/ @sysid='2' entries from the period list.</td>
+            </tr>
+
+            <tr>
+                <td>Loyalty Totals</td>
+                <td>Fepname, Terminalbatch</td>
+                <td><a href="invalid" id="Id_vviperrept/loyaltyTotals"  target="_blank">Loyalty Totals</a></td>
+                <td>View viper loyalty totals for a specific terminal batch and FEP. Only use the vs:period/ @sysid='2' entries from the period list.</td>
+            </tr>
+
+            <tr>
+                <td>Payment Totals</td>
+                <td>Fepname, Terminalbatch</td>
+                <td><a href="invalid" id="Id_vviperrept/paymentTotals"  target="_blank">paymentTotals</a></td>
+                <td>View viper payment totals (Terminal, Host and Card Type) for a specific terminal batch and FEP. Only use the vs:period/@sysid='2' entries from the period list.</td>
+            </tr>
+
+            <tr>
+                <td>Prepaid Totals</td>
+                <td>Fepname, Terminalbatch</td>
+                <td><a href="invalid" id="Id_vviperrept/prepaidTotals"  target="_blank">prepaidTotals</a></td>
+                <td>View viper prepaid totals for a specific terminal batch and FEP. Only use the vs:period/ @sysid='2' entries from the period list.</td>
+            </tr>
+
+        </table>
+
+        <h3 color='0xff0000'>INSTRUCTIONS:</h3>
+        <p>Please follow instructions. </p>
+        <p></p>
+
+    </body>
+</html>

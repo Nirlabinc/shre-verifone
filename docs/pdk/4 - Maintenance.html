@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+    <title>Verifone Services - Maintenance</title>
+    <Head>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    </Head>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+    </style>
+    <body onload="updateURLs()">
+        
+        <h1>Verifone Services - Maintenance</h1>
+<!--        <p>blah blah blah ....</p>-->
+        
+        IP: <input type="text" id="VerifoneIp" value="192.168.31.11" onchange="updateURLs()"/>
+        Cookie: <input type="text" id="Cookie" value="PASTE COOKIE HERE" onchange="updateURLs()"/>
+        <p>
+        x: <input type="text" id="id-x" value="x" onchange="updateURLs()"/>
+        y: <input type="text" id="id-y" value="y" onchange="updateURLs()"/>
+        z: <input type="text" id="id-z" value="z" onchange="updateURLs()"/>
+        
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+            var varx = ""
+            var vary = ""
+            var varz = ""
+            
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+                varx = document.getElementById('id-x').value;
+                vary = document.getElementById('id-y').value;
+                varz = document.getElementById('id-z').value;
+            }
+        
+        function updateURLs() {
+            getFormData();
+            
+            baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+            
+            vecheckcfgCommand = baseUrl + "vecheckcfg" + "&cookie=" + cookie;
+            uecheckcfgCommand = baseUrl + "uecheckcfg" + "&cookie=" + cookie;
+            vdcrunattendedcfgCommand = baseUrl + "vdcrunattendedcfg" + "&cookie=" + cookie;
+            udcrunattendedcfgCommand = baseUrl + "udcrunattendedcfg" + "&cookie=" + cookie;
+            umanagedcfgCommand = baseUrl + "umanagedcfg" + "&cookie=" + cookie;
+            vmanagedcfgstatusCommand = baseUrl + "vmanagedcfgstatus" + "&cookie=" + cookie;
+            vscreencfgCommand = baseUrl + "vscreencfg" + "&cookie=" + cookie;
+            uscreencfgCommand = baseUrl + "uscreencfg" + "&cookie=" + cookie;
+            vinhousecfgCommand = baseUrl + "vinhousecfg" + "&cookie=" + cookie;
+            uinhousecfgCommand = baseUrl + "uinhousecfg" + "&cookie=" + cookie;
+            vuseradminCommand = baseUrl + "vuseradmin" + "&cookie=" + cookie;
+            uuseradminCommand = baseUrl + "uuseradmin" + "&cookie=" + cookie;
+            vsapphirepropCommand = baseUrl + "vsapphireprop" + "&cookie=" + cookie;
+            usapphirepropCommand = baseUrl + "usapphireprop" + "&cookie=" + cookie;
+            vfuelcfgCommand = baseUrl + "vfuelcfg" + "&cookie=" + cookie;
+            ufuelcfgCommand = baseUrl + "ufuelcfg" + "&cookie=" + cookie;
+            vfuelrtcfgCommand = baseUrl + "vfuelrtcfg" + "&cookie=" + cookie;
+            vfuelrtpricescfgCommand = baseUrl + "vfuelrtpricescfg" + "&cookie=" + cookie;
+            vpscdcrcfgCommand = baseUrl + "vpscdcrcfg" + "&cookie=" + cookie;
+            upscdcrcfgCommand = baseUrl + "upscdcrcfg" + "&cookie=" + cookie;
+            vexpandeddealcfgCommand = baseUrl + "vexpandeddealcfg" + "&cookie=" + cookie;
+            uexpandeddealcfgCommand = baseUrl + "uexpandeddealcfg" + "&cookie=" + cookie;
+            vfepdetailsCommand = baseUrl + "vfepdetails" + "&cookie=" + cookie;
+            vvipercfgCommand = baseUrl + "vvipercfg" + "&cookie=" + cookie;
+            uvipercfgCommand = baseUrl + "uvipercfg" + "&cookie=" + cookie;
+            vfepcfgCommand = baseUrl + "vfepcfg" + "&cookie=" + cookie;
+            ufepcfgCommand = baseUrl + "ufepcfg" + "&cookie=" + cookie;
+            vfepcardcfgCommand = baseUrl + "vfepcardcfg" + "&cookie=" + cookie;
+            ufepcardcfgCommand = baseUrl + "ufepcardcfg" + "&cookie=" + cookie;
+            vfepcardtypecfgCommand = baseUrl + "vfepcardtypecfg" + "&cookie=" + cookie;
+            ufepcardtypecfgCommand = baseUrl + "ufepcardtypecfg" + "&cookie=" + cookie;
+            vdealcfgCommand = baseUrl + "vdealcfg" + "&cookie=" + cookie;
+            udealcfgCommand = baseUrl + "udealcfg" + "&cookie=" + cookie;
+            vregistercfgCommand = baseUrl + "vregistercfg" + "&cookie=" + cookie;
+            uregistercfgCommand = baseUrl + "uregistercfg" + "&cookie=" + cookie;
+            vpaymentcfgCommand = baseUrl + "vpaymentcfg" + "&cookie=" + cookie;
+            upaymentcfgCommand = baseUrl + "upaymentcfg" + "&cookie=" + cookie;
+            vposcfgCommand = baseUrl + "vposcfg" + "&cookie=" + cookie;
+            uposcfgCommand = baseUrl + "uposcfg" + "&cookie=" + cookie;
+            vfuelsiteCommand = baseUrl + "vfuelsite" + "&cookie=" + cookie;
+            ufuelsiteCommand = baseUrl + "ufuelsite" + "&cookie=" + cookie;
+            vrestrictionscfgCommand = baseUrl + "vrestrictionscfg" + "&cookie=" + cookie;
+            urestrictionscfgCommand = baseUrl + "urestrictionscfg" + "&cookie=" + cookie;
+            vpossecurityCommand = baseUrl + "vpossecurity" + "&cookie=" + cookie;
+            upossecurityCommand = baseUrl + "upossecurity" + "&cookie=" + cookie;
+            vdcrcfgCommand = baseUrl + "vdcrcfg" + "&cookie=" + cookie;
+            udcrcfgCommand = baseUrl + "udcrcfg" + "&cookie=" + cookie;
+            vrefintegCommand = baseUrl + "vrefinteg" + "&cookie=" + cookie;
+            vsalescfgCommand = baseUrl + "vsalescfg" + "&cookie=" + cookie;
+            usalescfgCommand = baseUrl + "usalescfg" + "&cookie=" + cookie;
+            vpopcfgCommand = baseUrl + "vpopcfg" + "&cookie=" + cookie;
+            upopcfgCommand = baseUrl + "upopcfg" + "&cookie=" + cookie;
+            vtlssiteCommand = baseUrl + "vtlssite" + "&cookie=" + cookie;
+            utlssiteCommand = baseUrl + "utlssite" + "&cookie=" + cookie;
+            vcarwashcfgCommand = baseUrl + "vcarwashcfg" + "&cookie=" + cookie;
+            ucarwashcfgCommand = baseUrl + "ucarwashcfg" + "&cookie=" + cookie;
+            vcashaccsiteCommand = baseUrl + "vcashaccsite" + "&cookie=" + cookie;
+            ucashaccsiteCommand = baseUrl + "ucashaccsite" + "&cookie=" + cookie;
+            vagevalidationcfgCommand = baseUrl + "vagevalidationcfg" + "&cookie=" + cookie;
+            uagevalidationcfgCommand = baseUrl + "uagevalidationcfg" + "&cookie=" + cookie;
+            vbannercfgCommand = baseUrl + "vbannercfg" + "&cookie=" + cookie;
+            ubannercfgCommand = baseUrl + "ubannercfg" + "&cookie=" + cookie;
+            vbluelawcfgCommand = baseUrl + "vbluelawcfg" + "&cookie=" + cookie;
+            ubluelawcfgCommand = baseUrl + "ubluelawcfg" + "&cookie=" + cookie;
+            vdcrheadercfgCommand = baseUrl + "vdcrheadercfg" + "&cookie=" + cookie;
+            udcrheadercfgCommand = baseUrl + "udcrheadercfg" + "&cookie=" + cookie;
+            vdcrmessagecfgCommand = baseUrl + "vdcrmessagecfg" + "&cookie=" + cookie;
+            udcrmessagecfgCommand = baseUrl + "udcrmessagecfg" + "&cookie=" + cookie;
+            vdcrtrailercfgCommand = baseUrl + "vdcrtrailercfg" + "&cookie=" + cookie;
+            udcrtrailercfgCommand = baseUrl + "udcrtrailercfg" + "&cookie=" + cookie;
+            vfeecfgCommand = baseUrl + "vfeecfg" + "&cookie=" + cookie;
+            ufeecfgCommand = baseUrl + "ufeecfg" + "&cookie=" + cookie;
+            vlogocfgCommand = baseUrl + "vlogocfg" + "&cookie=" + cookie;
+            ulogocfgCommand = baseUrl + "ulogocfg" + "&cookie=" + cookie;
+            vslogancfgCommand = baseUrl + "vslogancfg" + "&cookie=" + cookie;
+            uslogancfgCommand = baseUrl + "uslogancfg" + "&cookie=" + cookie;
+            vtaxratecfgCommand = baseUrl + "vtaxratecfg" + "&cookie=" + cookie;
+            utaxratecfgCommand = baseUrl + "utaxratecfg" + "&cookie=" + cookie;
+            vdatetimeCommand = baseUrl + "vdatetime" + "&cookie=" + cookie;
+            udatetimeCommand = baseUrl + "udatetime" + "&cookie=" + cookie;
+            vperiodcfgCommand = baseUrl + "vperiodcfg" + "&cookie=" + cookie;
+            uperiodcfgCommand = baseUrl + "uperiodcfg" + "&cookie=" + cookie;
+            vmaintcfgCommand = baseUrl + "vmaintcfg" + "&cookie=" + cookie;
+            umaintcfgCommand = baseUrl + "umaintcfg" + "&cookie=" + cookie;
+            vPLUsCommand = baseUrl + "vPLUs" + "&cookie=" + cookie;
+            uPLUsCommand = baseUrl + "uPLUs" + "&cookie=" + cookie;
+            changepasswdCommand = baseUrl + "changepasswd" + "&cookie=" + cookie;
+            vesafecfgCommand = baseUrl + "vesafecfg" + "&cookie=" + cookie;
+            uesafecfgCommand = baseUrl + "uesafecfg" + "&cookie=" + cookie;
+            vcwpaypointcfgCommand = baseUrl + "vcwpaypointcfg" + "&cookie=" + cookie;
+            ucwpaypointcfgCommand = baseUrl + "ucwpaypointcfg" + "&cookie=" + cookie;
+            vloyaltycfgCommand = baseUrl + "vloyaltycfg" + "&cookie=" + cookie;
+            uloyaltycfgCommand = baseUrl + "uloyaltycfg" + "&cookie=" + cookie;
+            vFPDcfgCommand = baseUrl + "vFPDcfg" + "&cookie=" + cookie;
+            uFPDcfgCommand = baseUrl + "uFPDcfg" + "&cookie=" + cookie;
+            vfuelpricesCommand = baseUrl + "vfuelprices" + "&cookie=" + cookie;
+            ufuelpricesCommand = baseUrl + "ufuelprices" + "&cookie=" + cookie;
+            cfuelinitCommand = baseUrl + "cfuelinit" + "&cookie=" + cookie;
+            cfuelpricesCommand = baseUrl + "cfuelprices" + "&cookie=" + cookie;
+            cdcrinitCommand = baseUrl + "cdcrinit" + "&cookie=" + cookie;
+            cFPDinitCommand = baseUrl + "cFPDinit" + "&cookie=" + cookie;
+            vsigcapcfgCommand = baseUrl + "vsigcapcfg" + "&cookie=" + cookie;
+            usigcapcfgCommand = baseUrl + "usigcapcfg" + "&cookie=" + cookie;
+
+            
+            updateURLForElement("Id_vecheckcfg",vecheckcfgCommand);
+            updateURLForElement("Id_uecheckcfg",uecheckcfgCommand);
+            updateURLForElement("Id_vdcrunattendedcfg",vdcrunattendedcfgCommand);
+            updateURLForElement("Id_udcrunattendedcfg",udcrunattendedcfgCommand);
+            updateURLForElement("Id_umanagedcfg",umanagedcfgCommand);
+            updateURLForElement("Id_vmanagedcfgstatus",vmanagedcfgstatusCommand);
+            updateURLForElement("Id_vscreencfg",vscreencfgCommand);
+            updateURLForElement("Id_uscreencfg",uscreencfgCommand);
+            updateURLForElement("Id_vinhousecfg",vinhousecfgCommand);
+            updateURLForElement("Id_uinhousecfg",uinhousecfgCommand);
+            updateURLForElement("Id_vuseradmin",vuseradminCommand);
+            updateURLForElement("Id_uuseradmin",uuseradminCommand);
+            updateURLForElement("Id_vsapphireprop",vsapphirepropCommand);
+            updateURLForElement("Id_usapphireprop",usapphirepropCommand);
+            updateURLForElement("Id_vfuelcfg",vfuelcfgCommand);
+            updateURLForElement("Id_ufuelcfg",ufuelcfgCommand);
+            updateURLForElement("Id_vfuelrtcfg",vfuelrtcfgCommand);
+            updateURLForElement("Id_vfuelrtpricescfg",vfuelrtpricescfgCommand);
+            updateURLForElement("Id_vpscdcrcfg",vpscdcrcfgCommand);
+            updateURLForElement("Id_upscdcrcfg",upscdcrcfgCommand);
+            updateURLForElement("Id_vexpandeddealcfg",vexpandeddealcfgCommand);
+            updateURLForElement("Id_uexpandeddealcfg",uexpandeddealcfgCommand);
+            updateURLForElement("Id_vfepdetails",vfepdetailsCommand);
+            updateURLForElement("Id_vvipercfg",vvipercfgCommand);
+            updateURLForElement("Id_uvipercfg",uvipercfgCommand);
+            updateURLForElement("Id_vfepcfg",vfepcfgCommand);
+            updateURLForElement("Id_ufepcfg",ufepcfgCommand);
+            updateURLForElement("Id_vfepcardcfg",vfepcardcfgCommand);
+            updateURLForElement("Id_ufepcardcfg",ufepcardcfgCommand);
+            updateURLForElement("Id_vfepcardtypecfg",vfepcardtypecfgCommand);
+            updateURLForElement("Id_ufepcardtypecfg",ufepcardtypecfgCommand);
+            updateURLForElement("Id_vdealcfg",vdealcfgCommand);
+            updateURLForElement("Id_udealcfg",udealcfgCommand);
+            updateURLForElement("Id_vregistercfg",vregistercfgCommand);
+            updateURLForElement("Id_uregistercfg",uregistercfgCommand);
+            updateURLForElement("Id_vpaymentcfg",vpaymentcfgCommand);
+            updateURLForElement("Id_upaymentcfg",upaymentcfgCommand);
+            updateURLForElement("Id_vposcfg",vposcfgCommand);
+            updateURLForElement("Id_uposcfg",uposcfgCommand);
+            updateURLForElement("Id_vfuelsite",vfuelsiteCommand);
+            updateURLForElement("Id_ufuelsite",ufuelsiteCommand);
+            updateURLForElement("Id_vrestrictionscfg",vrestrictionscfgCommand);
+            updateURLForElement("Id_urestrictionscfg",urestrictionscfgCommand);
+            updateURLForElement("Id_vpossecurity",vpossecurityCommand);
+            updateURLForElement("Id_upossecurity",upossecurityCommand);
+            updateURLForElement("Id_vdcrcfg",vdcrcfgCommand);
+            updateURLForElement("Id_udcrcfg",udcrcfgCommand);
+            updateURLForElement("Id_vrefinteg",vrefintegCommand);
+            updateURLForElement("Id_vsalescfg",vsalescfgCommand);
+            updateURLForElement("Id_usalescfg",usalescfgCommand);
+            updateURLForElement("Id_vpopcfg",vpopcfgCommand);
+            updateURLForElement("Id_upopcfg",upopcfgCommand);
+            updateURLForElement("Id_vtlssite",vtlssiteCommand);
+            updateURLForElement("Id_utlssite",utlssiteCommand);
+            updateURLForElement("Id_vcarwashcfg",vcarwashcfgCommand);
+            updateURLForElement("Id_ucarwashcfg",ucarwashcfgCommand);
+            updateURLForElement("Id_vcashaccsite",vcashaccsiteCommand);
+            updateURLForElement("Id_ucashaccsite",ucashaccsiteCommand);
+            updateURLForElement("Id_vagevalidationcfg",vagevalidationcfgCommand);
+            updateURLForElement("Id_uagevalidationcfg",uagevalidationcfgCommand);
+            updateURLForElement("Id_vbannercfg",vbannercfgCommand);
+            updateURLForElement("Id_ubannercfg",ubannercfgCommand);
+            updateURLForElement("Id_vbluelawcfg",vbluelawcfgCommand);
+            updateURLForElement("Id_ubluelawcfg",ubluelawcfgCommand);
+            updateURLForElement("Id_vdcrheadercfg",vdcrheadercfgCommand);
+            updateURLForElement("Id_udcrheadercfg",udcrheadercfgCommand);
+            updateURLForElement("Id_vdcrmessagecfg",vdcrmessagecfgCommand);
+            updateURLForElement("Id_udcrmessagecfg",udcrmessagecfgCommand);
+            updateURLForElement("Id_vdcrtrailercfg",vdcrtrailercfgCommand);
+            updateURLForElement("Id_udcrtrailercfg",udcrtrailercfgCommand);
+            updateURLForElement("Id_vfeecfg",vfeecfgCommand);
+            updateURLForElement("Id_ufeecfg",ufeecfgCommand);
+            updateURLForElement("Id_vlogocfg",vlogocfgCommand);
+            updateURLForElement("Id_ulogocfg",ulogocfgCommand);
+            updateURLForElement("Id_vslogancfg",vslogancfgCommand);
+            updateURLForElement("Id_uslogancfg",uslogancfgCommand);
+            updateURLForElement("Id_vtaxratecfg",vtaxratecfgCommand);
+            updateURLForElement("Id_utaxratecfg",utaxratecfgCommand);
+            updateURLForElement("Id_vdatetime",vdatetimeCommand);
+            updateURLForElement("Id_udatetime",udatetimeCommand);
+            updateURLForElement("Id_vperiodcfg",vperiodcfgCommand);
+            updateURLForElement("Id_uperiodcfg",uperiodcfgCommand);
+            updateURLForElement("Id_vmaintcfg",vmaintcfgCommand);
+            updateURLForElement("Id_umaintcfg",umaintcfgCommand);
+            updateURLForElement("Id_vPLUs",vPLUsCommand);
+            updateURLForElement("Id_uPLUs",uPLUsCommand);
+            updateURLForElement("Id_changepasswd",changepasswdCommand);
+            updateURLForElement("Id_vesafecfg",vesafecfgCommand);
+            updateURLForElement("Id_uesafecfg",uesafecfgCommand);
+            updateURLForElement("Id_vcwpaypointcfg",vcwpaypointcfgCommand);
+            updateURLForElement("Id_ucwpaypointcfg",ucwpaypointcfgCommand);
+            updateURLForElement("Id_vloyaltycfg",vloyaltycfgCommand);
+            updateURLForElement("Id_uloyaltycfg",uloyaltycfgCommand);
+            updateURLForElement("Id_vFPDcfg",vFPDcfgCommand);
+            updateURLForElement("Id_uFPDcfg",uFPDcfgCommand);
+            updateURLForElement("Id_vfuelprices",vfuelpricesCommand);
+            updateURLForElement("Id_ufuelprices",ufuelpricesCommand);
+            updateURLForElement("Id_cfuelinit",cfuelinitCommand);
+            updateURLForElement("Id_cfuelprices",cfuelpricesCommand);
+            updateURLForElement("Id_cdcrinit",cdcrinitCommand);
+            updateURLForElement("Id_cFPDinit",cFPDinitCommand);
+            updateURLForElement("Id_vsigcapcfg",vsigcapcfgCommand);
+            updateURLForElement("Id_usigcapcfg",usigcapcfgCommand);
+
+            
+        }
+        
+        function updateURLForElement(elementId, command) {
+            theElement = document.getElementById(elementId)
+            theElement.textContent = command;
+            theElement.href = command;
+            
+        }
+        
+            </script>
+        
+        <p>
+        <table>
+            <tr>
+                <th>Command</th><th>Link</th>
+            </tr>
+            <tr><td>vecheckcfg</td><td><a href="invalid" id="Id_vecheckcfg"  target="_blank">vecheckcfg</a></td></tr>
+            <tr><td>uecheckcfg</td><td><a href="invalid" id="Id_uecheckcfg"  target="_blank">uecheckcfg</a></td></tr>
+            <tr><td>vdcrunattendedcfg</td><td><a href="invalid" id="Id_vdcrunattendedcfg"  target="_blank">vdcrunattendedcfg</a></td></tr>
+            <tr><td>udcrunattendedcfg</td><td><a href="invalid" id="Id_udcrunattendedcfg"  target="_blank">udcrunattendedcfg</a></td></tr>
+            <tr><td>umanagedcfg</td><td><a href="invalid" id="Id_umanagedcfg"  target="_blank">umanagedcfg</a></td></tr>
+            <tr><td>vmanagedcfgstatus</td><td><a href="invalid" id="Id_vmanagedcfgstatus"  target="_blank">vmanagedcfgstatus</a></td></tr>
+            <tr><td>vscreencfg</td><td><a href="invalid" id="Id_vscreencfg"  target="_blank">vscreencfg</a></td></tr>
+            <tr><td>uscreencfg</td><td><a href="invalid" id="Id_uscreencfg"  target="_blank">uscreencfg</a></td></tr>
+            <tr><td>vinhousecfg</td><td><a href="invalid" id="Id_vinhousecfg"  target="_blank">vinhousecfg</a></td></tr>
+            <tr><td>uinhousecfg</td><td><a href="invalid" id="Id_uinhousecfg"  target="_blank">uinhousecfg</a></td></tr>
+            <tr><td>vuseradmin</td><td><a href="invalid" id="Id_vuseradmin"  target="_blank">vuseradmin</a></td></tr>
+            <tr><td>uuseradmin</td><td><a href="invalid" id="Id_uuseradmin"  target="_blank">uuseradmin</a></td></tr>
+            <tr><td>vsapphireprop</td><td><a href="invalid" id="Id_vsapphireprop"  target="_blank">vsapphireprop</a></td></tr>
+            <tr><td>usapphireprop</td><td><a href="invalid" id="Id_usapphireprop"  target="_blank">usapphireprop</a></td></tr>
+            <tr><td>vfuelcfg</td><td><a href="invalid" id="Id_vfuelcfg"  target="_blank">vfuelcfg</a></td></tr>
+            <tr><td>ufuelcfg</td><td><a href="invalid" id="Id_ufuelcfg"  target="_blank">ufuelcfg</a></td></tr>
+            <tr><td>vfuelrtcfg</td><td><a href="invalid" id="Id_vfuelrtcfg"  target="_blank">vfuelrtcfg</a></td></tr>
+            <tr><td>vfuelrtpricescfg</td><td><a href="invalid" id="Id_vfuelrtpricescfg"  target="_blank">vfuelrtpricescfg</a></td></tr>
+            <tr><td>vpscdcrcfg</td><td><a href="invalid" id="Id_vpscdcrcfg"  target="_blank">vpscdcrcfg</a></td></tr>
+            <tr><td>upscdcrcfg</td><td><a href="invalid" id="Id_upscdcrcfg"  target="_blank">upscdcrcfg</a></td></tr>
+            <tr><td>vexpandeddealcfg</td><td><a href="invalid" id="Id_vexpandeddealcfg"  target="_blank">vexpandeddealcfg</a></td></tr>
+            <tr><td>uexpandeddealcfg</td><td><a href="invalid" id="Id_uexpandeddealcfg"  target="_blank">uexpandeddealcfg</a></td></tr>
+            <tr><td>vfepdetails</td><td><a href="invalid" id="Id_vfepdetails"  target="_blank">vfepdetails</a></td></tr>
+            <tr><td>vvipercfg</td><td><a href="invalid" id="Id_vvipercfg"  target="_blank">vvipercfg</a></td></tr>
+            <tr><td>uvipercfg</td><td><a href="invalid" id="Id_uvipercfg"  target="_blank">uvipercfg</a></td></tr>
+            <tr><td>vfepcfg</td><td><a href="invalid" id="Id_vfepcfg"  target="_blank">vfepcfg</a></td></tr>
+            <tr><td>ufepcfg</td><td><a href="invalid" id="Id_ufepcfg"  target="_blank">ufepcfg</a></td></tr>
+            <tr><td>vfepcardcfg</td><td><a href="invalid" id="Id_vfepcardcfg"  target="_blank">vfepcardcfg</a></td></tr>
+            <tr><td>ufepcardcfg</td><td><a href="invalid" id="Id_ufepcardcfg"  target="_blank">ufepcardcfg</a></td></tr>
+            <tr><td>vfepcardtypecfg</td><td><a href="invalid" id="Id_vfepcardtypecfg"  target="_blank">vfepcardtypecfg</a></td></tr>
+            <tr><td>ufepcardtypecfg</td><td><a href="invalid" id="Id_ufepcardtypecfg"  target="_blank">ufepcardtypecfg</a></td></tr>
+            <tr><td>vdealcfg</td><td><a href="invalid" id="Id_vdealcfg"  target="_blank">vdealcfg</a></td></tr>
+            <tr><td>udealcfg</td><td><a href="invalid" id="Id_udealcfg"  target="_blank">udealcfg</a></td></tr>
+            <tr><td>vregistercfg</td><td><a href="invalid" id="Id_vregistercfg"  target="_blank">vregistercfg</a></td></tr>
+            <tr><td>uregistercfg</td><td><a href="invalid" id="Id_uregistercfg"  target="_blank">uregistercfg</a></td></tr>
+            <tr><td>vpaymentcfg</td><td><a href="invalid" id="Id_vpaymentcfg"  target="_blank">vpaymentcfg</a></td></tr>
+            <tr><td>upaymentcfg</td><td><a href="invalid" id="Id_upaymentcfg"  target="_blank">upaymentcfg</a></td></tr>
+            <tr><td>vposcfg</td><td><a href="invalid" id="Id_vposcfg"  target="_blank">vposcfg</a></td></tr>
+            <tr><td>uposcfg</td><td><a href="invalid" id="Id_uposcfg"  target="_blank">uposcfg</a></td></tr>
+            <tr><td>vfuelsite</td><td><a href="invalid" id="Id_vfuelsite"  target="_blank">vfuelsite</a></td></tr>
+            <tr><td>ufuelsite</td><td><a href="invalid" id="Id_ufuelsite"  target="_blank">ufuelsite</a></td></tr>
+            <tr><td>vrestrictionscfg</td><td><a href="invalid" id="Id_vrestrictionscfg"  target="_blank">vrestrictionscfg</a></td></tr>
+            <tr><td>urestrictionscfg</td><td><a href="invalid" id="Id_urestrictionscfg"  target="_blank">urestrictionscfg</a></td></tr>
+            <tr><td>vpossecurity</td><td><a href="invalid" id="Id_vpossecurity"  target="_blank">vpossecurity</a></td></tr>
+            <tr><td>upossecurity</td><td><a href="invalid" id="Id_upossecurity"  target="_blank">upossecurity</a></td></tr>
+            <tr><td>vdcrcfg</td><td><a href="invalid" id="Id_vdcrcfg"  target="_blank">vdcrcfg</a></td></tr>
+            <tr><td>udcrcfg</td><td><a href="invalid" id="Id_udcrcfg"  target="_blank">udcrcfg</a></td></tr>
+            <tr><td>vrefinteg</td><td><a href="invalid" id="Id_vrefinteg"  target="_blank">vrefinteg</a></td></tr>
+            <tr><td>vsalescfg</td><td><a href="invalid" id="Id_vsalescfg"  target="_blank">vsalescfg</a></td></tr>
+            <tr><td>usalescfg</td><td><a href="invalid" id="Id_usalescfg"  target="_blank">usalescfg</a></td></tr>
+            <tr><td>vpopcfg</td><td><a href="invalid" id="Id_vpopcfg"  target="_blank">vpopcfg</a></td></tr>
+            <tr><td>upopcfg</td><td><a href="invalid" id="Id_upopcfg"  target="_blank">upopcfg</a></td></tr>
+            <tr><td>vtlssite</td><td><a href="invalid" id="Id_vtlssite"  target="_blank">vtlssite</a></td></tr>
+            <tr><td>utlssite</td><td><a href="invalid" id="Id_utlssite"  target="_blank">utlssite</a></td></tr>
+            <tr><td>vcarwashcfg</td><td><a href="invalid" id="Id_vcarwashcfg"  target="_blank">vcarwashcfg</a></td></tr>
+            <tr><td>ucarwashcfg</td><td><a href="invalid" id="Id_ucarwashcfg"  target="_blank">ucarwashcfg</a></td></tr>
+            <tr><td>vcashaccsite</td><td><a href="invalid" id="Id_vcashaccsite"  target="_blank">vcashaccsite</a></td></tr>
+            <tr><td>ucashaccsite</td><td><a href="invalid" id="Id_ucashaccsite"  target="_blank">ucashaccsite</a></td></tr>
+            <tr><td>vagevalidationcfg</td><td><a href="invalid" id="Id_vagevalidationcfg"  target="_blank">vagevalidationcfg</a></td></tr>
+            <tr><td>uagevalidationcfg</td><td><a href="invalid" id="Id_uagevalidationcfg"  target="_blank">uagevalidationcfg</a></td></tr>
+            <tr><td>vbannercfg</td><td><a href="invalid" id="Id_vbannercfg"  target="_blank">vbannercfg</a></td></tr>
+            <tr><td>ubannercfg</td><td><a href="invalid" id="Id_ubannercfg"  target="_blank">ubannercfg</a></td></tr>
+            <tr><td>vbluelawcfg</td><td><a href="invalid" id="Id_vbluelawcfg"  target="_blank">vbluelawcfg</a></td></tr>
+            <tr><td>ubluelawcfg</td><td><a href="invalid" id="Id_ubluelawcfg"  target="_blank">ubluelawcfg</a></td></tr>
+            <tr><td>vdcrheadercfg</td><td><a href="invalid" id="Id_vdcrheadercfg"  target="_blank">vdcrheadercfg</a></td></tr>
+            <tr><td>udcrheadercfg</td><td><a href="invalid" id="Id_udcrheadercfg"  target="_blank">udcrheadercfg</a></td></tr>
+            <tr><td>vdcrmessagecfg</td><td><a href="invalid" id="Id_vdcrmessagecfg"  target="_blank">vdcrmessagecfg</a></td></tr>
+            <tr><td>udcrmessagecfg</td><td><a href="invalid" id="Id_udcrmessagecfg"  target="_blank">udcrmessagecfg</a></td></tr>
+            <tr><td>vdcrtrailercfg</td><td><a href="invalid" id="Id_vdcrtrailercfg"  target="_blank">vdcrtrailercfg</a></td></tr>
+            <tr><td>udcrtrailercfg</td><td><a href="invalid" id="Id_udcrtrailercfg"  target="_blank">udcrtrailercfg</a></td></tr>
+            <tr><td>vfeecfg</td><td><a href="invalid" id="Id_vfeecfg"  target="_blank">vfeecfg</a></td></tr>
+            <tr><td>ufeecfg</td><td><a href="invalid" id="Id_ufeecfg"  target="_blank">ufeecfg</a></td></tr>
+            <tr><td>vlogocfg</td><td><a href="invalid" id="Id_vlogocfg"  target="_blank">vlogocfg</a></td></tr>
+            <tr><td>ulogocfg</td><td><a href="invalid" id="Id_ulogocfg"  target="_blank">ulogocfg</a></td></tr>
+            <tr><td>vslogancfg</td><td><a href="invalid" id="Id_vslogancfg"  target="_blank">vslogancfg</a></td></tr>
+            <tr><td>uslogancfg</td><td><a href="invalid" id="Id_uslogancfg"  target="_blank">uslogancfg</a></td></tr>
+            <tr><td>vtaxratecfg</td><td><a href="invalid" id="Id_vtaxratecfg"  target="_blank">vtaxratecfg</a></td></tr>
+            <tr><td>utaxratecfg</td><td><a href="invalid" id="Id_utaxratecfg"  target="_blank">utaxratecfg</a></td></tr>
+            <tr><td>vdatetime</td><td><a href="invalid" id="Id_vdatetime"  target="_blank">vdatetime</a></td></tr>
+            <tr><td>udatetime</td><td><a href="invalid" id="Id_udatetime"  target="_blank">udatetime</a></td></tr>
+            <tr><td>vperiodcfg</td><td><a href="invalid" id="Id_vperiodcfg"  target="_blank">vperiodcfg</a></td></tr>
+            <tr><td>uperiodcfg</td><td><a href="invalid" id="Id_uperiodcfg"  target="_blank">uperiodcfg</a></td></tr>
+            <tr><td>vmaintcfg</td><td><a href="invalid" id="Id_vmaintcfg"  target="_blank">vmaintcfg</a></td></tr>
+            <tr><td>umaintcfg</td><td><a href="invalid" id="Id_umaintcfg"  target="_blank">umaintcfg</a></td></tr>
+            <tr><td>vPLUs</td><td><a href="invalid" id="Id_vPLUs"  target="_blank">vPLUs</a></td></tr>
+            <tr><td>uPLUs</td><td><a href="invalid" id="Id_uPLUs"  target="_blank">uPLUs</a></td></tr>
+            <tr><td>changepasswd</td><td><a href="invalid" id="Id_changepasswd"  target="_blank">changepasswd</a></td></tr>
+            <tr><td>vesafecfg</td><td><a href="invalid" id="Id_vesafecfg"  target="_blank">vesafecfg</a></td></tr>
+            <tr><td>uesafecfg</td><td><a href="invalid" id="Id_uesafecfg"  target="_blank">uesafecfg</a></td></tr>
+            <tr><td>vcwpaypointcfg</td><td><a href="invalid" id="Id_vcwpaypointcfg"  target="_blank">vcwpaypointcfg</a></td></tr>
+            <tr><td>ucwpaypointcfg</td><td><a href="invalid" id="Id_ucwpaypointcfg"  target="_blank">ucwpaypointcfg</a></td></tr>
+            <tr><td>vloyaltycfg</td><td><a href="invalid" id="Id_vloyaltycfg"  target="_blank">vloyaltycfg</a></td></tr>
+            <tr><td>uloyaltycfg</td><td><a href="invalid" id="Id_uloyaltycfg"  target="_blank">uloyaltycfg</a></td></tr>
+            <tr><td>vFPDcfg</td><td><a href="invalid" id="Id_vFPDcfg"  target="_blank">vFPDcfg</a></td></tr>
+            <tr><td>uFPDcfg</td><td><a href="invalid" id="Id_uFPDcfg"  target="_blank">uFPDcfg</a></td></tr>
+            <tr><td>vfuelprices</td><td><a href="invalid" id="Id_vfuelprices"  target="_blank">vfuelprices</a></td></tr>
+            <tr><td>ufuelprices</td><td><a href="invalid" id="Id_ufuelprices"  target="_blank">ufuelprices</a></td></tr>
+            <tr><td>cfuelinit</td><td><a href="invalid" id="Id_cfuelinit"  target="_blank">cfuelinit</a></td></tr>
+            <tr><td>cfuelprices</td><td><a href="invalid" id="Id_cfuelprices"  target="_blank">cfuelprices</a></td></tr>
+            <tr><td>cdcrinit</td><td><a href="invalid" id="Id_cdcrinit"  target="_blank">cdcrinit</a></td></tr>
+            <tr><td>cFPDinit</td><td><a href="invalid" id="Id_cFPDinit"  target="_blank">cFPDinit</a></td></tr>
+            <tr><td>vsigcapcfg</td><td><a href="invalid" id="Id_vsigcapcfg"  target="_blank">vsigcapcfg</a></td></tr>
+            <tr><td>usigcapcfg</td><td><a href="invalid" id="Id_usigcapcfg"  target="_blank">usigcapcfg</a></td></tr>
+        </table>
+        
+        <h3 color='0xff0000'>INSTRUCTIONS:</h3>
+        <p>Please follow instructions. </p>
+        <p></p>
+        
+    </body>
+</html>
+

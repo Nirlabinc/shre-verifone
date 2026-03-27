@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+    <title>Verifone Services - Event Notification</title>
+    <Head>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    </Head>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+    </style>
+    <body onload="updateURLs()">
+
+        <h1>Verifone Services - Event Notification</h1>
+<!--        <p>blah blah blah ....</p>-->
+
+        IP: <input type="text" id="VerifoneIp" value="192.168.31.11" onchange="updateURLs()"/>
+        Cookie: <input type="text" id="Cookie" value="PASTE COOKIE HERE" onchange="updateURLs()"/>
+        <p>
+        x: <input type="text" id="id-x" value="x" onchange="updateURLs()"/>
+        y: <input type="text" id="id-y" value="y" onchange="updateURLs()"/>
+        z: <input type="text" id="id-z" value="z" onchange="updateURLs()"/>
+
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+            var varx = ""
+            var vary = ""
+            var varz = ""
+
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+                varx = document.getElementById('id-x').value;
+                vary = document.getElementById('id-y').value;
+                varz = document.getElementById('id-z').value;
+            }
+
+        function updateURLs() {
+            getFormData();
+
+            baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+
+            veventcfgCommand = baseUrl + "veventcfg";
+            ueventcfgCommand = baseUrl + "ueventcfg";
+            veventhistoryCommand = baseUrl + "veventhistory";
+            vseteventCommand = baseUrl + "vsetevent";
+            veventunsetCommand = baseUrl + "veventunset";
+            repeatEventCommand = baseUrl + "repeatEvent";
+
+
+
+            updateURLForElement("Id_veventcfg",veventcfgCommand);
+            updateURLForElement("Id_ueventcfg",ueventcfgCommand);
+            updateURLForElement("Id_veventhistory",veventhistoryCommand);
+            updateURLForElement("Id_vsetevent",vseteventCommand);
+            updateURLForElement("Id_veventunset",veventunsetCommand);
+            updateURLForElement("Id_repeatEvent",repeatEventCommand);
+
+        }
+
+        function updateURLForElement(elementId, command) {
+            theElement = document.getElementById(elementId)
+            theElement.textContent = command;
+            theElement.href = command;
+
+        }
+
+            </script>
+
+        <p>
+        <table>
+            <tr>
+                <th>Command</th><th>Link</th>
+            </tr>
+            <tr><td>veventcfg</td><td><a href="invalid" id="Id_veventcfg"  target="_blank">veventcfg</a></td></tr>
+            <tr><td>ueventcfg</td><td><a href="invalid" id="Id_ueventcfg"  target="_blank">ueventcfg</a></td></tr>
+            <tr><td>veventhistory</td><td><a href="invalid" id="Id_veventhistory"  target="_blank">veventhistory</a></td></tr>
+            <tr><td>vsetevent</td><td><a href="invalid" id="Id_vsetevent"  target="_blank">vsetevent</a></td></tr>
+            <tr><td>veventunset</td><td><a href="invalid" id="Id_veventunset"  target="_blank">veventunset</a></td></tr>
+            <tr><td>repeatEvent</td><td><a href="invalid" id="Id_repeatEvent"  target="_blank">repeatEvent</a></td></tr>
+        </table>
+
+        <h3 color='0xff0000'>INSTRUCTIONS:</h3>
+        <p>Please follow instructions. </p>
+        <p></p>
+
+    </body>
+</html>
+

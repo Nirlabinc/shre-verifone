@@ -1,0 +1,33 @@
+[Unit]
+Description=Verifone Edge Relay — POS data sync to Shre AI
+After=network-online.target
+Wants=network-online.target
+Documentation=https://docs.shreai.com/edge-relay
+
+[Service]
+Type=simple
+User=verifone-relay
+Group=verifone-relay
+ExecStart=/opt/verifone-edge-relay/verifone-edge-relay
+Restart=on-failure
+RestartSec=10
+Environment=RELAY_DATA_DIR=/var/lib/verifone-edge-relay
+Environment=NODE_TLS_REJECT_UNAUTHORIZED=0
+WorkingDirectory=/opt/verifone-edge-relay
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/verifone-edge-relay
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

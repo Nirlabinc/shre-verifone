@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verifone Edge Relay</title>
+  <script>
+    fetch('/api/setup/status').then(r => r.json()).then(data => {
+      window.location.href = data.complete ? '/status.html' : '/setup.html';
+    }).catch(() => {
+      window.location.href = '/setup.html';
+    });
+  </script>
+</head>
+<body style="font-family:system-ui;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+  <p>Loading Verifone Edge Relay...</p>
+</body>
+</html>

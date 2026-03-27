@@ -1,0 +1,26 @@
+{
+  "name": "shre-verifone",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Verifone Commander POS integration — LAN-based sync, XML report parsing, fuel analytics",
+  "main": "live-server.mjs",
+  "scripts": {
+    "start": "node live-server.mjs",
+    "sync": "node src/live/auto-sync.mjs",
+    "extract": "node src/analytics/extract-tables.mjs",
+    "views": "node src/analytics/create-views.mjs",
+    "views:refresh": "node src/analytics/create-views.mjs --refresh",
+    "views:recreate": "node src/analytics/create-views.mjs --recreate",
+    "test": "node --test src/**/*.test.mjs"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.4.1",
+    "pg": "^8.13.1",
+    "shre-sdk": "file:../shre-sdk",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "@types/ws": "^8.5.13"
+  }
+}

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<title>Verifone Services - Reports</title>
+
+<Head>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+</Head>
+<style>
+    table,
+    th,
+    td {
+        border: 1px solid black;
+    }
+</style>
+
+<body onload="updateURLs()">
+
+    <h1>Viewing Database Reports</h1>
+
+    IP: <input type="text" id="VerifoneIp" value="192.168.31.11" placeholder="Verifone IP" onchange="updateURLs()" />
+    Cookie: <input type="text" id="Cookie" value="" placeholder="Past cookie here" onchange="updateURLs()" />
+    <p>
+        Period: <input type="text" id="id-period" value="" placeholder="1=Shift,2=Day" onchange="updateURLs()" />
+        File Name: <input type="text" id="id-filename" value="" placeholder="File Name" onchange="updateURLs()" />
+        Cashier Number: <input type="text" id="id-cashierNum" value="" placeholder="Cashier number"
+            onchange="updateURLs()" />
+        Register Number: <input type="text" id="id-regNum" value="" placeholder="Register used"
+            onchange="updateURLs()" />
+        Reptnum: <input type="text" id="id-reptnum" value="" placeholder="Report number" onchange="updateURLs()" />
+        Department number: <input type="text" id="id-reptDept" value="" placeholder="Department number"
+            onchange="updateURLs()" />
+
+
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+                varPeriod = document.getElementById('id-period').value;
+                varFileName = document.getElementById('id-filename').value;
+                varCashierNum = document.getElementById('id-cashierNum').value;
+                varRegNum = document.getElementById('id-regNum').value;
+                varReptnum = document.getElementById('id-reptnum').value;
+                varReptDept = document.getElementById('id-reptDept').value;
+            }
+
+            function updateURLs() {
+                getFormData();
+
+                baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+
+                vcashierrept = baseUrl + "vcashierrept&filename=" + varFileName + "&cookie=" + cookie + "&cashierNum=" + varCashierNum + "&regNum=" + varRegNum;
+                vesafecashierrept = baseUrl + "vesafecashierrept&filename=" + varFileName + "&cookie=" + cookie + "&cashierNum=" + varCashierNum + "&regNum=" + varRegNum;
+
+                summary_fileName = baseUrl + "vrubyrept&reptname=summary&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                summary_reptnum = baseUrl + "vrubyrept&reptname=summary&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                department_fileName = baseUrl + "vrubyrept&reptname=department&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                department_reptnum = baseUrl + "vrubyrept&reptname=department&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                eCheck_fileName = baseUrl + "vrubyrept&reptname=eCheck&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                eCheck_reptnum = baseUrl + "vrubyrept&reptname=eCheck&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                tax_fileName = baseUrl + "vrubyrept&reptname=tax&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                tax_reptnum = baseUrl + "vrubyrept&reptname=tax&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                hourly_fileName = baseUrl + "vrubyrept&reptname=hourly&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                hourly_reptnum = baseUrl + "vrubyrept&reptname=hourly&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                network_fileName = baseUrl + "vrubyrept&reptname=network&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                network_reptnum = baseUrl + "vrubyrept&reptname=network&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                deal_fileName = baseUrl + "vrubyrept&reptname=deal&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                deal_reptnum = baseUrl + "vrubyrept&reptname=deal&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                plu_fileName = baseUrl + "vrubyrept&reptname=plu&period=" + varPeriod + "&filename=" + varFileName + "&reptDept=" + varReptDept + "&cookie=" + cookie;
+                plu_reptnum = baseUrl + "vrubyrept&reptname=plu&period=" + varPeriod + "&reptnum=" + varReptnum + "&reptDept=" + varReptDept + "&cookie=" + cookie;
+
+                category_fileName = baseUrl + "vrubyrept&reptname=category&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                category_reptnum = baseUrl + "vrubyrept&reptname=category&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                cashAcc_fileName = baseUrl + "vrubyrept&reptname=cashAcc&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                cashAcc_reptnum = baseUrl + "vrubyrept&reptname=cashAcc&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                carWash_fileName = baseUrl + "vrubyrept&reptname=carWash&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                carWash_reptnum = baseUrl + "vrubyrept&reptname=carWash&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                propCard_fileName = baseUrl + "vrubyrept&reptname=propCard&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                propCard_reptnum = baseUrl + "vrubyrept&reptname=propCard&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                propProd_fileName = baseUrl + "vrubyrept&reptname=propProd&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                propProd_reptnum = baseUrl + "vrubyrept&reptname=propProd&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                moneyOrderDev_fileName = baseUrl + "vrubyrept&reptname=moneyOrderDev&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                moneyOrderDev_reptnum = baseUrl + "vrubyrept&reptname=moneyOrderDev&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                networkTotals_fileName = baseUrl + "vrubyrept&reptname=networkTotals&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                networkTotals_reptnum = baseUrl + "vrubyrept&reptname=networkTotals&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                cwPaypoint_fileName = baseUrl + "vrubyrept&reptname=cwPaypoint&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                cwPaypoint_reptnum = baseUrl + "vrubyrept&reptname=cwPaypoint&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                esafeeod_fileName = baseUrl + "vrubyrept&reptname=esafeeod&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                esafeeod_reptnum = baseUrl + "vrubyrept&reptname=esafeeod&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                esafecontent_fileName = baseUrl + "vrubyrept&reptname=esafecontent&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                esafecontent_reptnum = baseUrl + "vrubyrept&reptname=esafecontent&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                eCheck_fileName = baseUrl + "vrubyrept&reptname=eCheck&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                eCheck_reptnum = baseUrl + "vrubyrept&reptname=eCheck&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+
+                updateURLForElement("Id_vcashierrept", vcashierrept);
+                updateURLForElement("Id_vesafecashierrept", vesafecashierrept);
+
+                updateURLForElement("Id_summary/fileName", summary_fileName);
+                updateURLForElement("Id_summary/reptnum", summary_reptnum);
+                updateURLForElement("Id_department/fileName", department_fileName);
+                updateURLForElement("Id_department/reptnum", department_reptnum);
+                updateURLForElement("Id_eCheck/fileName", eCheck_fileName);
+                updateURLForElement("Id_eCheck/reptnum", eCheck_reptnum);
+                updateURLForElement("Id_tax/fileName", tax_fileName);
+                updateURLForElement("Id_tax/reptnum", tax_reptnum);
+                updateURLForElement("Id_hourly/fileName", hourly_fileName);
+                updateURLForElement("Id_hourly/reptnum", hourly_reptnum);
+                updateURLForElement("Id_network/fileName", network_fileName);
+                updateURLForElement("Id_network/reptnum", network_reptnum);
+                updateURLForElement("Id_deal/fileName", deal_fileName);
+                updateURLForElement("Id_deal/reptnum", deal_reptnum);
+                updateURLForElement("Id_plu/fileName", plu_fileName);
+                updateURLForElement("Id_plu/reptnum", plu_reptnum);
+                updateURLForElement("Id_category/fileName", category_fileName);
+                updateURLForElement("Id_category/reptnum", category_reptnum);
+                updateURLForElement("Id_cashAcc/fileName", cashAcc_fileName);
+                updateURLForElement("Id_cashAcc/reptnum", cashAcc_reptnum);
+                updateURLForElement("Id_carWash/fileName", carWash_fileName);
+                updateURLForElement("Id_carWash/reptnum", carWash_reptnum);
+                updateURLForElement("Id_propCard/fileName", propCard_fileName);
+                updateURLForElement("Id_propCard/reptnum", propCard_reptnum);
+                updateURLForElement("Id_propProd/fileName", propProd_fileName);
+                updateURLForElement("Id_propProd/reptnum", propProd_reptnum);
+                updateURLForElement("Id_moneyOrderDev/fileName", moneyOrderDev_fileName);
+                updateURLForElement("Id_moneyOrderDev/reptnum", moneyOrderDev_reptnum);
+                updateURLForElement("Id_networkTotals/fileName", networkTotals_fileName);
+                updateURLForElement("Id_networkTotals/reptnum", networkTotals_reptnum);
+                updateURLForElement("Id_cwPaypoint/fileName", cwPaypoint_fileName);
+                updateURLForElement("Id_cwPaypoint/reptnum", cwPaypoint_reptnum);
+                updateURLForElement("Id_esafeeod/fileName", esafeeod_fileName);
+                updateURLForElement("Id_esafeeod/reptnum", esafeeod_reptnum);
+                updateURLForElement("Id_esafecontent/fileName", esafecontent_fileName);
+                updateURLForElement("Id_esafecontent/reptnum", esafecontent_reptnum);
+                updateURLForElement("Id_eCheck/fileName", eCheck_fileName);
+                updateURLForElement("Id_eCheck/reptnum", eCheck_reptnum);
+
+
+            }
+
+            function updateURLForElement(elementId, command) {
+                theElement = document.getElementById(elementId)
+                theElement.textContent = "Click here";
+                theElement.href = command;
+
+            }
+
+        </script>
+
+    <p>
+    <table>
+        <tr>
+            <th>Command</th>
+            <th>Inpunt data</th>
+            <th>Link</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>vcashierrept</td>
+            <td>File Name, Cashier number, Register used</td>
+            <td><a href="invalid" id="Id_vcashierrept" target="_blank">vcashierrept</a></td>
+            <td>View the cashier report for a given cashier period, register, and cashier.</td>
+        </tr>
+        <tr>
+            <td>vesafecashierrept</td>
+            <td>File Name, Cashier number, Register used</td>
+            <td><a href="invalid" id="Id_vesafecashierrept" target="_blank">vesafecashierrept</a></td>
+            <td>View the cashier specific electronic safe report for a given cashier period, register, and cashier.</td>
+        </tr>
+
+        <tr>
+            <td rowspan="2">summary</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_summary/fileName" target="_blank">summary</a></td>
+            <td rowspan="2">View the summary report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_summary/reptnum" target="_blank">summary</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">department</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_department/fileName" target="_blank">department</a></td>
+            <td rowspan="2">View the department sales report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_department/reptnum" target="_blank">department</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">eCheck</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_eCheck/fileName" target="_blank">eCheck</a></td>
+            <td rowspan="2">View the eCheck report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_eCheck/reptnum" target="_blank">eCheck</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">tax</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_tax/fileName" target="_blank">tax</a></td>
+            <td rowspan="2">View the tax report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_tax/reptnum" target="_blank">tax</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">hourly</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_hourly/fileName" target="_blank">hourly</a></td>
+            <td rowspan="2">View the hourly sales report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_hourly/reptnum" target="_blank">hourly</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">network</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_network/fileName" target="_blank">network</a></td>
+            <td rowspan="2">View the network report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_network/reptnum" target="_blank">network</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">deal</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_deal/fileName" target="_blank">deal</a></td>
+            <td rowspan="2">View the deal (mix-match and combo) report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_deal/reptnum" target="_blank">deal</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">plu</td>
+            <td>Period, File Name, Department number</td>
+            <td><a href="invalid" id="Id_plu/fileName" target="_blank">plu</a></td>
+            <td rowspan="2">View the PLU (price look-up code) sales report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum, Department number</td>
+            <td><a href="invalid" id="Id_plu/reptnum" target="_blank">plu</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">category</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_category/fileName" target="_blank">category</a></td>
+            <td rowspan="2">View the category sales report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_category/reptnum" target="_blank">category</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">cashAcc</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_cashAcc/fileName" target="_blank">cashAcc</a></td>
+            <td rowspan="2">View the cash acceptor report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_cashAcc/reptnum" target="_blank">cashAcc</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">carWash</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_carWash/fileName" target="_blank">carWash</a></td>
+            <td rowspan="2">View the car wash report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_carWash/reptnum" target="_blank">carWash</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">propCard</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_propCard/fileName" target="_blank">propCard</a></td>
+            <td rowspan="2">View the proprietary card report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_propCard/reptnum" target="_blank">propCard</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">propProd</td>
+            <td></td>
+            <td><a href="invalid" id="Id_propProd/fileName" target="_blank">propProd</a></td>
+            <td rowspan="2">View the proprietary card network report by product code for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_propProd/reptnum" target="_blank">propProd</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">moneyOrderDev</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_moneyOrderDev/fileName" target="_blank">moneyOrderDev</a></td>
+            <td rowspan="2">View the money order (device totals) report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_moneyOrderDev/reptnum" target="_blank">moneyOrderDev</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">networkTotals</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_networkTotals/fileName" target="_blank">networkTotals</a></td>
+            <td rowspan="2">View the network totals report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_networkTotals/reptnum" target="_blank">networkTotals</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">cwPaypoint</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_cwPaypoint/fileName" target="_blank">cwPaypoint</a></td>
+            <td rowspan="2">View the car wash pay point activity for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_cwPaypoint/reptnum" target="_blank">cwPaypoint</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">esafeeod</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_esafeeod/fileName" target="_blank">esafeeod</a></td>
+            <td rowspan="2">View the electronic safe end of day report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_esafeeod/reptnum" target="_blank">esafeeod</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">esafecontent</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_esafecontent/fileName" target="_blank">esafecontent</a></td>
+            <td rowspan="2">View the electronic safe content report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_esafecontent/reptnum" target="_blank">esafecontent</a></td>
+        </tr>
+        <tr>
+            <td rowspan="2">eCheck</td>
+            <td>Period, File Name</td>
+            <td><a href="invalid" id="Id_eCheck/fileName" target="_blank">eCheck</a></td>
+            <td rowspan="2">View the electronic check report for a given period and period type.</td>
+        </tr>
+        <tr>
+            <td>Period, reptnum</td>
+            <td><a href="invalid" id="Id_eCheck/reptnum" target="_blank">eCheck</a></td>
+        </tr>
+
+    </table>
+</body>
+
+</html>

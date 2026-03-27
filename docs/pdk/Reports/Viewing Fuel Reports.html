@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+    <title>Verifone Services - Reports</title>
+    <Head>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    </Head>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+    </style>
+    <body onload="updateURLs()">
+
+        <h1>Viewing Fuel Reports</h1>
+        IP: <input type="text" id="VerifoneIp" value="192.168.31.11" placeholder="verifone ip" onchange="updateURLs()"/>
+        Cookie: <input type="text" id="Cookie" value="" placeholder="Past cookie here" onchange="updateURLs()"/>
+        <p>
+            Period: <input type="text" id="id-period" value="" placeholder="1=Shift,2=Day" onchange="updateURLs()"/>
+            File Name: <input type="text" id="id-fileName" value="" placeholder="Current" onchange="updateURLs()"/>
+            Reptnum: <input type="text" id="id-reptnum" value="" placeholder="Report number" onchange="updateURLs()"/>
+
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+            var varPeriod = ""
+            var varFileName = ""
+            var varReptnum = ""
+
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+                varPeriod = document.getElementById('id-period').value;
+                varFileName = document.getElementById('id-fileName').value;
+                varReptnum = document.getElementById('id-reptnum').value;
+            }
+
+            function updateURLs() {
+                getFormData();
+
+                baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+
+                vrubyrept_popDiscCommand_fileName = baseUrl + "vrubyrept&reptname=popDisc&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_popDiscCommand_reptnum = baseUrl + "vrubyrept&reptname=popDisc&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_dcrStatCommand_fileName = baseUrl + "vrubyrept&reptname=dcrStat&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_dcrStatCommand_reptnum = baseUrl + "vrubyrept&reptname=dcrStat&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_fpHoseTestCommand_fileName = baseUrl + "vrubyrept&reptname=fpHoseTest&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_fpHoseTestCommand_reptnum = baseUrl + "vrubyrept&reptname=fpHoseTest&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_fpHoseCommand_fileName = baseUrl + "vrubyrept&reptname=fpHose&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_fpHoseCommand_reptnum = baseUrl + "vrubyrept&reptname=fpHose&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_fpHoseRunningCommand_fileName = baseUrl + "vrubyrept&reptname=fpHoseRunning&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_fpHoseRunningCommand_reptnum = baseUrl + "vrubyrept&reptname=fpHoseRunning&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_prPriceLvlCommand_fileName = baseUrl + "vrubyrept&reptname=prPriceLvl&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_prPriceLvlCommand_reptnum = baseUrl + "vrubyrept&reptname=prPriceLvl&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_slPriceLvlCommand_fileName = baseUrl + "vrubyrept&reptname=slPriceLvl&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_slPriceLvlCommand_reptnum = baseUrl + "vrubyrept&reptname=slPriceLvl&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_tierProductCommand_fileName = baseUrl + "vrubyrept&reptname=tierProduct&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_tierProductCommand_reptnum = baseUrl + "vrubyrept&reptname=tierProduct&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_autoCollectCommand_fileName = baseUrl + "vrubyrept&reptname=autoCollect&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_autoCollectCommand_reptnum = baseUrl + "vrubyrept&reptname=autoCollect&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_tankCommand_fileName = baseUrl + "vrubyrept&reptname=tank&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_tankCommand_reptnum = baseUrl + "vrubyrept&reptname=tank&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_tankMonitorCommand_fileName = baseUrl + "vrubyrept&reptname=tankMonitor&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_tankMonitorCommand_reptnum = baseUrl + "vrubyrept&reptname=tankMonitor&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_tankRecCommand_fileName = baseUrl + "vrubyrept&reptname=tankRec&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_tankRecCommand_reptnum = baseUrl + "vrubyrept&reptname=tankRec&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vfueltotalsCommand_fileName = baseUrl + "vfueltotals&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vfueltotalsCommand_reptnum = baseUrl + "vfueltotals&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vfueltotalszCommand_fileName = baseUrl + "vfueltotalsz&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vfueltotalszCommand_reptnum = baseUrl + "vfueltotalsz&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_blendProductCommand_fileName = baseUrl + "vrubyrept&reptname=blendProduct&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_blendProductCommand_reptnum = baseUrl + "vrubyrept&reptname=blendProduct&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_fpDispenserCommand_fileName = baseUrl + "vrubyrept&reptname=fpDispenser&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_fpDispenserCommand_reptnum = baseUrl + "vrubyrept&reptname=fpDispenser&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_popDefCommand_fileName = baseUrl + "vrubyrept&reptname=popDef&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_popDefCommand_reptnum = baseUrl + "vrubyrept&reptname=popDef&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+                
+                vrubyrept_popdiscprgmrptCommand_fileName = baseUrl + "vrubyrept&reptname=popdiscprgmrpt&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vrubyrept_popdiscprgmrptCommand_reptnum = baseUrl + "vrubyrept&reptname=popdiscprgmrpt&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+
+
+                updateURLForElement("Id_vrubyrept/popDisc/fileName",vrubyrept_popDiscCommand_fileName);
+                updateURLForElement("Id_vrubyrept/popDisc/reptnum",vrubyrept_popDiscCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/dcrStat/fileName",vrubyrept_dcrStatCommand_fileName);
+                updateURLForElement("Id_vrubyrept/dcrStat/reptnum",vrubyrept_dcrStatCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/fpHoseTest/fileName",vrubyrept_fpHoseTestCommand_fileName);
+                updateURLForElement("Id_vrubyrept/fpHoseTest/reptnum",vrubyrept_fpHoseTestCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/fpHose/fileName",vrubyrept_fpHoseCommand_fileName);
+                updateURLForElement("Id_vrubyrept/fpHose/reptnum",vrubyrept_fpHoseCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/fpHoseRunning/fileName",vrubyrept_fpHoseRunningCommand_fileName);
+                updateURLForElement("Id_vrubyrept/fpHoseRunning/reptnum",vrubyrept_fpHoseRunningCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/prPriceLvl/fileName",vrubyrept_prPriceLvlCommand_fileName);
+                updateURLForElement("Id_vrubyrept/prPriceLvl/reptnum",vrubyrept_prPriceLvlCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/slPriceLvl/fileName",vrubyrept_slPriceLvlCommand_fileName);
+                updateURLForElement("Id_vrubyrept/slPriceLvl/reptnum",vrubyrept_slPriceLvlCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/tierProduct/fileName",vrubyrept_tierProductCommand_fileName);
+                updateURLForElement("Id_vrubyrept/tierProduct/reptnum",vrubyrept_tierProductCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/autoCollect/fileName",vrubyrept_autoCollectCommand_fileName);
+                updateURLForElement("Id_vrubyrept/autoCollect/reptnum",vrubyrept_autoCollectCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/tank/fileName",vrubyrept_tankCommand_fileName);
+                updateURLForElement("Id_vrubyrept/tank/reptnum",vrubyrept_tankCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/tankMonitor/fileName",vrubyrept_tankMonitorCommand_fileName);
+                updateURLForElement("Id_vrubyrept/tankMonitor/reptnum",vrubyrept_tankMonitorCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/tankRec/fileName",vrubyrept_tankRecCommand_fileName);
+                updateURLForElement("Id_vrubyrept/tankRec/reptnum",vrubyrept_tankRecCommand_reptnum);
+                
+                updateURLForElement("Id_vfueltotals/fileName",vfueltotalsCommand_fileName);
+                updateURLForElement("Id_vfueltotals/reptnum",vfueltotalsCommand_reptnum);
+                
+                updateURLForElement("Id_vfueltotalsz/fileName",vfueltotalszCommand_fileName);
+                updateURLForElement("Id_vfueltotalsz/reptnum",vfueltotalszCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/blendProduct/fileName",vrubyrept_blendProductCommand_fileName);
+                updateURLForElement("Id_vrubyrept/blendProduct/reptnum",vrubyrept_blendProductCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/fpDispenser/fileName",vrubyrept_fpDispenserCommand_fileName);
+                updateURLForElement("Id_vrubyrept/fpDispenser/reptnum",vrubyrept_fpDispenserCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/popDef/fileName",vrubyrept_popDefCommand_fileName);
+                updateURLForElement("Id_vrubyrept/popDef/reptnum",vrubyrept_popDefCommand_reptnum);
+                
+                updateURLForElement("Id_vrubyrept/popdiscprgmrpt/fileName",vrubyrept_popdiscprgmrptCommand_fileName);
+                updateURLForElement("Id_vrubyrept/popdiscprgmrpt/reptnum",vrubyrept_popdiscprgmrptCommand_reptnum);
+            }
+
+            function updateURLForElement(elementId, command) {
+                theElement = document.getElementById(elementId)
+                theElement.textContent = command;
+                theElement.href = command;
+
+            }
+
+        </script>
+
+        <p>
+        <table>
+            <tr>
+                <th>Command</th><th>Link</th>
+            </tr>
+            <tr><td rowspan="2">vrubyrept/popDisc</td><td><a href="invalid" id="Id_vrubyrept/popDisc/fileName"  target="_blank">vrubyrept/popDisc/fileName</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/popDisc/reptnum"  target="_blank">vrubyrept/popDisc/reptnum</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/dcrStat</td><td><a href="invalid" id="Id_vrubyrept/dcrStat/fileName"  target="_blank">vrubyrept/dcrStat/fileName</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/dcrStat/reptnum"  target="_blank">vrubyrept/dcrStat/reptnum</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/fpHoseTest</td><td><a href="invalid" id="Id_vrubyrept/fpHoseTest/fileName"  target="_blank">vrubyrept/fpHoseTest</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/fpHoseTest/reptnum"  target="_blank">vrubyrept/fpHoseTest</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/fpHose</td><td><a href="invalid" id="Id_vrubyrept/fpHose/fileName"  target="_blank">vrubyrept/fpHose</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/fpHose/reptnum"  target="_blank">vrubyrept/fpHose</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/fpHoseRunning</td><td><a href="invalid" id="Id_vrubyrept/fpHoseRunning/fileName"  target="_blank">vrubyrept/fpHoseRunning</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/fpHoseRunning/reptnum"  target="_blank">vrubyrept/fpHoseRunning</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/prPriceLvl</td><td><a href="invalid" id="Id_vrubyrept/prPriceLvl/fileName"  target="_blank">vrubyrept/prPriceLvl</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/prPriceLvl/reptnum"  target="_blank">vrubyrept/prPriceLvl</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/slPriceLvl</td><td><a href="invalid" id="Id_vrubyrept/slPriceLvl/fileName"  target="_blank">vrubyrept/slPriceLvl</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/slPriceLvl/reptnum"  target="_blank">vrubyrept/slPriceLvl</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/tierProduct</td><td><a href="invalid" id="Id_vrubyrept/tierProduct/fileName"  target="_blank">vrubyrept/tierProduct</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/tierProduct/reptnum"  target="_blank">vrubyrept/tierProduct</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/autoCollect</td><td><a href="invalid" id="Id_vrubyrept/autoCollect/fileName"  target="_blank">vrubyrept/autoCollect</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/autoCollect/reptnum"  target="_blank">vrubyrept/autoCollect</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/tank</td><td><a href="invalid" id="Id_vrubyrept/tank/fileName"  target="_blank">vrubyrept/tank</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/tank/reptnum"  target="_blank">vrubyrept/tank</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/tankMonitor</td><td><a href="invalid" id="Id_vrubyrept/tankMonitor/fileName"  target="_blank">vrubyrept/tankMonitor</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/tankMonitor/reptnum"  target="_blank">vrubyrept/tankMonitor</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/tankRec</td><td><a href="invalid" id="Id_vrubyrept/tankRec/fileName"  target="_blank">vrubyrept/tankRec</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/tankRec/reptnum"  target="_blank">vrubyrept/tankRec</a></td></tr>
+            
+            <tr><td rowspan="2">vfueltotals</td><td><a href="invalid" id="Id_vfueltotals/fileName"  target="_blank">vfueltotals</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vfueltotals/reptnum"  target="_blank">vfueltotals</a></td></tr>
+            
+            <tr><td rowspan="2">vfueltotalsz</td><td><a href="invalid" id="Id_vfueltotalsz/fileName"  target="_blank">vfueltotalsz</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vfueltotalsz/reptnum"  target="_blank">vfueltotalsz</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/blendProduct</td><td><a href="invalid" id="Id_vrubyrept/blendProduct/fileName"  target="_blank">vfueltotalsz</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/blendProduct/reptnum"  target="_blank">blendProduct</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/blendProduct</td><td><a href="invalid" id="Id_vrubyrept/fpDispenser/fileName"  target="_blank">vfueltotalsz</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/fpDispenser/reptnum"  target="_blank">fpDispenser</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/popDef</td><td><a href="invalid" id="Id_vrubyrept/popDef/fileName"  target="_blank">vfueltotalsz</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/popDef/reptnum"  target="_blank">popDef</a></td></tr>
+            
+            <tr><td rowspan="2">vrubyrept/popdiscprgmrpt</td><td><a href="invalid" id="Id_vrubyrept/popdiscprgmrpt/fileName"  target="_blank">vfueltotalsz</a></td></tr>
+            <tr><td><a href="invalid" id="Id_vrubyrept/popdiscprgmrpt/reptnum"  target="_blank">popdiscprgmrpt</a></td></tr>
+        </table>
+
+        <h3 color='0xff0000'>INSTRUCTIONS:</h3>
+        <p>Please follow instructions. </p>
+        <p></p>
+
+    </body>
+</html>

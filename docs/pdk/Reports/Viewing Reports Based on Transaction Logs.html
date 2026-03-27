@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+    <title>Verifone Services - Reports</title>
+    <Head>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    </Head>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+    </style>
+    <body onload="updateURLs()">
+
+        <h1>Viewing Reports Based on Transaction Logs</h1>
+
+        IP: <input type="text" id="VerifoneIp" value="192.168.31.11" placeholder="verifone ip" onchange="updateURLs()"/>
+        Cookie: <input type="text" id="Cookie" value="" placeholder="Past cookie here" onchange="updateURLs()"/>
+        <p>
+            Period: <input type="text" id="id-period" value="" placeholder="1=Shift,2=Day" onchange="updateURLs()"/>
+            File Name: <input type="text" id="id-fileName" value="" placeholder="Current" onchange="updateURLs()"/>
+            Reptnum: <input type="text" id="id-reptnum" value="" placeholder="Report number" onchange="updateURLs()"/>
+
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+            var varPeriod = ""
+            var varFileName = ""
+            var varReptnum = ""
+
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+                varPeriod = document.getElementById('id-period').value;
+                varFileName = document.getElementById('id-fileName').value;
+                varReptnum = document.getElementById('id-reptnum').value;
+            }
+
+            function updateURLs() {
+                getFormData();
+
+                baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+
+                vperiodrept_fileName = baseUrl + "vperiodrept&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vperiodrept_reptnum = baseUrl + "vperiodrept&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                vperiodreptz_fileName = baseUrl + "vperiodreptz&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vperiodreptz_reptnum = baseUrl + "vperiodreptz&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                vperiodrept2_fileName = baseUrl + "vperiodrept2&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vperiodrept2_reptnum = baseUrl + "vperiodrept2&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                vtransset_fileName = baseUrl + "vtransset&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vtransset_reptnum = baseUrl + "vtransset&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+                vtranssetz_fileName = baseUrl + "vtranssetz&period=" + varPeriod + "&filename=" + varFileName + "&cookie=" + cookie;
+                vtranssetz_reptnum = baseUrl + "vtranssetz&period=" + varPeriod + "&reptnum=" + varReptnum + "&cookie=" + cookie;
+
+
+                updateURLForElement("Id_vperiodrept/fileName", vperiodrept_fileName);
+                updateURLForElement("Id_vperiodrept/reptnum", vperiodrept_reptnum);
+
+                updateURLForElement("Id_vperiodreptz/fileName", vperiodreptz_fileName);
+                updateURLForElement("Id_vperiodreptz/reptnum", vperiodreptz_reptnum);
+
+                updateURLForElement("Id_vperiodrept2/fileName", vperiodrept2_fileName);
+                updateURLForElement("Id_vperiodrept2/reptnum", vperiodrept2_reptnum);
+
+                updateURLForElement("Id_vtransset/fileName", vtransset_fileName);
+                updateURLForElement("Id_vtransset/reptnum", vtransset_reptnum);
+                
+                updateURLForElement("Id_vtranssetz/fileName", vtranssetz_fileName);
+                updateURLForElement("Id_vtranssetz/reptnum", vtranssetz_reptnum);
+            }
+
+            function updateURLForElement(elementId, command) {
+                theElement = document.getElementById(elementId)
+                theElement.textContent = "Click here";
+                theElement.href = command;
+
+            }
+
+        </script>
+
+        <p>
+        <table>
+            <tr>
+                <th>Command</th><th>Inpunt data</th><th>Link</th><th>Description</th>
+            </tr>
+            <tr>
+                <td rowspan="2">vperiodrept</td>
+                <td>Period, File Name</td>
+                <td><a href="invalid" id="Id_vperiodrept/fileName"  target="_blank">vperiodrept/fileName</a></td>
+                <td rowspan="2">View the designated transaction log document.</td>
+            </tr>
+            <tr>
+                <td>Period, Reptnum</td>
+                <td><a href="invalid" id="Id_vperiodrept/reptnum"  target="_blank">vperiodrept/reptnum</a></td>
+            </tr>
+            
+            <tr>
+                <td rowspan="2">vperiodreptz</td>
+                <td>Period, File Name</td>
+                <td><a href="invalid" id="Id_vperiodreptz/fileName"  target="_blank">vperiodreptz/fileName</a></td>
+                <td rowspan="2">View the designated transaction log document. The returned document is in gzip format.</td>
+            </tr>
+            <tr>
+                <td>Period, Reptnum</td>
+                <td><a href="invalid" id="Id_vperiodreptz/reptnum"  target="_blank">vperiodreptz/reptnum</a></td>
+            </tr>
+
+            <tr>
+                <td rowspan="2">vperiodrept2</td>
+                <td>Period, File Name</td>
+                <td><a href="invalid" id="Id_vperiodrept2/fileName"  target="_blank">vperiodrept2/fileName</a></td>
+                <td rowspan="2">View the designated transaction log with credit card account numbers masked, except for what is permitted under PA-DSS.</td>
+            </tr>
+            <tr>
+                <td>Period, Reptnum</td>
+                <td><a href="invalid" id="Id_vperiodrept2/reptnum"  target="_blank">vperiodrept2/reptnum</a></td>
+            </tr>
+
+            <tr>
+                <td rowspan="2">vtransset</td>
+                <td>Period, File Name</td>
+                <td><a href="invalid" id="Id_vtransset/fileName"  target="_blank">vtransset/fileName</a></td>
+                <td rowspan="2">View the designated transaction log document from Commander Site Controller.</td>
+            </tr>
+            <tr>
+                <td>Period, Reptnum</td>
+                <td><a href="invalid" id="Id_vtransset/reptnum"  target="_blank">vtransset/reptnum</a></td>
+            </tr>
+
+            <tr>
+                <td rowspan="2">vtranssetz</td>
+                <td>Period, File Name</td>
+                <td><a href="invalid" id="Id_vtranssetz/fileName"  target="_blank">vtranssetz/fileName</a></td>
+                <td rowspan="2">View the designated transaction log document from Commander Site Controller. The returned document is in gzip format.</td>
+            </tr>
+            <tr>
+                <td>Period, Reptnum</td>
+                <td><a href="invalid" id="Id_vtranssetz/reptnum"  target="_blank">vtranssetz/reptnum</a></td>
+            </tr>
+            
+        </table>
+
+        <h3 color='0xff0000'>INSTRUCTIONS:</h3>
+        <p>Please follow instructions. </p>
+        <p></p>
+
+    </body>
+</html>

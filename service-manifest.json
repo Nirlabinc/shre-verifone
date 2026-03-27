@@ -1,0 +1,130 @@
+{
+  "$schema": "../scripts/service-manifest.schema.json",
+  "service_id": "shre-verifone",
+  "name": "Verifone Commander Live Server",
+  "description": "Verifone Commander POS live dashboard — LAN-based sync, fuel analytics, XML report parsing",
+  "type": "agent",
+  "port": 5464,
+
+  "fleet": {
+    "name": "Verifone Commander Operations",
+    "description": "Pre-trained c-store/fuel operations team for Verifone Commander POS management",
+
+    "agents": [
+      {
+        "agent_id": "verifone-support",
+        "display_name": "Verifone Support",
+        "title": "C-Store & Fuel POS Specialist",
+        "preferred_model": "anthropic/claude-opus-4-6",
+        "keywords": ["fuel", "c-store", "commander", "verifone", "dispenser", "tank", "shift", "department", "plu", "network", "carwash"],
+        "task_type": "research",
+        "domain_specific": true,
+        "can_spawn": false,
+        "tools": ["read_file"],
+        "capabilities": { "pos_analytics": true, "fuel_data": true, "shift_reports": true, "chat_context": true },
+
+        "soul": "You are the C-Store & Fuel POS Specialist for Verifone Commander sites. You have deep expertise in convenience store and fuel station operations including daily/shift sales, department performance, PLU rankings, fuel grade mix, network (payment) totals, and hourly traffic patterns. You always answer using the live data injected into your context. Be concise, use numbers, format with tables when listing items.",
+
+        "skills": {
+          "retail/pos-operations": { "level": 5, "confidence": "tested" },
+          "retail/fuel-operations": { "level": 5, "confidence": "tested" },
+          "retail/sales-analytics": { "level": 5, "confidence": "tested" },
+          "retail/shift-management": { "level": 4, "confidence": "inferred" },
+          "data/report-generation": { "level": 4, "confidence": "inferred" },
+          "data/trend-analysis": { "level": 4, "confidence": "inferred" }
+        },
+
+        "memory": [
+          "Commander CGI API uses cookie-based sessions (30min TTL)",
+          "Report types: summary, department, plu, tax, hourly, network, networkTotals, category, deal, carWash, cashAcc, propCard",
+          "Period types: 1=Shift, 2=Day (daily reports)",
+          "Fuel data comes from department codes + dedicated fuel reports",
+          "Network = payment methods (Visa, MC, Amex, Discover, EBT, etc.)",
+          "Commander is a LAN device — data comes from local IP, not cloud"
+        ]
+      },
+      {
+        "agent_id": "verifone-admin",
+        "display_name": "Verifone Admin",
+        "title": "Commander Configuration & Sync Admin",
+        "preferred_model": "anthropic/claude-opus-4-6",
+        "keywords": ["verifone-admin", "commander config", "site setup", "sync", "connection", "fuel price"],
+        "task_type": "infra",
+        "domain_specific": true,
+        "can_spawn": false,
+        "tools": ["read_file", "shell_exec"],
+        "capabilities": { "site_management": true, "sync_control": true },
+
+        "soul": "You are the Commander Configuration & Sync Admin. You manage Verifone Commander site connections, sync schedules, and troubleshoot connectivity. You can register new sites, test connections, trigger manual syncs, and monitor sync health. Always describe what you'll change and ask for confirmation.",
+
+        "skills": {
+          "infra/site-management": { "level": 5, "confidence": "tested" },
+          "infra/sync-operations": { "level": 5, "confidence": "tested" },
+          "networking/lan-diagnostics": { "level": 4, "confidence": "inferred" }
+        },
+
+        "memory": [
+          "Commander default IP: 192.168.31.11 (configurable per site)",
+          "Cookie sessions expire ~30min — auto-refresh handles this",
+          "Circuit breaker: 3 failures → open, exponential backoff to 30min",
+          "500ms rate limit between requests — device is single-threaded",
+          "Sites registered via POST /api/sites with IP, user, pass, interval"
+        ]
+      }
+    ]
+  },
+
+  "vault": {
+    "description": "Credentials this app needs — auto-provisioned on first registration",
+    "files": [
+      {
+        "name": "cortexdb.json",
+        "description": "CortexDB connection credentials (PG host, port, user, password, db)",
+        "required": true,
+        "shared": true
+      }
+    ],
+    "env_vars": []
+  },
+
+  "data_sources": [
+    {
+      "connector_type": "lan-device",
+      "cortex_schema": "verifone",
+      "role": "primary",
+      "description": "Verifone Commander LAN device (CGI API over HTTPS)",
+      "tables": ["site_config", "data_day_summary", "data_shift_summary", "data_department", "data_plu", "data_hourly", "data_tax", "data_network", "data_network_totals", "data_category", "data_deal", "data_carwash", "data_transaction_log", "sync_ledger"]
+    },
+    {
+      "connector_type": "cortexdb",
+      "cortex_schema": "verifone_analytics",
+      "role": "analytics",
+      "description": "Materialized analytics views (auto-refresh 4h)"
+    }
+  ],
+
+  "sdk_modules": ["logger", "cortex", "rag", "events"],
+
+  "endpoints": {
+    "health": "/health",
+    "readyz": "/readyz",
+    "sites": "/api/sites",
+    "sync": "/api/sites/:siteId/sync"
+  },
+
+  "routing": {
+    "retail_path": "openclaw",
+    "engineering_path": "shre-router",
+    "default_agent": "verifone-support"
+  },
+
+  "learning": {
+    "rag_enabled": true,
+    "conversation_learning": true,
+    "skill_gap_detection": true,
+    "cross_agent_sharing": true,
+    "share_to_domains": ["retail/*", "fuel/*"],
+    "feedback_to": ["shre", "ellie"],
+    "learn_schedule": "hourly"
+  }
+}

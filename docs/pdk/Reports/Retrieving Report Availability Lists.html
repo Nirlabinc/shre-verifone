@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+    <title>Verifone Services - Reports</title>
+    <Head>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    </Head>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+    </style>
+    <body onload="updateURLs()">
+
+        <h1>Retrieving Report Availability Lists</h1>
+
+        IP: <input type="text" id="VerifoneIp" value="192.168.31.11" placeholder="Verifone IP" onchange="updateURLs()"/>
+        Cookie: <input type="text" id="Cookie" value="" placeholder="Past cookie here" onchange="updateURLs()"/>
+        <p>
+
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+            }
+
+            function updateURLs() {
+                getFormData();
+
+                baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+
+                vtlogpdlistCommand = baseUrl + "vtlogpdlist" + "&cookie=" + cookie;
+                vcashierpdlistCommand = baseUrl + "vcashierpdlist" + "&cookie=" + cookie;
+                vpayrollpdlist2Command = baseUrl + "vpayrollpdlist2" + "&cookie=" + cookie;
+                vcwpaypointpdlistCommand = baseUrl + "vcwpaypointpdlist" + "&cookie=" + cookie;
+                vreportpdlistCommand = baseUrl + "vreportpdlist" + "&cookie=" + cookie;
+                vviperpdListCommand = baseUrl + "vviperpdList" + "&cookie=" + cookie;
+
+
+
+                updateURLForElement("Id_vtlogpdlist",vtlogpdlistCommand);
+                updateURLForElement("Id_vcashierpdlist",vcashierpdlistCommand);
+                updateURLForElement("Id_vpayrollpdlist2",vpayrollpdlist2Command);
+                updateURLForElement("Id_vcwpaypointpdlist",vcwpaypointpdlistCommand);
+                updateURLForElement("Id_vreportpdlist",vreportpdlistCommand);
+                updateURLForElement("Id_vviperpdList",vviperpdListCommand);
+
+            }
+
+            function updateURLForElement(elementId, command) {
+                theElement = document.getElementById(elementId)
+                theElement.textContent = "Click here";
+                theElement.href = command;
+
+            }
+
+        </script>
+
+        <p>
+        <table>
+            <tr>
+                <th>Command</th><th>Inpunt data</th><th>Link</th><th>Description</th>
+            </tr>
+            <tr>
+                <td>vtlogpdlist</td>
+                <td></td>
+                <td><a href="invalid" id="Id_vtlogpdlist"  target="_blank">vtlogpdlist</a></td>
+                <td>Get a list of all transaction logs (by period: 1, 2) available for all period types. The returned entries can each be used in a "filename" value in a subsequent call.</td>
+            </tr>
+            <tr>
+                <td>vcashierpdlist</td>
+                <td></td>
+                <td><a href="invalid" id="Id_vcashierpdlist"  target="_blank">vcashierpdlist</a></td>
+                <td>Get a list of all the cashier report periods the currently signed in user can access.</td>
+            </tr>
+            <tr>
+                <td>vpayrollpdlist2</td>
+                <td></td>
+                <td><a href="invalid" id="Id_vpayrollpdlist2"  target="_blank">vpayrollpdlist2</a></td>
+                <td>Get a list of all the payroll report periods available.</td>
+            </tr>
+            <tr>
+                <td>vcwpaypointpdlist</td>
+                <td></td>
+                <td><a href="invalid" id="Id_vcwpaypointpdlist"  target="_blank">vcwpaypointpdlist</a></td>
+                <td>Get a list of all the car wash pay point report periods available.</td>
+            </tr>
+            <tr>
+                <td>vreportpdlist</td>
+                <td></td>
+                <td><a href="invalid" id="Id_vreportpdlist"  target="_blank">vreportpdlist</a></td>
+                <td>Get a list of available reports for all vrubyrept reports (period: 1-4). The returned entries can each be used in a “filename” value in a subsequent call.</td>
+            </tr>
+            <tr>
+                <td>vviperpdList</td>
+                <td></td>
+                <td><a href="invalid" id="Id_vviperpdList"  target="_blank">vviperpdList</a></td>
+                <td>Get a list of all viper report periods available.</td>
+            </tr>
+        </table>
+    </body>
+</html>

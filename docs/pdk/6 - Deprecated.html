@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+    <title>Verifone Services - DEPRECATED</title>
+    <Head>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    </Head>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+    </style>
+    <body onload="updateURLs()">
+
+        <h1>Verifone Services - DEPRECATED</h1>
+        <p>blah blah blah ....</p>
+
+        IP: <input type="text" id="VerifoneIp" value="192.168.31.11" onchange="updateURLs()"/>
+        Cookie: <input type="text" id="Cookie" value="PASTE COOKIE HERE" onchange="updateURLs()"/>
+        <p>
+        x: <input type="text" id="id-x" value="x" onchange="updateURLs()"/>
+        y: <input type="text" id="id-y" value="y" onchange="updateURLs()"/>
+        z: <input type="text" id="id-z" value="z" onchange="updateURLs()"/>
+
+        <script type="text/javascript">
+            var verifoneIp = ""
+            var cookie = ""
+            var varx = ""
+            var vary = ""
+            var varz = ""
+
+            function getFormData() {
+                verifoneIp = document.getElementById('VerifoneIp').value;
+                cookie = document.getElementById('Cookie').value;
+                varx = document.getElementById('id-x').value;
+                vary = document.getElementById('id-y').value;
+                varz = document.getElementById('id-z').value;
+            }
+
+        function updateURLs() {
+            getFormData();
+
+            baseUrl = "https://" + verifoneIp + "/cgi-bin/CGILink?cmd=";
+
+            vfuelposstatCommand = baseUrl + "vfuelposstat";
+            vnetcfgCommand = baseUrl + "vnetcfg";
+            unetcfgCommand = baseUrl + "unetcfg";
+            vPLUUpdateStatusCommand = baseUrl + "vPLUUpdateStatus";
+            vPLUCacheListCommand = baseUrl + "vPLUCacheList";
+            uPLUCacheListCommand = baseUrl + "uPLUCacheList";
+            getPLUsFromGemproCommand = baseUrl + "getPLUsFromGempro";
+            sendPLUsToGemproCommand = baseUrl + "sendPLUsToGempro";
+            vpayrollpdlistCommand = baseUrl + "vpayrollpdlist";
+
+
+
+            updateURLForElement("Id_vfuelposstat",vfuelposstatCommand);
+            updateURLForElement("Id_vnetcfg",vnetcfgCommand);
+            updateURLForElement("Id_unetcfg",unetcfgCommand);
+            updateURLForElement("Id_vPLUUpdateStatus",vPLUUpdateStatusCommand);
+            updateURLForElement("Id_vPLUCacheList",vPLUCacheListCommand);
+            updateURLForElement("Id_uPLUCacheList",uPLUCacheListCommand);
+            updateURLForElement("Id_getPLUsFromGempro",getPLUsFromGemproCommand);
+            updateURLForElement("Id_sendPLUsToGempro",sendPLUsToGemproCommand);
+            updateURLForElement("Id_vpayrollpdlist",vpayrollpdlistCommand);
+
+        }
+
+        function updateURLForElement(elementId, command) {
+            theElement = document.getElementById(elementId)
+            theElement.textContent = command;
+            theElement.href = command;
+
+        }
+
+            </script>
+
+        <p>
+        <table>
+            <tr>
+                <th>Command</th><th>Link</th>
+            </tr>
+            <tr><td>vfuelposstat</td><td><a href="invalid" id="Id_vfuelposstat"  target="_blank">vfuelposstat</a></td></tr>
+            <tr><td>vnetcfg</td><td><a href="invalid" id="Id_vnetcfg"  target="_blank">vnetcfg</a></td></tr>
+            <tr><td>unetcfg</td><td><a href="invalid" id="Id_unetcfg"  target="_blank">unetcfg</a></td></tr>
+            <tr><td>vPLUUpdateStatus</td><td><a href="invalid" id="Id_vPLUUpdateStatus"  target="_blank">vPLUUpdateStatus</a></td></tr>
+            <tr><td>vPLUCacheList</td><td><a href="invalid" id="Id_vPLUCacheList"  target="_blank">vPLUCacheList</a></td></tr>
+            <tr><td>uPLUCacheList</td><td><a href="invalid" id="Id_uPLUCacheList"  target="_blank">uPLUCacheList</a></td></tr>
+            <tr><td>getPLUsFromGempro</td><td><a href="invalid" id="Id_getPLUsFromGempro"  target="_blank">getPLUsFromGempro</a></td></tr>
+            <tr><td>sendPLUsToGempro</td><td><a href="invalid" id="Id_sendPLUsToGempro"  target="_blank">sendPLUsToGempro</a></td></tr>
+            <tr><td>vpayrollpdlist</td><td><a href="invalid" id="Id_vpayrollpdlist"  target="_blank">vpayrollpdlist</a></td></tr>
+        </table>
+
+        <h3 color='0xff0000'>INSTRUCTIONS:</h3>
+        <p>Please follow instructions. </p>
+        <p></p>
+
+    </body>
+</html>

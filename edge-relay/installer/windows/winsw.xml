@@ -1,0 +1,24 @@
+<!--
+  WinSW Service Configuration — Verifone Edge Relay
+  https://github.com/winsw/winsw
+-->
+<service>
+  <id>VerifoneEdgeRelay</id>
+  <name>Verifone Edge Relay</name>
+  <description>Syncs Verifone Commander POS data to Shre AI cloud</description>
+  <executable>%BASE%\verifone-edge-relay.exe</executable>
+  <arguments></arguments>
+  <logpath>%COMMONAPPDATA%\VerifoneEdgeRelay\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>3</keepFiles>
+  </log>
+  <env name="RELAY_DATA_DIR" value="%COMMONAPPDATA%\VerifoneEdgeRelay" />
+  <env name="NODE_TLS_REJECT_UNAUTHORIZED" value="0" />
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="60 sec" />
+  <resetfailure>1 hour</resetfailure>
+</service>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup — Verifone Edge Relay</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .container { max-width: 480px; width: 100%; padding: 2rem; }
+    .logo { text-align: center; margin-bottom: 2rem; }
+    .logo h1 { font-size: 1.5rem; color: #38bdf8; }
+    .logo p { color: #94a3b8; font-size: 0.875rem; margin-top: 0.25rem; }
+    .steps { display: flex; gap: 0.5rem; margin-bottom: 2rem; }
+    .step-dot { width: 2.5rem; height: 4px; border-radius: 2px; background: #334155; transition: background 0.3s; }
+    .step-dot.active { background: #38bdf8; }
+    .step-dot.done { background: #22c55e; }
+    .card { background: #1e293b; border-radius: 0.75rem; padding: 1.5rem; border: 1px solid #334155; }
+    .card h2 { font-size: 1.125rem; margin-bottom: 0.25rem; }
+    .card p.desc { color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.25rem; }
+    label { display: block; font-size: 0.875rem; color: #94a3b8; margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    input, select { width: 100%; padding: 0.625rem; background: #0f172a; border: 1px solid #475569; border-radius: 0.5rem; color: #e2e8f0; font-size: 0.875rem; outline: none; }
+    input:focus { border-color: #38bdf8; }
+    .btn { display: inline-block; padding: 0.625rem 1.25rem; border: none; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: background 0.2s; width: 100%; margin-top: 1.25rem; }
+    .btn-primary { background: #38bdf8; color: #0f172a; }
+    .btn-primary:hover { background: #7dd3fc; }
+    .btn-primary:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: #334155; color: #e2e8f0; margin-top: 0.5rem; }
+    .error { background: #7f1d1d; border: 1px solid #dc2626; color: #fca5a5; padding: 0.75rem; border-radius: 0.5rem; font-size: 0.875rem; margin-top: 0.75rem; display: none; }
+    .success { background: #14532d; border: 1px solid #22c55e; color: #86efac; padding: 0.75rem; border-radius: 0.5rem; font-size: 0.875rem; margin-top: 0.75rem; display: none; }
+    .tier-option { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: #0f172a; border-radius: 0.5rem; margin-top: 0.5rem; cursor: pointer; border: 1px solid #334155; }
+    .tier-option.selected { border-color: #38bdf8; }
+    .tier-option input[type=radio] { width: auto; }
+    .tier-label strong { display: block; font-size: 0.875rem; color: #e2e8f0; }
+    .tier-label span { font-size: 0.75rem; color: #94a3b8; }
+    .hidden { display: none; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #0f172a; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .summary-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #334155; font-size: 0.875rem; }
+    .summary-row:last-child { border: none; }
+    .summary-val { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <h1>Verifone Edge Relay</h1>
+      <p>Connect your Commander to Shre AI</p>
+    </div>
+
+    <div class="steps">
+      <div class="step-dot active" id="dot-1"></div>
+      <div class="step-dot" id="dot-2"></div>
+      <div class="step-dot" id="dot-3"></div>
+      <div class="step-dot" id="dot-4"></div>
+    </div>
+
+    <!-- Step 1: Login -->
+    <div class="card" id="step-1">
+      <h2>Sign In</h2>
+      <p class="desc">Use your Shre AI or MIB007 account</p>
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="you@company.com" autocomplete="email">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Your password" autocomplete="current-password">
+      <div class="error" id="err-1"></div>
+      <button class="btn btn-primary" id="btn-login" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <!-- Step 2: Commander -->
+    <div class="card hidden" id="step-2">
+      <h2>Commander Connection</h2>
+      <p class="desc">Enter your Verifone Commander device details</p>
+      <label for="cmd-ip">Commander IP Address</label>
+      <input type="text" id="cmd-ip" value="192.168.31.11" placeholder="192.168.31.11">
+      <label for="cmd-user">Username</label>
+      <input type="text" id="cmd-user" value="rapidnir" placeholder="Username">
+      <label for="cmd-pass">Password</label>
+      <input type="password" id="cmd-pass" placeholder="Commander password">
+      <div class="error" id="err-2"></div>
+      <div class="success" id="ok-2"></div>
+      <button class="btn btn-primary" id="btn-test" onclick="doTestCommander()">Test Connection</button>
+      <button class="btn btn-secondary hidden" id="btn-next-2" onclick="goStep(3)">Continue</button>
+    </div>
+
+    <!-- Step 3: Data Sharing -->
+    <div class="card hidden" id="step-3">
+      <h2>Data Sharing</h2>
+      <p class="desc">Choose what data to share with Shre AI for analytics and learning</p>
+      <div class="tier-option selected" onclick="selectTier(1)">
+        <input type="radio" name="tier" value="1">
+        <div class="tier-label"><strong>Tier 1 — Metrics Only</strong><span>Aggregated sales, department, hourly summaries (always on)</span></div>
+      </div>
+      <div class="tier-option" onclick="selectTier(2)">
+        <input type="radio" name="tier" value="2" checked>
+        <div class="tier-label"><strong>Tier 2 — Recommended</strong><span>+ Skill performance, query patterns, training data</span></div>
+      </div>
+      <div class="tier-option" onclick="selectTier(3)">
+        <input type="radio" name="tier" value="3">
+        <div class="tier-label"><strong>Tier 3 — Full Access</strong><span>+ Encrypted transaction-level data (for advanced analytics)</span></div>
+      </div>
+      <button class="btn btn-primary" onclick="goStep(4)">Continue</button>
+    </div>
+
+    <!-- Step 4: Confirm -->
+    <div class="card hidden" id="step-4">
+      <h2>Confirm Setup</h2>
+      <p class="desc">Review your configuration</p>
+      <div id="summary"></div>
+      <div class="error" id="err-4"></div>
+      <button class="btn btn-primary" id="btn-complete" onclick="doComplete()">Start Relay</button>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    let authToken = null;
+    let selectedTier = 2;
+
+    function goStep(n) {
+      document.getElementById(`step-${currentStep}`).classList.add('hidden');
+      document.getElementById(`step-${n}`).classList.remove('hidden');
+      for (let i = 1; i <= 4; i++) {
+        const dot = document.getElementById(`dot-${i}`);
+        dot.classList.remove('active', 'done');
+        if (i < n) dot.classList.add('done');
+        if (i === n) dot.classList.add('active');
+      }
+      currentStep = n;
+      if (n === 4) buildSummary();
+    }
+
+    function showError(stepId, msg) {
+      const el = document.getElementById(`err-${stepId}`);
+      el.textContent = msg; el.style.display = 'block';
+    }
+    function hideError(stepId) {
+      document.getElementById(`err-${stepId}`).style.display = 'none';
+    }
+
+    async function doLogin() {
+      hideError(1);
+      const btn = document.getElementById('btn-login');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Signing in...';
+
+      try {
+        const res = await fetch('/api/setup/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Authentication failed');
+        authToken = data;
+        goStep(2);
+      } catch (err) {
+        showError(1, err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Sign In';
+      }
+    }
+
+    async function doTestCommander() {
+      hideError(2);
+      const btn = document.getElementById('btn-test');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Testing...';
+
+      try {
+        const res = await fetch('/api/setup/test-commander', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ip: document.getElementById('cmd-ip').value,
+            username: document.getElementById('cmd-user').value,
+            password: document.getElementById('cmd-pass').value,
+          }),
+        });
+        const data = await res.json();
+        if (!data.reachable) throw new Error(data.error || 'Connection failed');
+
+        const ok = document.getElementById('ok-2');
+        ok.textContent = 'Connection successful!'; ok.style.display = 'block';
+        document.getElementById('btn-next-2').classList.remove('hidden');
+      } catch (err) {
+        showError(2, err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Test Connection';
+      }
+    }
+
+    function selectTier(tier) {
+      selectedTier = tier;
+      document.querySelectorAll('.tier-option').forEach((el, i) => {
+        el.classList.toggle('selected', i + 1 === tier);
+        el.querySelector('input').checked = i + 1 === tier;
+      });
+    }
+
+    function buildSummary() {
+      const tierNames = { 1: 'Tier 1 — Metrics Only', 2: 'Tier 2 — Recommended', 3: 'Tier 3 — Full Access' };
+      document.getElementById('summary').innerHTML = `
+        <div class="summary-row"><span>Account</span><span class="summary-val">${document.getElementById('email').value}</span></div>
+        <div class="summary-row"><span>Commander IP</span><span class="summary-val">${document.getElementById('cmd-ip').value}</span></div>
+        <div class="summary-row"><span>Username</span><span class="summary-val">${document.getElementById('cmd-user').value}</span></div>
+        <div class="summary-row"><span>Data Sharing</span><span class="summary-val">${tierNames[selectedTier]}</span></div>
+      `;
+    }
+
+    async function doComplete() {
+      hideError(4);
+      const btn = document.getElementById('btn-complete');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Configuring...';
+
+      try {
+        const res = await fetch('/api/setup/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+            commander: {
+              ip: document.getElementById('cmd-ip').value,
+              username: document.getElementById('cmd-user').value,
+              password: document.getElementById('cmd-pass').value,
+              siteName: document.getElementById('cmd-ip').value,
+            },
+            dataTier: selectedTier,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Setup failed');
+        window.location.href = '/status.html';
+      } catch (err) {
+        showError(4, err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Start Relay';
+      }
+    }
+
+    // Check if already setup
+    fetch('/api/setup/status').then(r => r.json()).then(d => {
+      if (d.complete) window.location.href = '/status.html';
+    });
+  </script>
+</body>
+</html>
