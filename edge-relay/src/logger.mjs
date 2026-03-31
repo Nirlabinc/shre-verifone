@@ -76,9 +76,14 @@ function rotateIfNeeded() {
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
       renameSync(logPath, join(_logDir, `relay-${ts}.log`));
     }
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
 }
 
 export function closeLogger() {
-  if (_stream) { _stream.end(); _stream = null; }
+  if (_stream) {
+    _stream.end();
+    _stream = null;
+  }
 }

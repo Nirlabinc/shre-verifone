@@ -160,5 +160,5 @@ export async function testConnection(ip, user, pass) {
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -19,7 +19,8 @@ const ROOT = join(__dirname, '..');
 const DIST = join(ROOT, 'dist');
 
 const args = process.argv.slice(2);
-const targetPlatform = args.find(a => a.startsWith('--platform='))?.split('=')[1] || process.platform;
+const targetPlatform =
+  args.find((a) => a.startsWith('--platform='))?.split('=')[1] || process.platform;
 const noPackage = args.includes('--no-package');
 
 async function main() {
@@ -61,7 +62,7 @@ async function main() {
   mkdirSync(nativeDir, { recursive: true });
 
   try {
-    const sqliteBinding = findNativeAddon('better-sqlite3');
+    const sqliteBinding = await findNativeAddon('better-sqlite3');
     if (sqliteBinding) {
       cpSync(sqliteBinding, join(nativeDir, 'better_sqlite3.node'));
       console.log('Native addon copied');
@@ -92,7 +93,7 @@ function getVersion() {
   return pkg.version || '1.0.0';
 }
 
-function findNativeAddon(name) {
+async function findNativeAddon(name) {
   const paths = [
     join(ROOT, 'node_modules', name, 'build', 'Release'),
     join(ROOT, 'node_modules', name, 'prebuilds', `${process.platform}-${process.arch}`),
@@ -100,8 +101,9 @@ function findNativeAddon(name) {
 
   for (const dir of paths) {
     if (!existsSync(dir)) continue;
-    const files = require('fs').readdirSync(dir);
-    const node = files.find(f => f.endsWith('.node'));
+    const { readdirSync } = await import('fs');
+    const files = readdirSync(dir);
+    const node = files.find((f) => f.endsWith('.node'));
     if (node) return join(dir, node);
   }
   return null;
@@ -129,7 +131,9 @@ async function packageSEA(platform) {
   writeFileSync(join(DIST, 'sea-config.json'), JSON.stringify(seaConfig, null, 2));
 
   // Generate SEA blob
-  execSync(`node --experimental-sea-config "${join(DIST, 'sea-config.json')}"`, { stdio: 'inherit' });
+  execSync(`node --experimental-sea-config "${join(DIST, 'sea-config.json')}"`, {
+    stdio: 'inherit',
+  });
 
   // Copy node binary
   execSync(`cp "$(which node)" "${binaryPath}"`, { stdio: 'inherit' });
@@ -137,16 +141,22 @@ async function packageSEA(platform) {
   // Inject blob
   if (process.platform === 'darwin') {
     execSync(`codesign --remove-signature "${binaryPath}"`, { stdio: 'inherit' });
-    execSync(`npx postject "${binaryPath}" NODE_SEA_BLOB "${join(DIST, 'sea-prep.blob')}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA`, { stdio: 'inherit' });
+    execSync(
+      `npx postject "${binaryPath}" NODE_SEA_BLOB "${join(DIST, 'sea-prep.blob')}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA`,
+      { stdio: 'inherit' },
+    );
     execSync(`codesign --sign - "${binaryPath}"`, { stdio: 'inherit' });
   } else {
-    execSync(`npx postject "${binaryPath}" NODE_SEA_BLOB "${join(DIST, 'sea-prep.blob')}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`, { stdio: 'inherit' });
+    execSync(
+      `npx postject "${binaryPath}" NODE_SEA_BLOB "${join(DIST, 'sea-prep.blob')}" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`,
+      { stdio: 'inherit' },
+    );
   }
 
   console.log(`Standalone binary: dist/${binaryName}`);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Build failed:', err);
   process.exit(1);
 });

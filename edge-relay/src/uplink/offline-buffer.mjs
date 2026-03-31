@@ -19,9 +19,11 @@ const BACKOFF_MS = [30_000, 60_000, 300_000, 900_000, 1_800_000]; // 30s, 1m, 5m
  */
 export function enqueuePayload(payloadType, payload) {
   const db = getDb();
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO uplink_queue (payload_type, payload) VALUES (?, ?)
-  `).run(payloadType, JSON.stringify(payload));
+  `,
+  ).run(payloadType, JSON.stringify(payload));
   log.debug('Payload buffered', { type: payloadType });
 }
 
@@ -37,11 +39,15 @@ export async function dequeueAndSend(sendFn) {
   db.prepare('DELETE FROM uplink_queue WHERE created_at < ? AND sent_at IS NULL').run(cutoff);
 
   // Get pending payloads
-  const pending = db.prepare(`
+  const pending = db
+    .prepare(
+      `
     SELECT id, payload_type, payload, attempts, created_at
     FROM uplink_queue WHERE sent_at IS NULL AND attempts < ?
     ORDER BY created_at ASC LIMIT 20
-  `).all(MAX_ATTEMPTS);
+  `,
+    )
+    .all(MAX_ATTEMPTS);
 
   if (!pending.length) return;
 
@@ -56,23 +62,27 @@ export async function dequeueAndSend(sendFn) {
   for (const item of pending) {
     const path = PATH_MAP[item.payload_type];
     if (!path) {
-      db.prepare('UPDATE uplink_queue SET sent_at = datetime(\'now\') WHERE id = ?').run(item.id);
+      db.prepare("UPDATE uplink_queue SET sent_at = datetime('now') WHERE id = ?").run(item.id);
       continue;
     }
 
     // Check backoff
     const backoffIdx = Math.min(item.attempts, BACKOFF_MS.length - 1);
     const backoffMs = BACKOFF_MS[backoffIdx];
-    const nextAttemptAt = new Date(item.created_at).getTime() + (backoffMs * item.attempts);
+    const nextAttemptAt = new Date(item.created_at).getTime() + backoffMs * item.attempts;
     if (Date.now() < nextAttemptAt && item.attempts > 0) continue;
 
     try {
       await sendFn(path, JSON.parse(item.payload));
-      db.prepare('UPDATE uplink_queue SET sent_at = datetime(\'now\') WHERE id = ?').run(item.id);
+      db.prepare("UPDATE uplink_queue SET sent_at = datetime('now') WHERE id = ?").run(item.id);
       log.debug('Buffered payload sent', { type: item.payload_type, id: item.id });
     } catch (err) {
       db.prepare('UPDATE uplink_queue SET attempts = attempts + 1 WHERE id = ?').run(item.id);
-      log.debug('Replay failed', { type: item.payload_type, attempts: item.attempts + 1, error: err.message });
+      log.debug('Replay failed', {
+        type: item.payload_type,
+        attempts: item.attempts + 1,
+        error: err.message,
+      });
       break; // Stop replaying on first failure (cloud likely down)
     }
   }
@@ -83,8 +93,14 @@ export async function dequeueAndSend(sendFn) {
  */
 export function getQueueStats() {
   const db = getDb();
-  const pending = db.prepare('SELECT COUNT(*) as c FROM uplink_queue WHERE sent_at IS NULL').get().c;
-  const oldest = db.prepare('SELECT MIN(created_at) as ts FROM uplink_queue WHERE sent_at IS NULL').get()?.ts;
-  const totalSent = db.prepare('SELECT COUNT(*) as c FROM uplink_queue WHERE sent_at IS NOT NULL').get().c;
+  const pending = db
+    .prepare('SELECT COUNT(*) as c FROM uplink_queue WHERE sent_at IS NULL')
+    .get().c;
+  const oldest = db
+    .prepare('SELECT MIN(created_at) as ts FROM uplink_queue WHERE sent_at IS NULL')
+    .get()?.ts;
+  const totalSent = db
+    .prepare('SELECT COUNT(*) as c FROM uplink_queue WHERE sent_at IS NOT NULL')
+    .get().c;
   return { pending, oldest, totalSent };
 }

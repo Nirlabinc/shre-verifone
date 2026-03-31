@@ -14,13 +14,16 @@ import Database from 'better-sqlite3';
 
 function resolveDataDir() {
   if (process.env.RELAY_DATA_DIR) return process.env.RELAY_DATA_DIR;
-  if (platform() === 'win32') return join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'VerifoneEdgeRelay');
+  if (platform() === 'win32')
+    return join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'VerifoneEdgeRelay');
   return '/var/lib/verifone-edge-relay';
 }
 
 const DATA_DIR = resolveDataDir();
 
-export function getDataDir() { return DATA_DIR; }
+export function getDataDir() {
+  return DATA_DIR;
+}
 
 export function ensureDataDir() {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
@@ -43,7 +46,10 @@ export function getDb() {
 }
 
 export function closeDb() {
-  if (_db) { _db.close(); _db = null; }
+  if (_db) {
+    _db.close();
+    _db = null;
+  }
 }
 
 function initSchema(db) {
@@ -169,16 +175,18 @@ export function getConfig(key, fallback = null) {
 
 export function setConfig(key, value) {
   const db = getDb();
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO relay_config (key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
-  `).run(key, String(value));
+  `,
+  ).run(key, String(value));
 }
 
 export function getAllConfig() {
   const db = getDb();
   const rows = db.prepare('SELECT key, value FROM relay_config').all();
-  return Object.fromEntries(rows.map(r => [r.key, r.value]));
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }
 
 // ── Defaults ─────────────────────────────────────────────────────────

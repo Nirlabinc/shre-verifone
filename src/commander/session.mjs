@@ -14,10 +14,10 @@ const sessions = new Map();
 /** @type {Map<string, { failures: number, openUntil: number, backoffMs: number }>} */
 const circuits = new Map();
 
-const COOKIE_TTL_MS = 25 * 60 * 1000;       // Refresh at 25min (cookies expire ~30min)
-const CIRCUIT_THRESHOLD = 3;                  // Failures before opening
-const CIRCUIT_MIN_BACKOFF = 30_000;           // 30s initial backoff
-const CIRCUIT_MAX_BACKOFF = 30 * 60 * 1000;  // 30min max backoff
+const COOKIE_TTL_MS = 25 * 60 * 1000; // Refresh at 25min (cookies expire ~30min)
+const CIRCUIT_THRESHOLD = 3; // Failures before opening
+const CIRCUIT_MIN_BACKOFF = 30_000; // 30s initial backoff
+const CIRCUIT_MAX_BACKOFF = 30 * 60 * 1000; // 30min max backoff
 
 /**
  * Get or create a session for a site.
@@ -29,12 +29,14 @@ export async function getSession(siteId, config) {
   // Check circuit breaker
   const circuit = circuits.get(siteId);
   if (circuit && Date.now() < circuit.openUntil) {
-    throw new Error(`Circuit open for ${siteId} — retry after ${new Date(circuit.openUntil).toISOString()}`);
+    throw new Error(
+      `Circuit open for ${siteId} — retry after ${new Date(circuit.openUntil).toISOString()}`,
+    );
   }
 
   // Check existing session
   const existing = sessions.get(siteId);
-  if (existing && (Date.now() - existing.refreshedAt) < COOKIE_TTL_MS) {
+  if (existing && Date.now() - existing.refreshedAt < COOKIE_TTL_MS) {
     return existing.cookie;
   }
 
@@ -142,7 +144,11 @@ export function getActiveSessions() {
 // ── Circuit breaker internals ────────────────────────────────────
 
 function recordFailure(siteId) {
-  const circuit = circuits.get(siteId) || { failures: 0, openUntil: 0, backoffMs: CIRCUIT_MIN_BACKOFF };
+  const circuit = circuits.get(siteId) || {
+    failures: 0,
+    openUntil: 0,
+    backoffMs: CIRCUIT_MIN_BACKOFF,
+  };
   circuit.failures++;
 
   if (circuit.failures >= CIRCUIT_THRESHOLD) {

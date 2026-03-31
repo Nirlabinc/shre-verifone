@@ -67,7 +67,10 @@ function encrypt(plaintext) {
   // Encrypt data with DEK
   const ivData = randomBytes(IV_LEN);
   const cipherData = createCipheriv(ALGO, dek, ivData);
-  const encData = Buffer.concat([cipherData.update(Buffer.from(plaintext, 'utf8')), cipherData.final()]);
+  const encData = Buffer.concat([
+    cipherData.update(Buffer.from(plaintext, 'utf8')),
+    cipherData.final(),
+  ]);
   const tagData = cipherData.getAuthTag();
 
   // Wrap DEK with KEK
@@ -107,7 +110,9 @@ function decrypt(dekEnc, valueEnc) {
 
   const decipherData = createDecipheriv(ALGO, dek, ivData);
   decipherData.setAuthTag(tagData);
-  const plaintext = Buffer.concat([decipherData.update(encData), decipherData.final()]).toString('utf8');
+  const plaintext = Buffer.concat([decipherData.update(encData), decipherData.final()]).toString(
+    'utf8',
+  );
 
   // Zeroize DEK
   dek.fill(0);
@@ -120,10 +125,14 @@ function decrypt(dekEnc, valueEnc) {
  */
 export function setSecret(name, value) {
   const { dekEnc, valueEnc } = encrypt(value);
-  _vaultDb.prepare(`
+  _vaultDb
+    .prepare(
+      `
     INSERT INTO secrets (name, dek_enc, value_enc) VALUES (?, ?, ?)
     ON CONFLICT(name) DO UPDATE SET dek_enc = excluded.dek_enc, value_enc = excluded.value_enc, updated_at = datetime('now')
-  `).run(name, dekEnc, valueEnc);
+  `,
+    )
+    .run(name, dekEnc, valueEnc);
   log.info('Secret stored', { name });
 }
 
@@ -154,6 +163,12 @@ export function listSecrets() {
  * Close vault database.
  */
 export function closeVault() {
-  if (_vaultDb) { _vaultDb.close(); _vaultDb = null; }
-  if (_kek) { _kek.fill(0); _kek = null; }
+  if (_vaultDb) {
+    _vaultDb.close();
+    _vaultDb = null;
+  }
+  if (_kek) {
+    _kek.fill(0);
+    _kek = null;
+  }
 }

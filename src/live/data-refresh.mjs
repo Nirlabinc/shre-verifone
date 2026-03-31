@@ -16,11 +16,26 @@ export async function fetchTodayData(pool, siteId) {
   const today = new Date().toISOString().slice(0, 10);
 
   const [summaryRes, deptRes, pluRes, networkRes, hourlyRes] = await Promise.allSettled([
-    pool.query(`SELECT raw_data FROM verifone.data_day_summary WHERE site_id = $1 AND report_date = $2`, [siteId, today]),
-    pool.query(`SELECT raw_data FROM verifone.data_department WHERE site_id = $1 AND report_date = $2 AND period_type = 2`, [siteId, today]),
-    pool.query(`SELECT raw_data FROM verifone.data_plu WHERE site_id = $1 AND report_date = $2 AND period_type = 2`, [siteId, today]),
-    pool.query(`SELECT raw_data FROM verifone.data_network WHERE site_id = $1 AND report_date = $2 AND period_type = 2`, [siteId, today]),
-    pool.query(`SELECT raw_data FROM verifone.data_hourly WHERE site_id = $1 AND report_date = $2 AND period_type = 2`, [siteId, today]),
+    pool.query(
+      `SELECT raw_data FROM verifone.data_day_summary WHERE site_id = $1 AND report_date = $2`,
+      [siteId, today],
+    ),
+    pool.query(
+      `SELECT raw_data FROM verifone.data_department WHERE site_id = $1 AND report_date = $2 AND period_type = 2`,
+      [siteId, today],
+    ),
+    pool.query(
+      `SELECT raw_data FROM verifone.data_plu WHERE site_id = $1 AND report_date = $2 AND period_type = 2`,
+      [siteId, today],
+    ),
+    pool.query(
+      `SELECT raw_data FROM verifone.data_network WHERE site_id = $1 AND report_date = $2 AND period_type = 2`,
+      [siteId, today],
+    ),
+    pool.query(
+      `SELECT raw_data FROM verifone.data_hourly WHERE site_id = $1 AND report_date = $2 AND period_type = 2`,
+      [siteId, today],
+    ),
   ]);
 
   const summary = summaryRes.status === 'fulfilled' ? summaryRes.value.rows[0]?.raw_data : null;
@@ -41,7 +56,11 @@ export async function fetchTodayData(pool, siteId) {
     margin: calculateMargin(summaryData),
     txns: num(summaryData.transaction_count || summaryData.total_transactions),
     ticket: calculateTicket(summaryData),
-    dept: Array.isArray(departments) ? departments : (typeof departments === 'object' ? [departments] : []),
+    dept: Array.isArray(departments)
+      ? departments
+      : typeof departments === 'object'
+        ? [departments]
+        : [],
     plu: Array.isArray(plu) ? plu.slice(0, 50) : [],
     tender: Array.isArray(network) ? network : [],
     hourly: Array.isArray(hourly) ? hourly : [],
@@ -58,17 +77,24 @@ export async function fetchTodayData(pool, siteId) {
 export async function fetchPeriodData(pool, siteId, period) {
   const { from, to } = getPeriodRange(period);
 
-  const res = await pool.query(`
+  const res = await pool.query(
+    `
     SELECT report_date, raw_data
     FROM verifone.data_day_summary
     WHERE site_id = $1 AND report_date BETWEEN $2 AND $3
     ORDER BY report_date
-  `, [siteId, from, to]);
+  `,
+    [siteId, from, to],
+  );
 
   if (!res.rows.length) return null;
 
   // Aggregate across days
-  let totalSales = 0, totalCost = 0, totalTax = 0, totalDisc = 0, totalTxns = 0;
+  let totalSales = 0,
+    totalCost = 0,
+    totalTax = 0,
+    totalDisc = 0,
+    totalTxns = 0;
   const dailyRows = [];
 
   for (const row of res.rows) {
@@ -87,7 +113,9 @@ export async function fetchPeriodData(pool, siteId, period) {
 
     dailyRows.push({
       date: row.report_date,
-      sales, cost, tax,
+      sales,
+      cost,
+      tax,
       profit: sales - cost,
       txns,
       ticket: txns > 0 ? sales / txns : 0,

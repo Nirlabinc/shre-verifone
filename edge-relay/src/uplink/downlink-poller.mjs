@@ -22,7 +22,7 @@ async function cloudGet(path) {
   const url = `${cloudUrl}${path}`;
   const res = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       'X-Relay-Id': relayId,
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

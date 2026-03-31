@@ -7,7 +7,15 @@
  */
 
 const TIER_1_REPORTS = new Set(['summary', 'department', 'hourly', 'network']);
-const TIER_2_REPORTS = new Set(['plu', 'tax', 'category', 'deal', 'carWash', 'cashAcc', 'networkTotals']);
+const TIER_2_REPORTS = new Set([
+  'plu',
+  'tax',
+  'category',
+  'deal',
+  'carWash',
+  'cashAcc',
+  'networkTotals',
+]);
 // Tier 3 = transaction_logs (handled separately)
 
 /**
@@ -46,8 +54,8 @@ export function anonymizeMetrics(data) {
     if (redactKeys.has(key.toLowerCase())) {
       cleaned[key] = '[REDACTED]';
     } else if (Array.isArray(value)) {
-      cleaned[key] = value.map(item =>
-        typeof item === 'object' ? anonymizeMetrics(item) : item
+      cleaned[key] = value.map((item) =>
+        typeof item === 'object' ? anonymizeMetrics(item) : item,
       );
     } else {
       cleaned[key] = value;

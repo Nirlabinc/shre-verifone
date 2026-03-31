@@ -19,7 +19,15 @@ const DEFAULT_INTERVAL_MS = 300_000;
 const SYNC_TIMEOUT_MS = 10 * 60 * 1000;
 
 const PRIMARY_REPORTS = ['summary', 'department', 'plu', 'network'];
-const SECONDARY_REPORTS = ['hourly', 'tax', 'category', 'deal', 'carWash', 'cashAcc', 'networkTotals'];
+const SECONDARY_REPORTS = [
+  'hourly',
+  'tax',
+  'category',
+  'deal',
+  'carWash',
+  'cashAcc',
+  'networkTotals',
+];
 
 /** @type {Map<string, { timer: NodeJS.Timeout, cycleCount: number, running: boolean }>} */
 const syncTimers = new Map();
@@ -138,7 +146,11 @@ async function runSyncCycle(siteId, config, cycleCount) {
       updateLedger(siteId, reptname, 'failed', err.message);
 
       if (err.message.includes('401') || err.message.includes('cookie')) {
-        try { cookie = await refreshSession(siteId, config); } catch { /* continue */ }
+        try {
+          cookie = await refreshSession(siteId, config);
+        } catch {
+          /* continue */
+        }
       }
     }
   }
@@ -163,10 +175,15 @@ async function runSyncCycle(siteId, config, cycleCount) {
     const periods = await fetchAvailablePeriods(config.ip, cookie);
     const knownFiles = getKnownPeriodFiles(siteId);
 
-    const newPeriods = periods.filter(p => !knownFiles.has(p.filename));
+    const newPeriods = periods.filter((p) => !knownFiles.has(p.filename));
     for (const period of newPeriods) {
       try {
-        const txns = await fetchTransactionLog(config.ip, cookie, period.type === 'shift' ? '1' : '2', period.filename);
+        const txns = await fetchTransactionLog(
+          config.ip,
+          cookie,
+          period.type === 'shift' ? '1' : '2',
+          period.filename,
+        );
         if (txns.length) {
           storeTransactionLog(siteId, period.filename, period.date, txns);
           log.debug(`Transaction log ${period.filename}: ${txns.length} rows`);

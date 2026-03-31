@@ -86,8 +86,12 @@ export function startAdminServer(uiDir, options = {}) {
         });
         res.end(JSON.stringify(result.body ?? result));
         logActivity({
-          direction: 'inbound-admin', target: remoteIp,
-          method, path, status: statusCode, durationMs: Date.now() - start,
+          direction: 'inbound-admin',
+          target: remoteIp,
+          method,
+          path,
+          status: statusCode,
+          durationMs: Date.now() - start,
         });
         return;
       }
@@ -118,7 +122,6 @@ export function startAdminServer(uiDir, options = {}) {
 
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found' }));
-
     } catch (err) {
       log.error('Admin request failed', { error: err.message, url: req.url });
       res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -143,10 +146,13 @@ export function stopAdminServer() {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', c => chunks.push(c));
+    req.on('data', (c) => chunks.push(c));
     req.on('end', () => {
-      try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
-      catch { resolve(null); }
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString()));
+      } catch {
+        resolve(null);
+      }
     });
     req.on('error', reject);
   });

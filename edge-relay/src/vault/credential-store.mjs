@@ -38,8 +38,8 @@ export function deleteCredential(siteId) {
  */
 export function listCredentials() {
   return listSecrets()
-    .filter(s => s.name.startsWith(PREFIX))
-    .map(s => ({
+    .filter((s) => s.name.startsWith(PREFIX))
+    .map((s) => ({
       siteId: s.name.slice(PREFIX.length),
       createdAt: s.created_at,
       updatedAt: s.updated_at,

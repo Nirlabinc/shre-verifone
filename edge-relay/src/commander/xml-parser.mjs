@@ -85,10 +85,13 @@ export function parsePeriodList(html) {
   if (rows.length) return rows;
 
   if (typeof html !== 'string') return [];
-  const lines = html.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines = html
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   return lines
-    .filter(l => /\d/.test(l))
-    .map(l => {
+    .filter((l) => /\d/.test(l))
+    .map((l) => {
       const match = l.match(/(\w+)\s+(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})/);
       return {
         filename: l.replace(/<[^>]+>/g, '').trim(),
@@ -123,7 +126,7 @@ export function parseSummaryReport(html) {
 function extractCells(cells) {
   if (!cells) return [];
   if (!Array.isArray(cells)) cells = [cells];
-  return cells.map(c => {
+  return cells.map((c) => {
     if (typeof c === 'string' || typeof c === 'number') return String(c);
     if (c?.['#text'] !== undefined) return String(c['#text']);
     return String(c ?? '');

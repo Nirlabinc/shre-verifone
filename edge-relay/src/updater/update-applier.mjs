@@ -77,7 +77,11 @@ export async function applyUpdate() {
     return { success: true, version };
   } catch (err) {
     log.error('Update failed', { error: err.message });
-    try { if (existsSync(tempPath)) unlinkSync(tempPath); } catch { /* ignore */ }
+    try {
+      if (existsSync(tempPath)) unlinkSync(tempPath);
+    } catch {
+      /* ignore */
+    }
     return { success: false, error: err.message };
   }
 }

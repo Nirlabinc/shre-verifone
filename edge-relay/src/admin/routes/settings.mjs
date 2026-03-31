@@ -6,10 +6,14 @@ import { getDb, getAllConfig, setConfig, getConfig } from '../../config.mjs';
 import { auditLog } from '../../secretservice/audit-chain.mjs';
 
 const WRITABLE_KEYS = new Set([
-  'data_tier', 'sync_interval_ms',
-  'retention_logs_days', 'retention_activity_days',
-  'retention_reports_days', 'retention_transactions_days',
-  'retention_wal_days', 'retention_audit_days',
+  'data_tier',
+  'sync_interval_ms',
+  'retention_logs_days',
+  'retention_activity_days',
+  'retention_reports_days',
+  'retention_transactions_days',
+  'retention_wal_days',
+  'retention_audit_days',
 ]);
 
 export function settingsRoutes(routes) {
@@ -53,7 +57,13 @@ export function settingsRoutes(routes) {
       const site = db.prepare('SELECT * FROM site_config WHERE site_id = ?').get(params.siteId);
       if (!site) return { status: 404, body: { error: 'Site not found' } };
 
-      const allowedFields = ['site_name', 'commander_ip', 'username', 'enabled', 'sync_interval_ms'];
+      const allowedFields = [
+        'site_name',
+        'commander_ip',
+        'username',
+        'enabled',
+        'sync_interval_ms',
+      ];
       const updates = [];
       const values = [];
 
@@ -66,7 +76,7 @@ export function settingsRoutes(routes) {
 
       if (!updates.length) return { status: 400, body: { error: 'No valid fields to update' } };
 
-      updates.push('updated_at = datetime(\'now\')');
+      updates.push("updated_at = datetime('now')");
       values.push(params.siteId);
 
       db.prepare(`UPDATE site_config SET ${updates.join(', ')} WHERE site_id = ?`).run(...values);
@@ -75,7 +85,9 @@ export function settingsRoutes(routes) {
 
       // Restart sync if interval or enabled changed
       if (body.enabled !== undefined || body.sync_interval_ms !== undefined) {
-        const updatedSite = db.prepare('SELECT * FROM site_config WHERE site_id = ?').get(params.siteId);
+        const updatedSite = db
+          .prepare('SELECT * FROM site_config WHERE site_id = ?')
+          .get(params.siteId);
         const { stopSync, startSync } = await import('../../sync/sync-engine.mjs');
         const { getCredential } = await import('../../vault/credential-store.mjs');
 
@@ -107,11 +119,13 @@ export function settingsRoutes(routes) {
       const now = new Date().toISOString();
       const passwordExpiry = new Date(Date.now() + 90 * 86400000).toISOString();
 
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO site_config (site_id, site_name, commander_ip, username, enabled,
                                   sync_interval_ms, password_set_at, password_expires_at)
         VALUES (?, ?, ?, ?, 1, 300000, ?, ?)
-      `).run(siteId, body.siteName || siteId, body.commanderIp, body.username, now, passwordExpiry);
+      `,
+      ).run(siteId, body.siteName || siteId, body.commanderIp, body.username, now, passwordExpiry);
 
       const { setCredential } = await import('../../vault/credential-store.mjs');
       setCredential(siteId, body.password);

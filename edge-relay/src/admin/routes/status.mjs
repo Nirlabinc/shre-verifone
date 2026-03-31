@@ -19,7 +19,11 @@ export function statusRoutes(routes) {
   routes.set('GET /api/status', {
     fn: async () => {
       const db = getDb();
-      const sites = db.prepare('SELECT site_id, site_name, commander_ip, enabled, sync_interval_ms, created_at FROM site_config').all();
+      const sites = db
+        .prepare(
+          'SELECT site_id, site_name, commander_ip, enabled, sync_interval_ms, created_at FROM site_config',
+        )
+        .all();
 
       return {
         body: {
@@ -110,7 +114,9 @@ export function statusRoutes(routes) {
       const { triggerSync } = await import('../../sync/sync-engine.mjs');
       const pass = getCredential(site.site_id);
 
-      triggerSync(site.site_id, { ip: site.commander_ip, user: site.username, pass }).catch(() => {});
+      triggerSync(site.site_id, { ip: site.commander_ip, user: site.username, pass }).catch(
+        () => {},
+      );
       return { body: { message: 'Sync triggered' } };
     },
   });

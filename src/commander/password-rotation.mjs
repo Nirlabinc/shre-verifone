@@ -13,7 +13,7 @@
 import { randomBytes } from 'crypto';
 
 const PASSWORD_MAX_AGE_DAYS = 90;
-const AUTO_ROTATE_AT_DAYS = 60;  // Attempt auto-rotate at day 60 (30 days before expiry)
+const AUTO_ROTATE_AT_DAYS = 60; // Attempt auto-rotate at day 60 (30 days before expiry)
 const ALERT_THRESHOLDS = [60, 30, 15, 10]; // Days remaining when we alert
 const CRITICAL_THRESHOLD = 10; // At this point, user MUST act manually
 
@@ -51,7 +51,9 @@ async function checkSitePassword(pool, site, log, publish) {
   const now = new Date();
   const expiresAt = new Date(site.password_expires_at);
   const daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
-  const passwordAgeDays = Math.floor((now - new Date(site.password_set_at)) / (1000 * 60 * 60 * 24));
+  const passwordAgeDays = Math.floor(
+    (now - new Date(site.password_set_at)) / (1000 * 60 * 60 * 24),
+  );
 
   // Already expired
   if (daysRemaining <= 0) {
@@ -84,13 +86,16 @@ async function checkSitePassword(pool, site, log, publish) {
     log.warn?.(`Auto-rotation failed for site ${site.site_id}`, { error: result.error });
     await logRotation(pool, site.site_id, 'auto_rotate_failed', daysRemaining, result.error);
 
-    await pool.query(`
+    await pool.query(
+      `
       UPDATE verifone.site_config SET
         password_rotation_failures = password_rotation_failures + 1,
         password_rotation_last_error = $2,
         updated_at = now()
       WHERE site_id = $1
-    `, [site.site_id, result.error]);
+    `,
+      [site.site_id, result.error],
+    );
   }
 
   // Check if we should alert the user at countdown thresholds
@@ -100,7 +105,9 @@ async function checkSitePassword(pool, site, log, publish) {
       const isCritical = daysRemaining <= CRITICAL_THRESHOLD;
 
       // Don't spam — only notify once per threshold level per day
-      const lastNotified = site.password_user_notified_at ? new Date(site.password_user_notified_at) : null;
+      const lastNotified = site.password_user_notified_at
+        ? new Date(site.password_user_notified_at)
+        : null;
       const hoursSinceNotified = lastNotified ? (now - lastNotified) / (1000 * 60 * 60) : Infinity;
 
       if (hoursSinceNotified >= 24) {
@@ -116,13 +123,18 @@ async function checkSitePassword(pool, site, log, publish) {
           message,
         });
 
-        await pool.query(`
+        await pool.query(
+          `
           UPDATE verifone.site_config SET password_user_notified_at = now() WHERE site_id = $1
-        `, [site.site_id]);
+        `,
+          [site.site_id],
+        );
 
         await logRotation(pool, site.site_id, 'user_notified', daysRemaining);
 
-        log.info?.(`Notified user: ${site.site_id} password expires in ${daysRemaining} days (${severity})`);
+        log.info?.(
+          `Notified user: ${site.site_id} password expires in ${daysRemaining} days (${severity})`,
+        );
       }
 
       break; // Only alert for the most critical threshold
@@ -158,7 +170,10 @@ async function attemptAutoRotation(pool, site, log) {
     const body = await loginRes.text();
     const cookieMatch = body.match(/cookie[=:]?\s*["']?([A-Za-z0-9_-]+)/i);
     const setCookie = loginRes.headers.get('set-cookie');
-    const cookie = cookieMatch?.[1] || setCookie?.match(/cookie=([^;]+)/i)?.[1] || setCookie?.match(/(\w{8,})/)?.[1];
+    const cookie =
+      cookieMatch?.[1] ||
+      setCookie?.match(/cookie=([^;]+)/i)?.[1] ||
+      setCookie?.match(/(\w{8,})/)?.[1];
 
     if (!cookie) {
       return { success: false, error: 'No cookie from login — cannot change password' };
@@ -179,8 +194,15 @@ async function attemptAutoRotation(pool, site, log) {
     const changeBody = await changeRes.text();
 
     // Check for success indicators in response
-    if (changeBody.toLowerCase().includes('error') || changeBody.toLowerCase().includes('fail') || changeBody.toLowerCase().includes('denied')) {
-      return { success: false, error: `Commander rejected password change: ${changeBody.slice(0, 200)}` };
+    if (
+      changeBody.toLowerCase().includes('error') ||
+      changeBody.toLowerCase().includes('fail') ||
+      changeBody.toLowerCase().includes('denied')
+    ) {
+      return {
+        success: false,
+        error: `Commander rejected password change: ${changeBody.slice(0, 200)}`,
+      };
     }
 
     // Step 3: Verify new password works
@@ -191,15 +213,21 @@ async function attemptAutoRotation(pool, site, log) {
 
     if (!verifyRes.ok) {
       // Rollback — new password didn't work, old one still valid
-      log.warn?.(`Auto-rotation verification failed for ${site.site_id}, old password still active`);
-      return { success: false, error: 'New password verification failed — old password still active' };
+      log.warn?.(
+        `Auto-rotation verification failed for ${site.site_id}, old password still active`,
+      );
+      return {
+        success: false,
+        error: 'New password verification failed — old password still active',
+      };
     }
 
     // Step 4: Update database with new password
     const now = new Date();
     const newExpiry = new Date(now.getTime() + PASSWORD_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
 
-    await pool.query(`
+    await pool.query(
+      `
       UPDATE verifone.site_config SET
         password_enc = $2,
         password_set_at = $3,
@@ -209,7 +237,9 @@ async function attemptAutoRotation(pool, site, log) {
         password_rotation_last_error = NULL,
         updated_at = $3
       WHERE site_id = $1
-    `, [site.site_id, newPassword, now.toISOString(), newExpiry.toISOString()]);
+    `,
+      [site.site_id, newPassword, now.toISOString(), newExpiry.toISOString()],
+    );
 
     // Also update vault credential file if it exists
     // (MIB007 connector stores credentials separately in vault)
@@ -228,7 +258,8 @@ export async function recordManualPasswordUpdate(pool, siteId, newPassword) {
   const now = new Date();
   const newExpiry = new Date(now.getTime() + PASSWORD_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
 
-  await pool.query(`
+  await pool.query(
+    `
     UPDATE verifone.site_config SET
       password_enc = $2,
       password_set_at = $3,
@@ -239,7 +270,9 @@ export async function recordManualPasswordUpdate(pool, siteId, newPassword) {
       password_user_notified_at = NULL,
       updated_at = $3
     WHERE site_id = $1
-  `, [siteId, newPassword, now.toISOString(), newExpiry.toISOString()]);
+  `,
+    [siteId, newPassword, now.toISOString(), newExpiry.toISOString()],
+  );
 
   await logRotation(pool, siteId, 'manual_update', PASSWORD_MAX_AGE_DAYS);
 }
@@ -265,7 +298,7 @@ export async function getPasswordHealth(pool) {
     ORDER BY password_expires_at ASC
   `);
 
-  return res.rows.map(r => ({
+  return res.rows.map((r) => ({
     siteId: r.site_id,
     siteName: r.site_name,
     passwordSetAt: r.password_set_at,
@@ -299,9 +332,14 @@ async function publishAlert(pool, publish, site, eventType, data) {
 
 async function logRotation(pool, siteId, action, daysRemaining, error = null) {
   try {
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO verifone.password_rotation_log (site_id, action, days_remaining, error)
       VALUES ($1, $2, $3, $4)
-    `, [siteId, action, daysRemaining, error]);
-  } catch { /* non-fatal */ }
+    `,
+      [siteId, action, daysRemaining, error],
+    );
+  } catch {
+    /* non-fatal */
+  }
 }

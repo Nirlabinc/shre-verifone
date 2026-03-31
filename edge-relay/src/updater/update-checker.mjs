@@ -28,7 +28,9 @@ export function checkForUpdate() {
         releaseNotes: update.releaseNotes,
       };
     }
-  } catch { /* ignore parse errors */ }
+  } catch {
+    /* ignore parse errors */
+  }
 
   return { available: false };
 }

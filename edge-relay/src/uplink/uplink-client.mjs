@@ -6,7 +6,12 @@
 
 import { getCloudUrl, getRelayId, getApiKey, getDb, DEFAULTS } from '../config.mjs';
 import { enqueuePayload, dequeueAndSend } from './offline-buffer.mjs';
-import { getUnuploadedReports, getUnuploadedTransactions, markReportsUploaded, markTransactionsUploaded } from '../sync/report-store.mjs';
+import {
+  getUnuploadedReports,
+  getUnuploadedTransactions,
+  markReportsUploaded,
+  markTransactionsUploaded,
+} from '../sync/report-store.mjs';
 import { buildHeartbeatPayload } from '../heartbeat.mjs';
 import { classifyReports } from './data-tiering.mjs';
 import { createLogger } from '../logger.mjs';
@@ -38,7 +43,7 @@ async function cloudPost(path, body) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'X-Relay-Id': relayId,
       },
       body: JSON.stringify(body),
@@ -65,7 +70,9 @@ export async function registerRelay(email, password, machineId) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email, password, machineId,
+      email,
+      password,
+      machineId,
       os: process.platform,
       arch: process.arch,
       version: process.env.RELAY_VERSION || '1.0.0',
@@ -124,13 +131,18 @@ async function uplinkMetrics() {
     const { tier1 } = classifyReports(reports);
     if (!tier1.length) return;
 
-    await cloudPost('/v1/uplink/metrics', { reports: tier1.map(r => ({
-      siteId: r.site_id, reportType: r.report_type,
-      reportDate: r.report_date, periodType: r.period_type,
-      data: JSON.parse(r.raw_data), fetchedAt: r.fetched_at,
-    }))});
+    await cloudPost('/v1/uplink/metrics', {
+      reports: tier1.map((r) => ({
+        siteId: r.site_id,
+        reportType: r.report_type,
+        reportDate: r.report_date,
+        periodType: r.period_type,
+        data: JSON.parse(r.raw_data),
+        fetchedAt: r.fetched_at,
+      })),
+    });
 
-    markReportsUploaded(tier1.map(r => r.id));
+    markReportsUploaded(tier1.map((r) => r.id));
     log.info(`Metrics uploaded: ${tier1.length} reports`);
   } catch (err) {
     log.warn('Metrics upload failed', { error: err.message });
@@ -146,13 +158,18 @@ async function uplinkTraining() {
     const { tier2 } = classifyReports(reports);
     if (!tier2.length) return;
 
-    await cloudPost('/v1/uplink/training', { reports: tier2.map(r => ({
-      siteId: r.site_id, reportType: r.report_type,
-      reportDate: r.report_date, periodType: r.period_type,
-      data: JSON.parse(r.raw_data), fetchedAt: r.fetched_at,
-    }))});
+    await cloudPost('/v1/uplink/training', {
+      reports: tier2.map((r) => ({
+        siteId: r.site_id,
+        reportType: r.report_type,
+        reportDate: r.report_date,
+        periodType: r.period_type,
+        data: JSON.parse(r.raw_data),
+        fetchedAt: r.fetched_at,
+      })),
+    });
 
-    markReportsUploaded(tier2.map(r => r.id));
+    markReportsUploaded(tier2.map((r) => r.id));
     log.info(`Training data uploaded: ${tier2.length} reports`);
   } catch (err) {
     log.warn('Training upload failed', { error: err.message });
@@ -167,12 +184,17 @@ async function uplinkTransactions() {
     const txns = getUnuploadedTransactions(50);
     if (!txns.length) return;
 
-    await cloudPost('/v1/uplink/transactions', { transactions: txns.map(t => ({
-      siteId: t.site_id, periodFile: t.period_file,
-      reportDate: t.report_date, data: JSON.parse(t.raw_data), fetchedAt: t.fetched_at,
-    }))});
+    await cloudPost('/v1/uplink/transactions', {
+      transactions: txns.map((t) => ({
+        siteId: t.site_id,
+        periodFile: t.period_file,
+        reportDate: t.report_date,
+        data: JSON.parse(t.raw_data),
+        fetchedAt: t.fetched_at,
+      })),
+    });
 
-    markTransactionsUploaded(txns.map(t => t.id));
+    markTransactionsUploaded(txns.map((t) => t.id));
     log.info(`Transactions uploaded: ${txns.length}`);
   } catch (err) {
     log.warn('Transaction upload failed', { error: err.message });
@@ -186,13 +208,21 @@ async function uplinkActivity() {
   try {
     const db = getDb();
     const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
-    const anomalies = db.prepare(`
+    const anomalies = db
+      .prepare(
+        `
       SELECT * FROM anomaly_events WHERE ts > ? AND acknowledged = 0
-    `).all(oneHourAgo);
+    `,
+      )
+      .all(oneHourAgo);
 
-    const activityCount = db.prepare(`
+    const activityCount = db
+      .prepare(
+        `
       SELECT direction, COUNT(*) as count FROM activity_log WHERE ts > ? GROUP BY direction
-    `).all(oneHourAgo);
+    `,
+      )
+      .all(oneHourAgo);
 
     if (!anomalies.length && !activityCount.length) return;
 
@@ -201,9 +231,11 @@ async function uplinkActivity() {
 
     // Acknowledge uploaded anomalies
     if (anomalies.length) {
-      const ids = anomalies.map(a => a.id);
+      const ids = anomalies.map((a) => a.id);
       const stmt = db.prepare('UPDATE anomaly_events SET acknowledged = 1 WHERE id = ?');
-      const tx = db.transaction((ids) => { for (const id of ids) stmt.run(id); });
+      const tx = db.transaction((ids) => {
+        for (const id of ids) stmt.run(id);
+      });
       tx(ids);
     }
   } catch (err) {

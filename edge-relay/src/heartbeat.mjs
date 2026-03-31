@@ -21,7 +21,9 @@ export function getHealthSnapshot() {
   const db = getDb();
 
   const siteCount = db.prepare('SELECT COUNT(*) as c FROM site_config WHERE enabled = 1').get().c;
-  const queueSize = db.prepare('SELECT COUNT(*) as c FROM uplink_queue WHERE sent_at IS NULL').get().c;
+  const queueSize = db
+    .prepare('SELECT COUNT(*) as c FROM uplink_queue WHERE sent_at IS NULL')
+    .get().c;
   const lastActivity = db.prepare('SELECT MAX(ts) as ts FROM activity_log').get()?.ts;
 
   return {
@@ -45,7 +47,9 @@ export function buildHeartbeatPayload() {
   try {
     // Cross-platform disk check handled by disk-monitor
     diskFree = global.__diskFreeMB || null;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return {
     version: process.env.RELAY_VERSION || '1.0.0',

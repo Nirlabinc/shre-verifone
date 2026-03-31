@@ -23,9 +23,17 @@ try {
   const infra = getInfra('postgres');
   pgPort = infra.port;
   pgHost = process.env.SHRE_NODE_HOST || pgHost;
-} catch { /* discovery unavailable — use defaults */ }
-if (!process.env.POSTGRES_PASSWORD) throw new Error("POSTGRES_PASSWORD env var is required");
-let creds = { host: pgHost, port: pgPort, user: process.env.POSTGRES_USER || 'rapidnir', password: process.env.POSTGRES_PASSWORD, database: 'cortexdb' };
+} catch {
+  /* discovery unavailable — use defaults */
+}
+if (!process.env.POSTGRES_PASSWORD) throw new Error('POSTGRES_PASSWORD env var is required');
+let creds = {
+  host: pgHost,
+  port: pgPort,
+  user: process.env.POSTGRES_USER || 'rapidnir',
+  password: process.env.POSTGRES_PASSWORD,
+  database: 'cortexdb',
+};
 const vaultPath = join(process.env.HOME || '', '.shre/vault/cortexdb.json');
 if (existsSync(vaultPath)) {
   creds = { ...creds, ...JSON.parse(readFileSync(vaultPath, 'utf8')) };
@@ -332,8 +340,12 @@ async function run() {
   for (const idx of INDEXES) {
     try {
       const idxName = `idx_vfn_${idx.view}`;
-      await pool.query(`CREATE INDEX IF NOT EXISTS ${idxName} ON verifone_analytics.${idx.view} (${idx.cols})`);
-    } catch { /* skip if view doesn't exist */ }
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS ${idxName} ON verifone_analytics.${idx.view} (${idx.cols})`,
+      );
+    } catch {
+      /* skip if view doesn't exist */
+    }
   }
 
   // Refresh if requested
@@ -347,11 +359,14 @@ async function run() {
         const countRes = await pool.query(`SELECT COUNT(*) FROM verifone_analytics.${view.name}`);
         const rowCount = parseInt(countRes.rows[0].count, 10);
 
-        await pool.query(`
+        await pool.query(
+          `
           INSERT INTO verifone_analytics.refresh_log (view_name, refreshed_at, row_count, duration_ms)
           VALUES ($1, now(), $2, $3)
           ON CONFLICT (view_name) DO UPDATE SET refreshed_at = now(), row_count = EXCLUDED.row_count, duration_ms = EXCLUDED.duration_ms
-        `, [view.name, rowCount, duration]);
+        `,
+          [view.name, rowCount, duration],
+        );
 
         console.log(`  ✓ ${view.name}: ${rowCount} rows (${duration}ms)`);
       } catch (err) {
@@ -375,4 +390,7 @@ async function run() {
   console.log('\n✅ Views complete');
 }
 
-run().catch(err => { console.error(err); process.exit(1); });
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

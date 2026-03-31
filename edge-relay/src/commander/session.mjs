@@ -24,11 +24,13 @@ const CIRCUIT_MAX_BACKOFF = 30 * 60 * 1000;
 export async function getSession(siteId, config) {
   const circuit = circuits.get(siteId);
   if (circuit && Date.now() < circuit.openUntil) {
-    throw new Error(`Circuit open for ${siteId} — retry after ${new Date(circuit.openUntil).toISOString()}`);
+    throw new Error(
+      `Circuit open for ${siteId} — retry after ${new Date(circuit.openUntil).toISOString()}`,
+    );
   }
 
   const existing = sessions.get(siteId);
-  if (existing && (Date.now() - existing.refreshedAt) < COOKIE_TTL_MS) {
+  if (existing && Date.now() - existing.refreshedAt < COOKIE_TTL_MS) {
     return existing.cookie;
   }
 
@@ -94,7 +96,11 @@ export function getActiveSessions() {
 }
 
 function recordFailure(siteId) {
-  const circuit = circuits.get(siteId) || { failures: 0, openUntil: 0, backoffMs: CIRCUIT_MIN_BACKOFF };
+  const circuit = circuits.get(siteId) || {
+    failures: 0,
+    openUntil: 0,
+    backoffMs: CIRCUIT_MIN_BACKOFF,
+  };
   circuit.failures++;
   if (circuit.failures >= CIRCUIT_THRESHOLD) {
     circuit.openUntil = Date.now() + circuit.backoffMs;

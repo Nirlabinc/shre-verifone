@@ -20,9 +20,17 @@ try {
   const infra = getInfra('postgres');
   pgPort = infra.port;
   pgHost = process.env.SHRE_NODE_HOST || pgHost;
-} catch { /* discovery unavailable — use defaults */ }
-if (!process.env.POSTGRES_PASSWORD) throw new Error("POSTGRES_PASSWORD env var is required");
-let creds = { host: pgHost, port: pgPort, user: process.env.POSTGRES_USER || 'rapidnir', password: process.env.POSTGRES_PASSWORD, database: 'cortexdb' };
+} catch {
+  /* discovery unavailable — use defaults */
+}
+if (!process.env.POSTGRES_PASSWORD) throw new Error('POSTGRES_PASSWORD env var is required');
+let creds = {
+  host: pgHost,
+  port: pgPort,
+  user: process.env.POSTGRES_USER || 'rapidnir',
+  password: process.env.POSTGRES_PASSWORD,
+  database: 'cortexdb',
+};
 const vaultPath = join(process.env.HOME || '', '.shre/vault/cortexdb.json');
 if (existsSync(vaultPath)) {
   creds = { ...creds, ...JSON.parse(readFileSync(vaultPath, 'utf8')) };
@@ -33,7 +41,9 @@ async function run() {
   console.log('── Verifone Extract Tables ──');
 
   // Phase 1: Summary report → normalized daily summary
-  await extractPhase('Phase 1: summary_report', `
+  await extractPhase(
+    'Phase 1: summary_report',
+    `
     CREATE TABLE IF NOT EXISTS verifone.summary_report (
       site_id         TEXT NOT NULL,
       report_date     DATE NOT NULL,
@@ -75,10 +85,13 @@ async function run() {
       gross_profit = EXCLUDED.gross_profit,
       transaction_count = EXCLUDED.transaction_count,
       avg_ticket = EXCLUDED.avg_ticket;
-  `);
+  `,
+  );
 
   // Phase 2: Department sales
-  await extractPhase('Phase 2: department_sales', `
+  await extractPhase(
+    'Phase 2: department_sales',
+    `
     CREATE TABLE IF NOT EXISTS verifone.department_sales (
       site_id         TEXT NOT NULL,
       report_date     DATE NOT NULL,
@@ -106,10 +119,13 @@ async function run() {
       sales_amount = EXCLUDED.sales_amount,
       item_count = EXCLUDED.item_count,
       refund_amount = EXCLUDED.refund_amount;
-  `);
+  `,
+  );
 
   // Phase 3: PLU (item) sales
-  await extractPhase('Phase 3: plu_sales', `
+  await extractPhase(
+    'Phase 3: plu_sales',
+    `
     CREATE TABLE IF NOT EXISTS verifone.plu_sales (
       site_id         TEXT NOT NULL,
       report_date     DATE NOT NULL,
@@ -140,10 +156,13 @@ async function run() {
       quantity = EXCLUDED.quantity,
       sales_amount = EXCLUDED.sales_amount,
       unit_price = EXCLUDED.unit_price;
-  `);
+  `,
+  );
 
   // Phase 4: Hourly sales
-  await extractPhase('Phase 4: hourly_sales', `
+  await extractPhase(
+    'Phase 4: hourly_sales',
+    `
     CREATE TABLE IF NOT EXISTS verifone.hourly_sales (
       site_id         TEXT NOT NULL,
       report_date     DATE NOT NULL,
@@ -168,10 +187,13 @@ async function run() {
       sales_amount = EXCLUDED.sales_amount,
       transaction_count = EXCLUDED.transaction_count,
       item_count = EXCLUDED.item_count;
-  `);
+  `,
+  );
 
   // Phase 5: Tax collected
-  await extractPhase('Phase 5: tax_collected', `
+  await extractPhase(
+    'Phase 5: tax_collected',
+    `
     CREATE TABLE IF NOT EXISTS verifone.tax_collected (
       site_id         TEXT NOT NULL,
       report_date     DATE NOT NULL,
@@ -196,10 +218,13 @@ async function run() {
       tax_rate = EXCLUDED.tax_rate,
       taxable_amount = EXCLUDED.taxable_amount,
       tax_amount = EXCLUDED.tax_amount;
-  `);
+  `,
+  );
 
   // Phase 6: Network (payment) totals
-  await extractPhase('Phase 6: network_totals', `
+  await extractPhase(
+    'Phase 6: network_totals',
+    `
     CREATE TABLE IF NOT EXISTS verifone.network_totals (
       site_id         TEXT NOT NULL,
       report_date     DATE NOT NULL,
@@ -228,10 +253,13 @@ async function run() {
       sales_amount = EXCLUDED.sales_amount,
       refund_amount = EXCLUDED.refund_amount,
       net_amount = EXCLUDED.net_amount;
-  `);
+  `,
+  );
 
   // Phase 7: Fuel sales (extracted from department data where department is fuel-related)
-  await extractPhase('Phase 7: fuel_sales', `
+  await extractPhase(
+    'Phase 7: fuel_sales',
+    `
     CREATE TABLE IF NOT EXISTS verifone.fuel_sales (
       site_id         TEXT NOT NULL,
       report_date     DATE NOT NULL,
@@ -265,10 +293,13 @@ async function run() {
       sales_amount = EXCLUDED.sales_amount,
       price_per_gallon = EXCLUDED.price_per_gallon,
       transaction_count = EXCLUDED.transaction_count;
-  `);
+  `,
+  );
 
   // Phase 8: Deal/combo sales
-  await extractPhase('Phase 8: deal_sales', `
+  await extractPhase(
+    'Phase 8: deal_sales',
+    `
     CREATE TABLE IF NOT EXISTS verifone.deal_sales (
       site_id         TEXT NOT NULL,
       report_date     DATE NOT NULL,
@@ -293,14 +324,20 @@ async function run() {
       deal_count = EXCLUDED.deal_count,
       sales_amount = EXCLUDED.sales_amount,
       discount_amount = EXCLUDED.discount_amount;
-  `);
+  `,
+  );
 
   // Print row counts
   console.log('\n── Row Counts ──');
   for (const table of [
-    'verifone.summary_report', 'verifone.department_sales', 'verifone.plu_sales',
-    'verifone.hourly_sales', 'verifone.tax_collected', 'verifone.network_totals',
-    'verifone.fuel_sales', 'verifone.deal_sales',
+    'verifone.summary_report',
+    'verifone.department_sales',
+    'verifone.plu_sales',
+    'verifone.hourly_sales',
+    'verifone.tax_collected',
+    'verifone.network_totals',
+    'verifone.fuel_sales',
+    'verifone.deal_sales',
   ]) {
     try {
       const res = await pool.query(`SELECT COUNT(*) FROM ${table}`);
@@ -323,4 +360,7 @@ async function extractPhase(name, sql) {
   }
 }
 
-run().catch(err => { console.error(err); process.exit(1); });
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

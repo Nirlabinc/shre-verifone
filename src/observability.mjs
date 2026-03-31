@@ -5,7 +5,13 @@
  * Provides createTraceMiddleware for raw HTTP servers (non-Express).
  */
 
-import { createTraceMiddleware, createTrace, getRecentTraces, getRecentFailures, getTraceStats } from 'shre-sdk/trace';
+import {
+  createTraceMiddleware,
+  createTrace,
+  getRecentTraces,
+  getRecentFailures,
+  getTraceStats,
+} from 'shre-sdk/trace';
 import { createHeartbeatMonitor } from 'shre-sdk/heartbeat';
 
 /**

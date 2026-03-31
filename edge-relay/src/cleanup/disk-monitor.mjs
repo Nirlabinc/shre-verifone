@@ -24,11 +24,15 @@ export function getDiskFreeMB() {
     const dataDir = getDataDir();
     if (platform() === 'win32') {
       const drive = dataDir.slice(0, 2); // e.g. "C:"
-      const output = execSync(`wmic logicaldisk where "DeviceID='${drive}'" get FreeSpace /value`, { encoding: 'utf8' });
+      const output = execSync(`wmic logicaldisk where "DeviceID='${drive}'" get FreeSpace /value`, {
+        encoding: 'utf8',
+      });
       const match = output.match(/FreeSpace=(\d+)/);
       return match ? parseInt(match[1]) / (1024 * 1024) : null;
     } else {
-      const output = execSync(`df -BM "${dataDir}" | tail -1 | awk '{print $4}'`, { encoding: 'utf8' });
+      const output = execSync(`df -BM "${dataDir}" | tail -1 | awk '{print $4}'`, {
+        encoding: 'utf8',
+      });
       return parseInt(output.replace('M', ''));
     }
   } catch (err) {

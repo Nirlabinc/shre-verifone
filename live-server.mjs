@@ -20,14 +20,24 @@ import { createRAGClient } from 'shre-sdk/rag';
 import { createExecutionTracker } from 'shre-sdk/execution';
 import { createHeartbeatMonitor } from 'shre-sdk/heartbeat';
 // shre-sdk/trace — request tracing + observability endpoints
-import { createTraceMiddleware, createTrace, getRecentTraces, getRecentFailures, getTraceStats } from 'shre-sdk/trace';
+import {
+  createTraceMiddleware,
+  createTrace,
+  getRecentTraces,
+  getRecentFailures,
+  getTraceStats,
+} from 'shre-sdk/trace';
 import { getInfra, serviceUrl, infraUrl } from 'shre-sdk/discovery';
 
 import { testConnection } from './src/commander/client.mjs';
 import { getActiveSessions, getCircuitState } from './src/commander/session.mjs';
 import { startSync, stopSync, triggerSync, getSyncStatus } from './src/live/auto-sync.mjs';
 import { buildPayload, fetchTodayData, fetchPeriodData } from './src/live/data-refresh.mjs';
-import { checkAllPasswords, getPasswordHealth, recordManualPasswordUpdate } from './src/commander/password-rotation.mjs';
+import {
+  checkAllPasswords,
+  getPasswordHealth,
+  recordManualPasswordUpdate,
+} from './src/commander/password-rotation.mjs';
 
 const log = createLogger('shre-verifone');
 
@@ -36,7 +46,9 @@ let PORT = 5464;
 try {
   const ports = JSON.parse(readFileSync(join(import.meta.dirname, '../ports.json'), 'utf8'));
   PORT = ports.services?.['shre-verifone']?.port || PORT;
-} catch { /* use default */ }
+} catch {
+  /* use default */
+}
 PORT = parseInt(process.env.PORT || PORT, 10);
 
 // ─── Event Bus + Lifecycle ────────────────────────────────────────
@@ -78,9 +90,17 @@ function initPool() {
       const infra = getInfra('postgres');
       pgPort = infra.port;
       pgHost = process.env.SHRE_NODE_HOST || pgHost;
-    } catch { /* discovery unavailable — use defaults */ }
-    if (!process.env.POSTGRES_PASSWORD) throw new Error("POSTGRES_PASSWORD env var is required");
-    let creds = { host: pgHost, port: pgPort, user: process.env.POSTGRES_USER || 'rapidnir', password: process.env.POSTGRES_PASSWORD, database: 'cortexdb' };
+    } catch {
+      /* discovery unavailable — use defaults */
+    }
+    if (!process.env.POSTGRES_PASSWORD) throw new Error('POSTGRES_PASSWORD env var is required');
+    let creds = {
+      host: pgHost,
+      port: pgPort,
+      user: process.env.POSTGRES_USER || 'rapidnir',
+      password: process.env.POSTGRES_PASSWORD,
+      database: 'cortexdb',
+    };
     const vaultPath = join(process.env.HOME || '', '.shre/vault/cortexdb.json');
     if (existsSync(vaultPath)) {
       creds = { ...creds, ...JSON.parse(readFileSync(vaultPath, 'utf8')) };
@@ -123,33 +143,41 @@ async function getSite(siteId) {
 
 async function createSite(body) {
   const siteId = body.siteId || `vfn-${randomUUID().slice(0, 8)}`;
-  await pool.query(`
+  await pool.query(
+    `
     INSERT INTO verifone.site_config (site_id, site_name, commander_ip, username, password_enc, sync_interval_ms, has_fuel, has_carwash)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-  `, [
-    siteId,
-    body.siteName || `Commander ${body.commanderIp}`,
-    body.commanderIp,
-    body.username,
-    body.password, // TODO: encrypt at rest
-    body.syncIntervalMs || 300000,
-    body.hasFuel !== false,
-    body.hasCarwash || false,
-  ]);
+  `,
+    [
+      siteId,
+      body.siteName || `Commander ${body.commanderIp}`,
+      body.commanderIp,
+      body.username,
+      body.password, // TODO: encrypt at rest
+      body.syncIntervalMs || 300000,
+      body.hasFuel !== false,
+      body.hasCarwash || false,
+    ],
+  );
 
   const site = await getSite(siteId);
 
   // Start sync for new site
   if (site?.enabled) {
-    startSync(pool, siteId, {
-      ip: site.commander_ip,
-      user: site.username,
-      pass: site.password_enc,
-      sync_interval_ms: site.sync_interval_ms,
-    }, {
-      log,
-      onComplete: (id) => broadcastUpdate(id),
-    });
+    startSync(
+      pool,
+      siteId,
+      {
+        ip: site.commander_ip,
+        user: site.username,
+        pass: site.password_enc,
+        sync_interval_ms: site.sync_interval_ms,
+      },
+      {
+        log,
+        onComplete: (id) => broadcastUpdate(id),
+      },
+    );
   }
 
   bus?.publish('verifone.sync.site_added', 'info', { siteId });
@@ -185,12 +213,17 @@ async function updateSite(siteId, body) {
   // Restart sync with new settings
   stopSync(siteId);
   if (site?.enabled) {
-    startSync(pool, siteId, {
-      ip: site.commander_ip,
-      user: site.username,
-      pass: site.password_enc,
-      sync_interval_ms: site.sync_interval_ms,
-    }, { log, onComplete: (id) => broadcastUpdate(id) });
+    startSync(
+      pool,
+      siteId,
+      {
+        ip: site.commander_ip,
+        user: site.username,
+        pass: site.password_enc,
+        sync_interval_ms: site.sync_interval_ms,
+      },
+      { log, onComplete: (id) => broadcastUpdate(id) },
+    );
   }
 
   return site;
@@ -216,19 +249,30 @@ async function readBody(req) {
 
 // ─── CORS ────────────────────────────────────────────────────────
 let chatOrigin, mibOrigin;
-try { chatOrigin = serviceUrl('shre-chat'); } catch { chatOrigin = 'https://127.0.0.1:5510'; }
-try { mibOrigin = serviceUrl('mib007'); } catch { mibOrigin = 'https://127.0.0.1:5520'; }
+try {
+  chatOrigin = serviceUrl('shre-chat');
+} catch {
+  chatOrigin = 'https://127.0.0.1:5510';
+}
+try {
+  mibOrigin = serviceUrl('mib007');
+} catch {
+  mibOrigin = 'https://127.0.0.1:5520';
+}
 const ALLOWED_ORIGINS = new Set([
-  `http://localhost:${PORT}`, `https://localhost:${PORT}`,
-  `http://127.0.0.1:${PORT}`, `https://127.0.0.1:${PORT}`,
-  chatOrigin, mibOrigin,
+  `http://localhost:${PORT}`,
+  `https://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+  `https://127.0.0.1:${PORT}`,
+  chatOrigin,
+  mibOrigin,
   'https://chat.nirtek.net',
   'https://mib007.nirtek.net',
 ]);
 function corsHeaders(req) {
   const origin = req.headers.origin;
   if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
-  return { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin' };
+  return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
 }
 
 // ─── WebSocket ───────────────────────────────────────────────────
@@ -276,15 +320,26 @@ const server = createServer(async (req, res) => {
   try {
     // ── Health endpoints ──
     if (path === '/health' && req.method === 'GET') {
-      return sendJSON(res, 200, {
-        status: 'ok',
-        service: 'shre-verifone',
-        port: PORT,
-        uptime: process.uptime(),
-        sessions: getActiveSessions(),
-        sync: getSyncStatus(),
-        pool: pool ? { totalCount: pool.totalCount, idleCount: pool.idleCount, waitingCount: pool.waitingCount } : null,
-      }, cors);
+      return sendJSON(
+        res,
+        200,
+        {
+          status: 'ok',
+          service: 'shre-verifone',
+          port: PORT,
+          uptime: process.uptime(),
+          sessions: getActiveSessions(),
+          sync: getSyncStatus(),
+          pool: pool
+            ? {
+                totalCount: pool.totalCount,
+                idleCount: pool.idleCount,
+                waitingCount: pool.waitingCount,
+              }
+            : null,
+        },
+        cors,
+      );
     }
 
     if (path === '/readyz' && req.method === 'GET') {
@@ -348,11 +403,16 @@ const server = createServer(async (req, res) => {
     if (syncMatch && req.method === 'POST') {
       const site = await getSite(syncMatch[1]);
       if (!site) return sendError(res, 404, 'Site not found', cors);
-      triggerSync(pool, syncMatch[1], {
-        ip: site.commander_ip,
-        user: site.username,
-        pass: site.password_enc,
-      }, log).then(() => broadcastUpdate(syncMatch[1]));
+      triggerSync(
+        pool,
+        syncMatch[1],
+        {
+          ip: site.commander_ip,
+          user: site.username,
+          pass: site.password_enc,
+        },
+        log,
+      ).then(() => broadcastUpdate(syncMatch[1]));
       return sendJSON(res, 202, { status: 'sync_triggered', siteId: syncMatch[1] }, cors);
     }
 
@@ -404,12 +464,17 @@ const server = createServer(async (req, res) => {
 
       // Restart sync with new credentials
       stopSync(pwdMatch[1]);
-      startSync(pool, pwdMatch[1], {
-        ip: site.commander_ip,
-        user: site.username,
-        pass: body.password,
-        sync_interval_ms: site.sync_interval_ms,
-      }, { log, onComplete: (id) => broadcastUpdate(id) });
+      startSync(
+        pool,
+        pwdMatch[1],
+        {
+          ip: site.commander_ip,
+          user: site.username,
+          pass: body.password,
+          sync_interval_ms: site.sync_interval_ms,
+        },
+        { log, onComplete: (id) => broadcastUpdate(id) },
+      );
 
       bus?.publish('verifone.password.manual_update', 'info', { siteId: pwdMatch[1] });
       return sendJSON(res, 200, { updated: true, expiresIn: '90 days' }, cors);
@@ -431,9 +496,13 @@ const server = createServer(async (req, res) => {
       const site = await getSite(verifyMatch[1]);
       if (!site) return sendError(res, 404, 'Site not found', cors);
 
-      const connectivity = await testConnection(site.commander_ip, site.username, site.password_enc);
+      const connectivity = await testConnection(
+        site.commander_ip,
+        site.username,
+        site.password_enc,
+      );
       const passwordHealth = await getPasswordHealth(pool);
-      const siteHealth = passwordHealth.find(h => h.siteId === verifyMatch[1]);
+      const siteHealth = passwordHealth.find((h) => h.siteId === verifyMatch[1]);
       const syncStatus = getSyncStatus();
       const circuitState = getCircuitState(verifyMatch[1]);
       const session = getActiveSessions()[verifyMatch[1]];
@@ -450,22 +519,48 @@ const server = createServer(async (req, res) => {
         }
       }
 
-      return sendJSON(res, 200, {
-        siteId: verifyMatch[1],
-        siteName: site.site_name,
-        checks: {
-          network: { pass: connectivity.reachable, detail: connectivity.reachable ? 'Commander reachable' : connectivity.error },
-          auth: { pass: !!connectivity.cookie, detail: connectivity.cookie ? 'Cookie obtained' : 'Authentication failed' },
-          report: { pass: reportTest.success, detail: reportTest.success ? 'Summary report fetched' : (reportTest.error || 'No data returned') },
-          circuit: { pass: !circuitState.isOpen, detail: circuitState.isOpen ? `Circuit open (${circuitState.failures} failures)` : 'Circuit closed (healthy)' },
-          sync: { pass: !!syncStatus[verifyMatch[1]], detail: syncStatus[verifyMatch[1]]?.running ? 'Sync running' : 'Sync idle' },
-          password: {
-            pass: siteHealth?.status === 'healthy' || siteHealth?.status === 'expiring_soon',
-            detail: siteHealth ? `${siteHealth.daysRemaining} days until expiry (${siteHealth.status})` : 'Unknown',
+      return sendJSON(
+        res,
+        200,
+        {
+          siteId: verifyMatch[1],
+          siteName: site.site_name,
+          checks: {
+            network: {
+              pass: connectivity.reachable,
+              detail: connectivity.reachable ? 'Commander reachable' : connectivity.error,
+            },
+            auth: {
+              pass: !!connectivity.cookie,
+              detail: connectivity.cookie ? 'Cookie obtained' : 'Authentication failed',
+            },
+            report: {
+              pass: reportTest.success,
+              detail: reportTest.success
+                ? 'Summary report fetched'
+                : reportTest.error || 'No data returned',
+            },
+            circuit: {
+              pass: !circuitState.isOpen,
+              detail: circuitState.isOpen
+                ? `Circuit open (${circuitState.failures} failures)`
+                : 'Circuit closed (healthy)',
+            },
+            sync: {
+              pass: !!syncStatus[verifyMatch[1]],
+              detail: syncStatus[verifyMatch[1]]?.running ? 'Sync running' : 'Sync idle',
+            },
+            password: {
+              pass: siteHealth?.status === 'healthy' || siteHealth?.status === 'expiring_soon',
+              detail: siteHealth
+                ? `${siteHealth.daysRemaining} days until expiry (${siteHealth.status})`
+                : 'Unknown',
+            },
           },
+          overall: connectivity.reachable && !!connectivity.cookie && reportTest.success,
         },
-        overall: connectivity.reachable && !!connectivity.cookie && reportTest.success,
-      }, cors);
+        cors,
+      );
     }
 
     sendError(res, 404, 'Not found', cors);
@@ -494,17 +589,22 @@ async function boot() {
     const sites = await getSites();
     for (const site of sites) {
       if (!site.enabled) continue;
-      startSync(pool, site.site_id, {
-        ip: site.commander_ip,
-        user: site.username,
-        pass: site.password_enc,
-        sync_interval_ms: site.sync_interval_ms,
-      }, {
-        log,
-        onComplete: (id) => broadcastUpdate(id),
-      });
+      startSync(
+        pool,
+        site.site_id,
+        {
+          ip: site.commander_ip,
+          user: site.username,
+          pass: site.password_enc,
+          sync_interval_ms: site.sync_interval_ms,
+        },
+        {
+          log,
+          onComplete: (id) => broadcastUpdate(id),
+        },
+      );
     }
-    log.info(`Loaded ${sites.length} sites (${sites.filter(s => s.enabled).length} enabled)`);
+    log.info(`Loaded ${sites.length} sites (${sites.filter((s) => s.enabled).length} enabled)`);
   } catch (err) {
     log.warn('Failed to load sites on boot', { error: err.message });
   }
@@ -513,21 +613,24 @@ async function boot() {
   checkAllPasswords(pool, {
     log,
     publish: (type, severity, data) => bus?.publish(type, severity, data),
-  }).catch(err => log.warn('Initial password check failed', { error: err.message }));
+  }).catch((err) => log.warn('Initial password check failed', { error: err.message }));
 
-  setInterval(() => {
-    checkAllPasswords(pool, {
-      log,
-      publish: (type, severity, data) => {
-        bus?.publish(type, severity, data);
-        // Also push to WebSocket clients for real-time UI alerts
-        const msg = JSON.stringify({ type: 'password_alert', ...data });
-        for (const ws of wsClients) {
-          if (ws.readyState === 1) ws.send(msg);
-        }
-      },
-    }).catch(err => log.warn('Password rotation check failed', { error: err.message }));
-  }, 60 * 60 * 1000); // Every hour
+  setInterval(
+    () => {
+      checkAllPasswords(pool, {
+        log,
+        publish: (type, severity, data) => {
+          bus?.publish(type, severity, data);
+          // Also push to WebSocket clients for real-time UI alerts
+          const msg = JSON.stringify({ type: 'password_alert', ...data });
+          for (const ws of wsClients) {
+            if (ws.readyState === 1) ws.send(msg);
+          }
+        },
+      }).catch((err) => log.warn('Password rotation check failed', { error: err.message }));
+    },
+    60 * 60 * 1000,
+  ); // Every hour
 
   server.listen(PORT, '0.0.0.0', () => {
     log.info(`shre-verifone listening on 0.0.0.0:${PORT}`);

@@ -19,11 +19,18 @@ export function runRetention(options = {}) {
   const multiplier = options.emergency ? 0.5 : 1;
 
   const retentionDays = {
-    activity: (parseInt(getConfig('retention_activity_days')) || DEFAULTS.RETENTION_ACTIVITY_DAYS) * multiplier,
-    reports: (parseInt(getConfig('retention_reports_days')) || DEFAULTS.RETENTION_REPORTS_DAYS) * multiplier,
-    transactions: (parseInt(getConfig('retention_transactions_days')) || DEFAULTS.RETENTION_TRANSACTIONS_DAYS) * multiplier,
+    activity:
+      (parseInt(getConfig('retention_activity_days')) || DEFAULTS.RETENTION_ACTIVITY_DAYS) *
+      multiplier,
+    reports:
+      (parseInt(getConfig('retention_reports_days')) || DEFAULTS.RETENTION_REPORTS_DAYS) *
+      multiplier,
+    transactions:
+      (parseInt(getConfig('retention_transactions_days')) || DEFAULTS.RETENTION_TRANSACTIONS_DAYS) *
+      multiplier,
     wal: (parseInt(getConfig('retention_wal_days')) || DEFAULTS.RETENTION_WAL_DAYS) * multiplier,
-    audit: (parseInt(getConfig('retention_audit_days')) || DEFAULTS.RETENTION_AUDIT_DAYS) * multiplier,
+    audit:
+      (parseInt(getConfig('retention_audit_days')) || DEFAULTS.RETENTION_AUDIT_DAYS) * multiplier,
     logs: (parseInt(getConfig('retention_logs_days')) || DEFAULTS.RETENTION_LOGS_DAYS) * multiplier,
   };
 
@@ -33,16 +40,40 @@ export function runRetention(options = {}) {
   totalDeleted += cleanTable(db, 'activity_log', 'ts', retentionDays.activity);
 
   // Reports (only uploaded ones)
-  totalDeleted += cleanTableWhere(db, 'reports', 'fetched_at', retentionDays.reports, 'uploaded_at IS NOT NULL');
+  totalDeleted += cleanTableWhere(
+    db,
+    'reports',
+    'fetched_at',
+    retentionDays.reports,
+    'uploaded_at IS NOT NULL',
+  );
 
   // Transaction logs (only uploaded ones)
-  totalDeleted += cleanTableWhere(db, 'transaction_logs', 'fetched_at', retentionDays.transactions, 'uploaded_at IS NOT NULL');
+  totalDeleted += cleanTableWhere(
+    db,
+    'transaction_logs',
+    'fetched_at',
+    retentionDays.transactions,
+    'uploaded_at IS NOT NULL',
+  );
 
   // Uplink WAL (sent entries)
-  totalDeleted += cleanTableWhere(db, 'uplink_queue', 'created_at', retentionDays.wal, 'sent_at IS NOT NULL');
+  totalDeleted += cleanTableWhere(
+    db,
+    'uplink_queue',
+    'created_at',
+    retentionDays.wal,
+    'sent_at IS NOT NULL',
+  );
 
   // Anomaly events (acknowledged)
-  totalDeleted += cleanTableWhere(db, 'anomaly_events', 'ts', retentionDays.activity, 'acknowledged = 1');
+  totalDeleted += cleanTableWhere(
+    db,
+    'anomaly_events',
+    'ts',
+    retentionDays.activity,
+    'acknowledged = 1',
+  );
 
   // Password rotation log
   totalDeleted += cleanTable(db, 'password_rotation_log', 'created_at', retentionDays.reports);
@@ -58,7 +89,11 @@ export function runRetention(options = {}) {
     });
 
     // Vacuum to reclaim space
-    try { db.exec('VACUUM'); } catch { /* non-fatal */ }
+    try {
+      db.exec('VACUUM');
+    } catch {
+      /* non-fatal */
+    }
   }
 
   return totalDeleted;
@@ -71,7 +106,8 @@ function cleanTable(db, table, tsColumn, retentionDays) {
 
 function cleanTableWhere(db, table, tsColumn, retentionDays, extraWhere) {
   const cutoff = daysAgo(retentionDays);
-  return db.prepare(`DELETE FROM ${table} WHERE ${tsColumn} < ? AND ${extraWhere}`).run(cutoff).changes;
+  return db.prepare(`DELETE FROM ${table} WHERE ${tsColumn} < ? AND ${extraWhere}`).run(cutoff)
+    .changes;
 }
 
 function daysAgo(days) {

@@ -11,7 +11,15 @@
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-import { getDb, closeDb, getRelayId, getConfig, ensureDataDir, getDataDir, DEFAULTS } from './config.mjs';
+import {
+  getDb,
+  closeDb,
+  getRelayId,
+  getConfig,
+  ensureDataDir,
+  getDataDir,
+  DEFAULTS,
+} from './config.mjs';
 import { initLogger, createLogger, closeLogger } from './logger.mjs';
 import { initVault, closeVault } from './vault/local-vault.mjs';
 import { getVaultInterface } from './vault/credential-store.mjs';
@@ -57,7 +65,9 @@ async function main() {
   // 4. Check if relay is configured
   const relayId = getRelayId();
   if (!relayId) {
-    log.info('Relay not configured — waiting for setup at http://localhost:' + adminPort + '/setup.html');
+    log.info(
+      'Relay not configured — waiting for setup at http://localhost:' + adminPort + '/setup.html',
+    );
     auditLog('relay.start', 'system', 'Waiting for setup');
 
     // Poll for setup completion
@@ -133,7 +143,8 @@ async function startServices(log) {
 
   setStatus('healthy');
   auditLog('relay.start', 'system', {
-    sites: sites.length, dataTier,
+    sites: sites.length,
+    dataTier,
     version: process.env.RELAY_VERSION || '1.0.0',
   });
 
@@ -169,7 +180,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 // Handle self-signed certs on Commander LAN devices
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Fatal error:', err);
   process.exit(1);
 });

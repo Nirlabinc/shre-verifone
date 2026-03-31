@@ -54,7 +54,11 @@ export function setupRoutes(routes) {
 
       try {
         const result = await testConnection(body.ip, body.username, body.password);
-        auditLog('setup.test_commander', 'admin', `Test ${body.ip}: ${result.reachable ? 'success' : 'failed'}`);
+        auditLog(
+          'setup.test_commander',
+          'admin',
+          `Test ${body.ip}: ${result.reachable ? 'success' : 'failed'}`,
+        );
         return { body: result };
       } catch (err) {
         return { body: { reachable: false, error: err.message } };
@@ -91,20 +95,29 @@ export function setupRoutes(routes) {
         const now = new Date().toISOString();
         const passwordExpiry = new Date(Date.now() + 90 * 86400000).toISOString();
 
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO site_config (site_id, site_name, commander_ip, username, enabled,
                                     sync_interval_ms, password_set_at, password_expires_at)
           VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-        `).run(
-          siteId, cmd.siteName || siteId, cmd.ip, cmd.username,
-          cmd.syncInterval || 300000, now, passwordExpiry,
+        `,
+        ).run(
+          siteId,
+          cmd.siteName || siteId,
+          cmd.ip,
+          cmd.username,
+          cmd.syncInterval || 300000,
+          now,
+          passwordExpiry,
         );
 
         // Store Commander password in vault
         setCredential(siteId, cmd.password);
 
         auditLog('setup.complete', body.email, {
-          relayId: registration.relayId, siteId, dataTier,
+          relayId: registration.relayId,
+          siteId,
+          dataTier,
         });
 
         log.info('Setup complete', { relayId: registration.relayId, siteId });

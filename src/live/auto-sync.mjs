@@ -26,7 +26,15 @@ const DEFAULT_INTERVAL_MS = 300_000; // 5 min
 const SYNC_TIMEOUT_MS = 10 * 60 * 1000; // 10 min hard limit
 
 const PRIMARY_REPORTS = ['summary', 'department', 'plu', 'network'];
-const SECONDARY_REPORTS = ['hourly', 'tax', 'category', 'deal', 'carWash', 'cashAcc', 'networkTotals'];
+const SECONDARY_REPORTS = [
+  'hourly',
+  'tax',
+  'category',
+  'deal',
+  'carWash',
+  'cashAcc',
+  'networkTotals',
+];
 
 /** @type {Map<string, { timer: NodeJS.Timeout, cycleCount: number, running: boolean }>} */
 const syncTimers = new Map();
@@ -153,7 +161,11 @@ async function runSyncCycle(pool, siteId, config, cycleCount, log) {
 
       // Refresh cookie on auth failure
       if (err.message.includes('401') || err.message.includes('cookie')) {
-        try { cookie = await refreshSession(siteId, config); } catch { /* continue with stale */ }
+        try {
+          cookie = await refreshSession(siteId, config);
+        } catch {
+          /* continue with stale */
+        }
       }
     }
   }
@@ -178,10 +190,15 @@ async function runSyncCycle(pool, siteId, config, cycleCount, log) {
     const periods = await fetchAvailablePeriods(config.ip, cookie);
     const knownFiles = await getKnownPeriodFiles(pool, siteId);
 
-    const newPeriods = periods.filter(p => !knownFiles.has(p.filename));
+    const newPeriods = periods.filter((p) => !knownFiles.has(p.filename));
     for (const period of newPeriods) {
       try {
-        const txns = await fetchTransactionLog(config.ip, cookie, period.type === 'shift' ? '1' : '2', period.filename);
+        const txns = await fetchTransactionLog(
+          config.ip,
+          cookie,
+          period.type === 'shift' ? '1' : '2',
+          period.filename,
+        );
         if (txns.length) {
           await storeTransactionLog(pool, siteId, period.filename, period.date, txns);
           log.debug?.(`Transaction log ${period.filename}: ${txns.length} rows`);
@@ -223,35 +240,47 @@ async function storeReportData(pool, siteId, reptname, reportDate, periodType, r
     if (periodType === 1) {
       // Shift summary
       const shiftId = `${reportDate}-shift-${Date.now()}`;
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO ${table} (site_id, shift_id, report_date, raw_data)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (site_id, shift_id) DO UPDATE SET raw_data = EXCLUDED.raw_data, fetched_at = now()
-      `, [siteId, shiftId, reportDate, JSON.stringify(rows)]);
+      `,
+        [siteId, shiftId, reportDate, JSON.stringify(rows)],
+      );
     } else {
       // Day summary
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO ${table} (site_id, report_date, raw_data)
         VALUES ($1, $2, $3)
         ON CONFLICT (site_id, report_date) DO UPDATE SET raw_data = EXCLUDED.raw_data, fetched_at = now()
-      `, [siteId, reportDate, JSON.stringify(rows)]);
+      `,
+        [siteId, reportDate, JSON.stringify(rows)],
+      );
     }
   } else {
     const table = typeof tableConfig === 'string' ? tableConfig : tableConfig.day;
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO ${table} (site_id, report_date, period_type, raw_data)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (site_id, report_date, period_type) DO UPDATE SET raw_data = EXCLUDED.raw_data, fetched_at = now()
-    `, [siteId, reportDate, periodType, JSON.stringify(rows)]);
+    `,
+      [siteId, reportDate, periodType, JSON.stringify(rows)],
+    );
   }
 }
 
 async function storeTransactionLog(pool, siteId, periodFile, reportDate, rows) {
-  await pool.query(`
+  await pool.query(
+    `
     INSERT INTO verifone.data_transaction_log (site_id, period_file, report_date, raw_data)
     VALUES ($1, $2, $3, $4)
     ON CONFLICT (site_id, period_file) DO UPDATE SET raw_data = EXCLUDED.raw_data, fetched_at = now()
-  `, [siteId, periodFile, reportDate || null, JSON.stringify(rows)]);
+  `,
+    [siteId, periodFile, reportDate || null, JSON.stringify(rows)],
+  );
 }
 
 async function getKnownPeriodFiles(pool, siteId) {
@@ -259,11 +288,12 @@ async function getKnownPeriodFiles(pool, siteId) {
     `SELECT period_file FROM verifone.data_transaction_log WHERE site_id = $1`,
     [siteId],
   );
-  return new Set(res.rows.map(r => r.period_file));
+  return new Set(res.rows.map((r) => r.period_file));
 }
 
 async function updateLedger(pool, siteId, endpoint, status, error = null) {
-  await pool.query(`
+  await pool.query(
+    `
     INSERT INTO verifone.sync_ledger (site_id, endpoint, status, error, started_at, updated_at)
     VALUES ($1, $2, $3, $4, now(), now())
     ON CONFLICT (site_id, endpoint) DO UPDATE SET
@@ -271,5 +301,7 @@ async function updateLedger(pool, siteId, endpoint, status, error = null) {
       error = EXCLUDED.error,
       completed_at = CASE WHEN EXCLUDED.status IN ('done','failed') THEN now() ELSE verifone.sync_ledger.completed_at END,
       updated_at = now()
-  `, [siteId, endpoint, status, error]);
+  `,
+    [siteId, endpoint, status, error],
+  );
 }
