@@ -1,0 +1,13 @@
+services:
+  verifone-edge-relay:
+    build: .
+    container_name: verifone-edge-relay
+    ports:
+      - "18464:18464"
+    volumes:
+      - relay-data:/data
+    restart: unless-stopped
+    network_mode: host   # Required — must reach Commander on LAN (e.g. 192.168.31.11)
+
+volumes:
+  relay-data:
