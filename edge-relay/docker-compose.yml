@@ -7,7 +7,15 @@ services:
     volumes:
       - relay-data:/data
     restart: unless-stopped
-    network_mode: host   # Required — must reach Commander on LAN (e.g. 192.168.31.11)
+    environment:
+      - COMMANDER_IP=${COMMANDER_IP:-192.168.31.11}
+      - RELAY_DATA_DIR=/data
+      - LOG_LEVEL=info
+    # Note: on macOS, host networking doesn't work (Docker runs in a VM).
+    # The relay connects to Commander via the Mac's LAN IP which is
+    # accessible from the container via host.docker.internal on Mac.
+    extra_hosts:
+      - "commander:host-gateway"
 
 volumes:
   relay-data:
