@@ -1,6 +1,6 @@
 services:
   verifone-edge-relay:
-    build: .
+    image: ghcr.io/nirlabinc/verifone-edge-relay:latest
     container_name: verifone-edge-relay
     ports:
       - "18464:18464"
@@ -11,11 +11,19 @@ services:
       - COMMANDER_IP=${COMMANDER_IP:-192.168.31.11}
       - RELAY_DATA_DIR=/data
       - LOG_LEVEL=info
-    # Note: on macOS, host networking doesn't work (Docker runs in a VM).
-    # The relay connects to Commander via the Mac's LAN IP which is
-    # accessible from the container via host.docker.internal on Mac.
     extra_hosts:
       - "commander:host-gateway"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=3600
+      - WATCHTOWER_LABEL_ENABLE=false
+    restart: unless-stopped
 
 volumes:
   relay-data:

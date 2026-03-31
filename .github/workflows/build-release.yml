@@ -1,93 +1,54 @@
-name: Build & Release Edge Relay
+name: Build & Publish Docker Image
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag (e.g. v1.0.0)'
-        required: false
 
 permissions:
-  contents: write
+  contents: read
+  packages: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            platform: darwin
-            arch: arm64
-            artifact: verifone-edge-relay-darwin-arm64
-          - os: macos-13
-            platform: darwin
-            arch: x64
-            artifact: verifone-edge-relay-darwin-x64
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
-            artifact: verifone-edge-relay-linux-x64
-          - os: windows-latest
-            platform: win32
-            arch: x64
-            artifact: verifone-edge-relay-win-x64
-
-    runs-on: ${{ matrix.os }}
-    name: Build (${{ matrix.platform }}-${{ matrix.arch }})
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        working-directory: edge-relay
-        run: npm ci
-
-      - name: Build bundle
-        working-directory: edge-relay
-        run: node build/build.mjs --no-package
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: |
-            edge-relay/dist/relay.cjs
-            edge-relay/dist/admin-ui/
-            edge-relay/dist/native/
-          retention-days: 30
-
-  release:
-    needs: build
+  docker:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: Build & Push Multi-Arch Image
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Package artifacts
-        run: |
-          cd artifacts
-          for dir in */; do
-            name="${dir%/}"
-            tar -czf "${name}.tar.gz" -C "$dir" .
-          done
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          files: artifacts/*.tar.gz
-          generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/nirlabinc/verifone-edge-relay
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: edge-relay
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

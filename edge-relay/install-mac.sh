@@ -112,12 +112,13 @@ else
   RELAY_DIR="$INSTALL_DIR/edge-relay"
 fi
 
-# ── 3. Build and start ───────────────────────────────────────────
+# ── 3. Pull and start ────────────────────────────────────────────
 
-echo "[3/4] Building Docker container..."
+echo "[3/4] Pulling and starting containers..."
 
 cd "$RELAY_DIR"
-docker compose up -d --build 2>&1 | sed 's/^/  /'
+docker compose pull 2>&1 | sed 's/^/  /'
+docker compose up -d 2>&1 | sed 's/^/  /'
 
 # ── 4. Verify ────────────────────────────────────────────────────
 

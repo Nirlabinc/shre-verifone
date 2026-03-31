@@ -1,0 +1,18 @@
+services:
+  verifone-edge-relay:
+    build: .
+    container_name: verifone-edge-relay
+    ports:
+      - "18464:18464"
+    volumes:
+      - relay-data:/data
+    restart: unless-stopped
+    environment:
+      - COMMANDER_IP=${COMMANDER_IP:-192.168.31.11}
+      - RELAY_DATA_DIR=/data
+      - LOG_LEVEL=debug
+    extra_hosts:
+      - "commander:host-gateway"
+
+volumes:
+  relay-data:
