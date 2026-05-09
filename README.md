@@ -65,6 +65,7 @@ Setup, onboarding, support, and specs:
 - [Setup Tree](docs/setup-tree.md)
 - [Installation Data Map](docs/installation-data-map.md)
 - [Credential Acquisition](docs/credential-acquisition.md)
+- [Environment Promotion](docs/environment-promotion.md)
 - [Local Alias](docs/local-alias.md)
 - [Customer Onboarding](docs/customer-onboarding.md)
 - [Developer Onboarding](docs/developer-onboarding.md)

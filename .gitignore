@@ -3,6 +3,9 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.dev.example
+!.env.qa.example
+!.env.prod.example
 *.log
 runtime/
 *.sqlite
