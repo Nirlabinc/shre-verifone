@@ -1,6 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { readFile, mkdir, readdir, stat } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { chmod, readFile, mkdir, readdir, stat } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir, hostname, platform, arch, totalmem, freemem, cpus } from "node:os";
 import { createHash, createHmac, randomBytes, randomUUID, createCipheriv, createDecipheriv, timingSafeEqual } from "node:crypto";
@@ -12,6 +12,7 @@ const runtimeRoot = process.env.VERIFONE_SHRE_HOME || join(homedir(), ".verifone
 const connectorRegistryUrl = process.env.CONNECTOR_REGISTRY_URL || "https://connector.aros.live";
 const connectorSharedSecret = process.env.CONNECTOR_SHARED_SECRET || "";
 const localBaseUrlOverride = process.env.LOCAL_BASE_URL || "";
+const localAdminToken = process.env.LOCAL_ADMIN_TOKEN || "";
 const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
 
@@ -20,6 +21,21 @@ async function ensureRuntime(): Promise<void> {
   await mkdir(join(runtimeRoot, "queue"), { recursive: true });
   await mkdir(join(runtimeRoot, "logs"), { recursive: true });
   await mkdir(join(runtimeRoot, "diagnostics"), { recursive: true });
+  await secureRuntimePath(runtimeRoot, 0o700);
+  await Promise.all([
+    secureRuntimePath(join(runtimeRoot, "connections"), 0o700),
+    secureRuntimePath(join(runtimeRoot, "queue"), 0o700),
+    secureRuntimePath(join(runtimeRoot, "logs"), 0o700),
+    secureRuntimePath(join(runtimeRoot, "diagnostics"), 0o700),
+  ]);
+}
+
+async function secureRuntimePath(path: string, mode: number): Promise<void> {
+  try {
+    await chmod(path, mode);
+  } catch {
+    // Best effort on Windows and filesystems that do not support POSIX modes.
+  }
 }
 
 async function requestBody(req: IncomingMessage): Promise<JsonValue> {
@@ -85,6 +101,17 @@ function enforceLocalOrigin(req: IncomingMessage, res: ServerResponse): boolean 
   return true;
 }
 
+function enforceLocalAdmin(req: IncomingMessage, res: ServerResponse, path: string): boolean {
+  if (!localAdminToken) return true;
+  if (path === "/api/health" || path === "/api/connector/manifest" || path === "/api/messages/inbound") return true;
+  const provided = String(req.headers["x-local-admin-token"] || "");
+  const expected = Buffer.from(localAdminToken);
+  const actual = Buffer.from(provided);
+  if (expected.length === actual.length && timingSafeEqual(expected, actual)) return true;
+  sendJson(res, 401, { error: "Local admin token required" });
+  return false;
+}
+
 function asObject(value: JsonValue): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as JsonObject;
@@ -99,8 +126,11 @@ function requireString(body: JsonObject, key: string): string {
 }
 
 function secretKey(): Buffer {
+  const installSecretPath = join(runtimeRoot, ".install-secret");
+  const installSecret = existsSync(installSecretPath) ? readFileSync(installSecretPath, "utf8").trim() : "";
   const material = [
     process.env.VERIFONE_SHRE_SECRET || "",
+    installSecret,
     hostname(),
     homedir(),
     "verifone-shre-cstoresku-local-secret",
@@ -201,6 +231,7 @@ async function directorySize(path: string): Promise<{ files: number; bytes: numb
 
 async function handleApi(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (!enforceJsonRequest(req, res) || !enforceLocalOrigin(req, res)) return;
+  if (!enforceLocalAdmin(req, res, path)) return;
 
   if (path === "/api/health") {
     const storage = await directorySize(runtimeRoot);

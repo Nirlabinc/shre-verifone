@@ -41,4 +41,5 @@ jobs:
           test -s docs/shre-marketplace-registration.md
           test -s docs/local-alias.md
           test -s docs/local-ai-ollama.md
+          test -s docs/security-hardening.md
           test -s marketplace/verifone-commander.connector.json

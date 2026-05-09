@@ -62,6 +62,19 @@
     .badge.completed, .badge.answered { color: var(--green); background: #dcfae6; }
     .scroll-table { max-height: 460px; overflow: auto; padding: 0; }
     .mono { font-family: Consolas, "Courier New", monospace; font-size: 12px; overflow-wrap: anywhere; }
+    .folder-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 10px 0 14px; }
+    .folder-tabs button { border: 1px solid var(--line); border-bottom: 0; background: #f8fafc; color: var(--muted); padding: 9px 12px; border-radius: 6px 6px 0 0; cursor: pointer; }
+    .folder-tabs button.active { background: var(--panel); color: var(--text); font-weight: 650; margin-bottom: -1px; }
+    .health-panel { display: none; }
+    .health-panel.active { display: block; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.24); opacity: 0; pointer-events: none; transition: opacity 160ms ease; z-index: 20; }
+    .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+    .drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(560px, 92vw); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -16px 0 40px rgba(15, 23, 42, 0.18); transform: translateX(100%); transition: transform 180ms ease; z-index: 21; display: grid; grid-template-rows: auto 1fr; }
+    .drawer.open { transform: translateX(0); }
+    .drawer header { position: static; height: auto; padding: 16px; border-bottom: 1px solid var(--line); }
+    .drawer main { display: block; min-height: 0; padding: 16px; overflow: auto; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: #f8fafc; }
     @media (max-width: 860px) {
       main, .split { grid-template-columns: 1fr; }
       nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
@@ -75,6 +88,7 @@
     <h1>Verifone Commander CStoreSKU</h1>
     <div class="toolbar">
       <span id="apiStatus" class="status-pill">Checking API</span>
+      <input id="adminToken" type="password" placeholder="Admin token" style="width:150px;padding:6px 8px">
       <button class="secondary" id="refreshAll" type="button">Refresh</button>
     </div>
   </header>
@@ -220,23 +234,42 @@
           <div class="mini"><span class="label">Storage</span><strong id="hStorage">0 KB</strong></div>
         </div>
         <div class="toolbar" style="margin-bottom:12px"><button id="createBundle" class="primary" type="button">Create Diagnostics Bundle</button><button id="refreshHealth" class="secondary" type="button">Refresh</button></div>
-        <div class="split">
+        <div class="folder-tabs" id="healthTabs">
+          <button class="active" data-health-tab="activityPanel" type="button">Activity Log</button>
+          <button data-health-tab="messagesPanel" type="button">Connector Messages</button>
+          <button data-health-tab="diagnosticsPanel" type="button">Diagnostics</button>
+        </div>
+        <div id="activityPanel" class="health-panel active">
           <div class="card">
-            <h2>Activity Log</h2>
             <div class="table-wrap scroll-table"><table><thead><tr><th>Time</th><th>Event</th><th>Metadata</th></tr></thead><tbody id="activityRows"></tbody></table></div>
           </div>
+        </div>
+        <div id="messagesPanel" class="health-panel">
           <div class="card">
-            <h2>Connector Messages</h2>
             <div class="table-wrap scroll-table"><table><thead><tr><th>Time</th><th>Source</th><th>Intent</th><th>Status</th><th>Response</th></tr></thead><tbody id="messageRows"></tbody></table></div>
           </div>
         </div>
-        <div class="card" style="margin-top:16px"><h2>Diagnostics</h2><pre id="diagnosticsJson">Loading</pre></div>
+        <div id="diagnosticsPanel" class="health-panel">
+          <div class="card"><pre id="diagnosticsJson">Loading</pre></div>
+        </div>
       </section>
     </div>
   </main>
 
+  <div id="drawerBackdrop" class="drawer-backdrop"></div>
+  <aside id="detailDrawer" class="drawer" aria-hidden="true">
+    <header>
+      <h2 id="drawerTitle">Details</h2>
+      <button id="closeDrawer" class="secondary" type="button">Close</button>
+    </header>
+    <main><pre id="drawerBody">{}</pre></main>
+  </aside>
+
   <script>
     const $ = (id) => document.getElementById(id);
+    const savedAdminToken = sessionStorage.getItem("localAdminToken") || "";
+    $("adminToken").value = savedAdminToken;
+    $("adminToken").addEventListener("change", () => sessionStorage.setItem("localAdminToken", $("adminToken").value));
     const today = new Date().toISOString().slice(0, 10);
     document.querySelectorAll('input[type="date"]').forEach((input) => input.value = today);
 
@@ -244,7 +277,11 @@
       const response = await fetch(path, {
         ...options,
         cache: "no-store",
-        headers: { "content-type": "application/json", ...(options.headers || {}) }
+        headers: {
+          "content-type": "application/json",
+          ...(sessionStorage.getItem("localAdminToken") ? { "x-local-admin-token": sessionStorage.getItem("localAdminToken") } : {}),
+          ...(options.headers || {})
+        }
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || data.message || `${response.status} ${response.statusText}`);
@@ -255,6 +292,18 @@
     }
     function showJson(id, value) {
       $(id).textContent = JSON.stringify(value, null, 2);
+    }
+    function openDrawer(title, value) {
+      $("drawerTitle").textContent = title;
+      showJson("drawerBody", value);
+      $("drawerBackdrop").classList.add("open");
+      $("detailDrawer").classList.add("open");
+      $("detailDrawer").setAttribute("aria-hidden", "false");
+    }
+    function closeDrawer() {
+      $("drawerBackdrop").classList.remove("open");
+      $("detailDrawer").classList.remove("open");
+      $("detailDrawer").setAttribute("aria-hidden", "true");
     }
     function setStatus(text, cls = "") {
       $("apiStatus").textContent = text;
@@ -309,10 +358,18 @@
       $("queueRows").innerHTML = items.map((item) => `<tr><td><span class="badge ${item.status}">${item.status}</span></td><td>${item.target}</td><td>${item.operation}</td><td>${item.entityType}:${item.entityId || ""}</td><td>${item.attemptCount || 0}</td><td class="mono">${JSON.stringify(item.payload || {})}</td><td>${item.updatedAt}</td></tr>`).join("") || '<tr><td colspan="7">No queue items</td></tr>';
     }
     function renderActivity(events) {
-      $("activityRows").innerHTML = events.slice().reverse().map((event) => `<tr><td>${event.timestamp}</td><td>${event.eventName}</td><td class="mono">${JSON.stringify(event.metadata)}</td></tr>`).join("") || '<tr><td colspan="3">No activity</td></tr>';
+      const ordered = events.slice().reverse();
+      $("activityRows").innerHTML = ordered.map((event, index) => `<tr class="clickable" data-activity-index="${index}"><td>${event.timestamp}</td><td>${event.eventName}</td><td class="mono">${JSON.stringify(event.metadata)}</td></tr>`).join("") || '<tr><td colspan="3">No activity</td></tr>';
+      $("activityRows").querySelectorAll("tr[data-activity-index]").forEach((row) => {
+        row.addEventListener("click", () => openDrawer("Activity Event", ordered[Number(row.dataset.activityIndex)]));
+      });
     }
     function renderMessages(messages) {
-      $("messageRows").innerHTML = messages.slice().reverse().map((message) => `<tr><td>${message.createdAt}</td><td>${message.source}</td><td>${message.intent}</td><td><span class="badge ${message.status}">${message.status}</span></td><td class="mono">${JSON.stringify(message.response || {})}</td></tr>`).join("") || '<tr><td colspan="5">No connector messages</td></tr>';
+      const ordered = messages.slice().reverse();
+      $("messageRows").innerHTML = ordered.map((message, index) => `<tr class="clickable" data-message-index="${index}"><td>${message.createdAt}</td><td>${message.source}</td><td>${message.intent}</td><td><span class="badge ${message.status}">${message.status}</span></td><td class="mono">${JSON.stringify(message.response || {})}</td></tr>`).join("") || '<tr><td colspan="5">No connector messages</td></tr>';
+      $("messageRows").querySelectorAll("tr[data-message-index]").forEach((row) => {
+        row.addEventListener("click", () => openDrawer("Connector Message", ordered[Number(row.dataset.messageIndex)]));
+      });
     }
 
     $("tabs").addEventListener("click", (event) => {
@@ -321,6 +378,14 @@
       document.querySelectorAll("nav button").forEach((item) => item.classList.toggle("active", item === button));
       document.querySelectorAll("section").forEach((section) => section.classList.toggle("active", section.id === button.dataset.tab));
     });
+    $("healthTabs").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-health-tab]");
+      if (!button) return;
+      $("healthTabs").querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
+      document.querySelectorAll(".health-panel").forEach((panel) => panel.classList.toggle("active", panel.id === button.dataset.healthTab));
+    });
+    $("closeDrawer").onclick = closeDrawer;
+    $("drawerBackdrop").onclick = closeDrawer;
     $("refreshAll").onclick = refresh;
     $("refreshQueue").onclick = refresh;
     $("refreshHealth").onclick = refresh;

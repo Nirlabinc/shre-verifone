@@ -30,6 +30,7 @@ try {
   $env:HOST = "127.0.0.1"
   $env:VERIFONE_SHRE_HOME = $runtime
   $env:CONNECTOR_SHARED_SECRET = $ConnectorSecret
+  $env:LOCAL_ADMIN_TOKEN = "download-e2e-admin-token"
   $env:LOCAL_BASE_URL = $baseUrl
   $api = Start-Process -FilePath node -ArgumentList "dist/apps/dashboard-api/src/server.js" -WorkingDirectory $repo -WindowStyle Hidden -PassThru
 
@@ -44,23 +45,24 @@ try {
   if (-not $health.ok) { throw "API did not become healthy at $baseUrl" }
 
   $json = "application/json"
-  Invoke-RestMethod -Uri "$baseUrl/api/profile" -Method Post -ContentType $json -Body (@{
+  $adminHeaders = @{ "x-local-admin-token" = $env:LOCAL_ADMIN_TOKEN }
+  Invoke-RestMethod -Uri "$baseUrl/api/profile" -Method Post -Headers $adminHeaders -ContentType $json -Body (@{
     company = "Rapid Infosoft LLC"
     storeId = "store_001"
     contactEmail = "info@rapidinfosoft.com"
     timezone = "America/New_York"
   } | ConvertTo-Json) | Out-Null
 
-  Invoke-RestMethod -Uri "$baseUrl/api/verifone/config" -Method Post -ContentType $json -Body (@{
+  Invoke-RestMethod -Uri "$baseUrl/api/verifone/config" -Method Post -Headers $adminHeaders -ContentType $json -Body (@{
     commanderUrl = "http://192.0.2.10"
     username = "manager"
     password = "download-e2e-password"
     applicationKey = "download-e2e-key"
   } | ConvertTo-Json) | Out-Null
 
-  Invoke-RestMethod -Uri "$baseUrl/api/verifone/validate" -Method Post -ContentType $json -Body (@{ daysRemaining = 30 } | ConvertTo-Json) | Out-Null
+  Invoke-RestMethod -Uri "$baseUrl/api/verifone/validate" -Method Post -Headers $adminHeaders -ContentType $json -Body (@{ daysRemaining = 30 } | ConvertTo-Json) | Out-Null
 
-  Invoke-RestMethod -Uri "$baseUrl/api/connector/activate" -Method Post -ContentType $json -Body (@{
+  Invoke-RestMethod -Uri "$baseUrl/api/connector/activate" -Method Post -Headers $adminHeaders -ContentType $json -Body (@{
     connectorId = "verifone-commander"
     connectorName = "Verifone Commander"
     tenantId = "tenant_rapid_001"
@@ -71,7 +73,7 @@ try {
     relatedConnectors = @("rapidrms-api")
   } | ConvertTo-Json) | Out-Null
 
-  Invoke-RestMethod -Uri "$baseUrl/api/sales/snapshot" -Method Post -ContentType $json -Body (@{
+  Invoke-RestMethod -Uri "$baseUrl/api/sales/snapshot" -Method Post -Headers $adminHeaders -ContentType $json -Body (@{
     businessDate = (Get-Date).ToString("yyyy-MM-dd")
     totalSales = 1234.56
     transactionCount = 42
@@ -82,7 +84,7 @@ try {
   node scripts/shre-cli-message.mjs --base-url $baseUrl --secret $ConnectorSecret --tenant tenant_rapid_001 --store store_001 --source shre-cli --message "What were sales today?"
   if ($LASTEXITCODE -ne 0) { throw "shre-cli message simulation failed" }
 
-  $audit = Invoke-RestMethod -Uri "$baseUrl/api/messages/audit" -UseBasicParsing
+  $audit = Invoke-RestMethod -Uri "$baseUrl/api/messages/audit" -Headers $adminHeaders -UseBasicParsing
   if (-not $audit.messages -or $audit.messages.Count -lt 1) { throw "No message audit was recorded" }
 
   Write-Host "Download/setup/shre-cli E2E passed at $baseUrl"

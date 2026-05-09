@@ -26,6 +26,8 @@ POST /api/diagnostics/bundle
 
 Every API response includes an `x-request-id` header. The activity log records `api_request_completed` with request ID, method, path, status code, duration, and remote address.
 
+If `LOCAL_ADMIN_TOKEN` is configured, enter it in the dashboard header before using setup, queue, diagnostics, audit, or connector screens.
+
 ## Alias Troubleshooting
 
 - Run `npm run alias:check` on Windows.

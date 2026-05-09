@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
@@ -72,10 +72,14 @@ export interface RuntimeStoreOptions {
 
 export class RuntimeStore {
   private readonly db: Database.Database;
+  private readonly key: Buffer;
 
   constructor(private readonly runtimeRoot: string, private readonly options: RuntimeStoreOptions) {
     mkdirSync(runtimeRoot, { recursive: true });
+    securePath(runtimeRoot, 0o700);
+    this.key = loadEncryptionKey(runtimeRoot);
     this.db = new Database(join(runtimeRoot, "runtime.sqlite"));
+    securePath(join(runtimeRoot, "runtime.sqlite"), 0o600);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
     this.migrate();
@@ -88,7 +92,7 @@ export class RuntimeStore {
   getJson<T extends JsonValue>(scope: string, key: string, fallback: T): T {
     const row = this.db.prepare("select value_json from app_state where scope = ? and key = ?").get(scope, key) as KeyValueRow | undefined;
     if (!row) return fallback;
-    return JSON.parse(row.value_json) as T;
+    return this.parseJson(row.value_json) as T;
   }
 
   setJson(scope: string, key: string, value: JsonValue): void {
@@ -96,14 +100,14 @@ export class RuntimeStore {
       insert into app_state (scope, key, value_json, updated_at)
       values (?, ?, ?, ?)
       on conflict(scope, key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at
-    `).run(scope, key, JSON.stringify(value), new Date().toISOString());
+    `).run(scope, key, this.stringifyJson(value), new Date().toISOString());
   }
 
   appendActivity(eventName: string, metadata: JsonObject = {}): void {
     this.db.prepare(`
       insert into activity_log (id, event_name, metadata_json, created_at)
       values (?, ?, ?, ?)
-    `).run(randomUUID(), eventName, JSON.stringify(metadata), new Date().toISOString());
+    `).run(randomUUID(), eventName, this.stringifyJson(metadata), new Date().toISOString());
   }
 
   activity(limit = 100): JsonValue[] {
@@ -116,7 +120,7 @@ export class RuntimeStore {
     return rows.reverse().map((row) => ({
       id: row.id,
       eventName: row.event_name,
-      metadata: JSON.parse(row.metadata_json) as JsonObject,
+      metadata: this.parseJson(row.metadata_json) as JsonObject,
       timestamp: row.created_at,
     }));
   }
@@ -149,7 +153,7 @@ export class RuntimeStore {
         status, attempt_count, last_error, created_at, updated_at
       )
       values (?, ?, ?, ?, ?, ?, 'pending', 0, null, ?, ?)
-    `).run(id, item.target, item.entityType, item.entityId || null, item.operation, JSON.stringify(item.payload), now, now);
+    `).run(id, item.target, item.entityType, item.entityId || null, item.operation, this.stringifyJson(item.payload), now, now);
     return this.queueItem(id)!;
   }
 
@@ -192,7 +196,7 @@ export class RuntimeStore {
     this.db.prepare(`
       insert into diagnostic_bundles (id, bundle_json, created_at)
       values (?, ?, ?)
-    `).run(id, JSON.stringify(bundle), String(bundle.createdAt || new Date().toISOString()));
+    `).run(id, this.stringifyJson(bundle), String(bundle.createdAt || new Date().toISOString()));
     return { ok: true, id, path: this.path(), storage: "sqlite:diagnostic_bundles" };
   }
 
@@ -201,7 +205,7 @@ export class RuntimeStore {
     return rows.map((row) => ({
       id: row.id,
       createdAt: row.created_at,
-      bundle: JSON.parse(row.bundle_json) as JsonObject,
+      bundle: this.parseJson(row.bundle_json) as JsonObject,
     }));
   }
 
@@ -383,7 +387,7 @@ export class RuntimeStore {
         top_items_json, source, created_at
       )
       values (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, businessDate, totalSales, transactionCount, JSON.stringify(topItems), source, now);
+    `).run(id, businessDate, totalSales, transactionCount, this.stringifyJson(topItems as JsonValue[]), source, now);
     return {
       id,
       businessDate,
@@ -416,7 +420,7 @@ export class RuntimeStore {
       businessDate: row.business_date,
       totalSales: row.total_sales,
       transactionCount: row.transaction_count,
-      topItems: JSON.parse(row.top_items_json) as JsonValue[],
+      topItems: this.parseJson(row.top_items_json) as JsonValue[],
       source: row.source,
       createdAt: row.created_at,
     };
@@ -486,10 +490,10 @@ export class RuntimeStore {
       entry.tenantId || null,
       entry.storeId || null,
       entry.userId || null,
-      entry.messageText,
+      encryptText(entry.messageText, this.key),
       entry.intent,
       entry.status,
-      JSON.stringify(entry.response),
+      this.stringifyJson(entry.response),
       createdAt,
     );
     return {
@@ -520,10 +524,10 @@ export class RuntimeStore {
       tenantId: row.tenant_id || "",
       storeId: row.store_id || "",
       userId: row.user_id || "",
-      messageText: row.message_text,
+      messageText: decryptText(row.message_text, this.key),
       intent: row.intent,
       status: row.status,
-      response: JSON.parse(row.response_json) as JsonObject,
+      response: this.parseJson(row.response_json) as JsonObject,
       createdAt: row.created_at,
     }));
   }
@@ -592,7 +596,7 @@ export class RuntimeStore {
       entityType: row.entity_type,
       entityId: row.entity_id || "",
       operation: row.operation,
-      payload: JSON.parse(row.payload_json) as JsonObject,
+      payload: this.parseJson(row.payload_json) as JsonObject,
       status: row.status,
       attemptCount: row.attempt_count,
       lastError: row.last_error,
@@ -615,7 +619,7 @@ export class RuntimeStore {
       entityType: row.entity_type,
       entityId: row.entity_id || "",
       operation: row.operation,
-      payload: JSON.parse(row.payload_json) as JsonObject,
+      payload: this.parseJson(row.payload_json) as JsonObject,
       status: row.status,
       attemptCount: row.attempt_count,
       lastError: row.last_error,
@@ -731,4 +735,51 @@ export class RuntimeStore {
       values (1, datetime('now'));
     `);
   }
+
+  private stringifyJson(value: JsonValue): string {
+    return encryptText(JSON.stringify(value), this.key);
+  }
+
+  private parseJson(value: string): JsonValue {
+    return JSON.parse(decryptText(value, this.key)) as JsonValue;
+  }
+}
+
+function securePath(path: string, mode: number): void {
+  try {
+    chmodSync(path, mode);
+  } catch {
+    // Best effort on Windows and locked files.
+  }
+}
+
+function loadEncryptionKey(runtimeRoot: string): Buffer {
+  if (process.env.VERIFONE_SHRE_SECRET) {
+    return createHash("sha256").update(process.env.VERIFONE_SHRE_SECRET).digest();
+  }
+  const secretPath = join(runtimeRoot, ".install-secret");
+  if (!existsSync(secretPath)) {
+    writeFileSync(secretPath, randomBytes(32).toString("hex"), { encoding: "utf8", mode: 0o600 });
+  }
+  securePath(secretPath, 0o600);
+  return createHash("sha256").update(readFileSync(secretPath, "utf8").trim()).digest();
+}
+
+function encryptText(value: string, key: Buffer): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `encjson:v1:${Buffer.concat([iv, tag, encrypted]).toString("base64")}`;
+}
+
+function decryptText(value: string, key: Buffer): string {
+  if (!value.startsWith("encjson:v1:")) return value;
+  const raw = Buffer.from(value.slice("encjson:v1:".length), "base64");
+  const iv = raw.subarray(0, 12);
+  const tag = raw.subarray(12, 28);
+  const encrypted = raw.subarray(28);
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }

@@ -70,6 +70,7 @@ Setup, onboarding, support, and specs:
 - [Commander Concurrency](docs/commander-concurrency.md)
 - [App Boundary Decision](docs/app-boundary-decision.md)
 - [Local AI / Ollama Option](docs/local-ai-ollama.md)
+- [Security Hardening](docs/security-hardening.md)
 
 ## Shre SDK Findings
 

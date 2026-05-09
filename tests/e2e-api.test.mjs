@@ -5,10 +5,12 @@ import { mkdtemp, rm, access, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHmac, randomUUID } from "node:crypto";
+import Database from "better-sqlite3";
 
 const port = 20_000 + Math.floor(Math.random() * 20_000);
 const baseUrl = `http://127.0.0.1:${port}`;
 const connectorSecret = "test-connector-secret";
+const localAdminToken = "test-local-admin-token";
 
 async function waitForHealth(child) {
   const deadline = Date.now() + 10_000;
@@ -33,6 +35,7 @@ async function json(path, options = {}) {
     ...options,
     headers: {
       "content-type": "application/json",
+      "x-local-admin-token": localAdminToken,
       ...(options.headers || {}),
     },
   });
@@ -71,6 +74,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       VERIFONE_SHRE_HOME: runtimeRoot,
       CONNECTOR_REGISTRY_URL: "https://connector.aros.live",
       CONNECTOR_SHARED_SECRET: connectorSecret,
+      LOCAL_ADMIN_TOKEN: localAdminToken,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -273,6 +277,17 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const audit = await json("/api/messages/audit");
     assert.equal(audit.response.status, 200);
     assert.equal(audit.body.messages.at(-1).intent, "sales_query");
+
+    const db = new Database(health.body.database, { readonly: true });
+    try {
+      const appState = db.prepare("select value_json from app_state where scope = 'connections' and key = 'verifone'").get();
+      assert.match(appState.value_json, /^encjson:v1:/);
+      const chatRow = db.prepare("select message_text, response_json from chat_audit_log limit 1").get();
+      assert.match(chatRow.message_text, /^encjson:v1:/);
+      assert.match(chatRow.response_json, /^encjson:v1:/);
+    } finally {
+      db.close();
+    }
 
     const lease = await json("/api/commander/lease/acquire", {
       method: "POST",

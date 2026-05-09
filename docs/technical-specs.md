@@ -34,6 +34,8 @@ Tables:
 
 Activity logging records `api_request_completed` for API request/response visibility. Business events such as queue replay, connector activation, inbound messages, diagnostics bundle creation, and sales queries are recorded separately.
 
+Runtime JSON content is encrypted at rest with AES-256-GCM. The SQLite table names remain visible, but app state, queue payloads, chat audit content, activity metadata, diagnostics bundles, and sales item details are stored as encrypted JSON blobs.
+
 ## Connector Registry
 
 Default:
