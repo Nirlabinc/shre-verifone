@@ -12,6 +12,8 @@ Rationale:
 
 The Phase 2 app should remain one local application package with separate internal services for Verifone/CStoreSKU and Shre SDK work. See [App Boundary Decision](app-boundary-decision.md).
 
+POS/BOS is the core module. FCC and Loyalty are optional marketplace add-ons, not default package features. See [Add-on Architecture](addon-architecture.md).
+
 ## Local-First Federation
 
 The store machine owns operational continuity. Remote Shre services are additive.
@@ -24,6 +26,9 @@ local store machine
 ├─ queue-worker
 ├─ diagnostics
 ├─ shre-connector
+├─ optional add-on adapters
+│  ├─ verifone-fcc
+│  └─ verifone-loyalty
 └─ local runtime storage
 
 remote

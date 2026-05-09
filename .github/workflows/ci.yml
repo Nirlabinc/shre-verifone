@@ -39,6 +39,7 @@ jobs:
           test -s docs/environment-promotion.md
           test -s docs/commander-concurrency.md
           test -s docs/app-boundary-decision.md
+          test -s docs/addon-architecture.md
           test -s docs/shre-marketplace-registration.md
           test -s docs/local-alias.md
           test -s docs/local-ai-ollama.md

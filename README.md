@@ -73,6 +73,7 @@ Setup, onboarding, support, and specs:
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)
 - [App Boundary Decision](docs/app-boundary-decision.md)
+- [Add-on Architecture](docs/addon-architecture.md)
 - [Local AI / Ollama Option](docs/local-ai-ollama.md)
 - [Security Hardening](docs/security-hardening.md)
 - [Local Login And Billing](docs/login-billing.md)

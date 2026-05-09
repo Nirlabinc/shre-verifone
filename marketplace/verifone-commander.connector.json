@@ -23,6 +23,26 @@
     ]
   },
   "relatedConnectors": ["rapidrms-api"],
+  "addOns": [
+    {
+      "id": "verifone-fcc",
+      "name": "FCC",
+      "bundled": false,
+      "enabledByDefault": false,
+      "installSource": "marketplace",
+      "dependsOn": ["verifone-commander"],
+      "scopes": ["fcc.status.read", "fcc.sync.write"]
+    },
+    {
+      "id": "verifone-loyalty",
+      "name": "Loyalty",
+      "bundled": false,
+      "enabledByDefault": false,
+      "installSource": "marketplace",
+      "dependsOn": ["verifone-commander"],
+      "scopes": ["loyalty.status.read", "loyalty.sync.write"]
+    }
+  ],
   "inbound": {
     "localEndpoint": "http://localhost:5480/api/messages/inbound",
     "supportedSources": ["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "shre-cli"],
@@ -56,6 +76,42 @@
       "mutating": false,
       "localEndpoint": "http://localhost:5480/api/password/status",
       "scopes": ["credentials.status.read"]
+    },
+    {
+      "id": "verifone:fcc-status",
+      "name": "Read FCC add-on status",
+      "mutating": false,
+      "localEndpoint": "http://localhost:5480/api/addons/fcc/status",
+      "scopes": ["fcc.status.read"],
+      "optionalAddOn": true,
+      "enabledByDefault": false
+    },
+    {
+      "id": "verifone:fcc-sync",
+      "name": "Queue FCC add-on sync",
+      "mutating": true,
+      "localEndpoint": "http://localhost:5480/api/queue/enqueue",
+      "scopes": ["fcc.sync.write"],
+      "optionalAddOn": true,
+      "enabledByDefault": false
+    },
+    {
+      "id": "verifone:loyalty-status",
+      "name": "Read Loyalty add-on status",
+      "mutating": false,
+      "localEndpoint": "http://localhost:5480/api/addons/loyalty/status",
+      "scopes": ["loyalty.status.read"],
+      "optionalAddOn": true,
+      "enabledByDefault": false
+    },
+    {
+      "id": "verifone:loyalty-sync",
+      "name": "Queue Loyalty add-on sync",
+      "mutating": true,
+      "localEndpoint": "http://localhost:5480/api/queue/enqueue",
+      "scopes": ["loyalty.sync.write"],
+      "optionalAddOn": true,
+      "enabledByDefault": false
     }
   ],
   "dataScopes": [

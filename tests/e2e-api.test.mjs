@@ -307,7 +307,9 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const catalog = await json("/api/connectors/catalog");
     assert.equal(catalog.response.status, 200);
     assert.equal(catalog.body.registryUrl, "https://connector.aros.live");
-    assert.deepEqual(catalog.body.connectors.map((item) => item.connectorId), ["rapidrms-api", "verifone-commander"]);
+    assert.deepEqual(catalog.body.connectors.map((item) => item.connectorId), ["rapidrms-api", "verifone-commander", "verifone-fcc", "verifone-loyalty"]);
+    assert.equal(catalog.body.connectors.find((item) => item.connectorId === "verifone-fcc").installState, "available_add_on");
+    assert.equal(catalog.body.connectors.find((item) => item.connectorId === "verifone-loyalty").bundled, false);
 
     const manifest = await json("/api/connector/manifest");
     assert.equal(manifest.response.status, 200);
@@ -315,6 +317,8 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(manifest.body.publisher.name, "Rapid Infosoft LLC");
     assert.equal(manifest.body.runtime.database, "sqlite");
     assert.ok(manifest.body.tools.some((tool) => tool.id === "verifone:sales-query"));
+    assert.ok(manifest.body.addOns.some((addon) => addon.id === "verifone-fcc" && addon.enabledByDefault === false));
+    assert.ok(manifest.body.addOns.some((addon) => addon.id === "verifone-loyalty" && addon.enabledByDefault === false));
     assert.ok(manifest.body.relatedConnectors.includes("rapidrms-api"));
 
     const messageContract = await json("/api/messages/contract");
