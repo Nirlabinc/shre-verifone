@@ -72,6 +72,7 @@ Setup, onboarding, support, and specs:
 - [Support Runbook](docs/support-runbook.md)
 - [Connectivity Rules](docs/connectivity-rules.md)
 - [Storage, Retention, And Backup](docs/storage-retention-backup.md)
+- [Production Update And Restart](docs/production-update.md)
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)
 - [App Boundary Decision](docs/app-boundary-decision.md)

@@ -36,6 +36,11 @@ jobs:
           fi
           ALLOW_VERIFONE_RUNTIME_RESET=I_UNDERSTAND_DELETE_LOCAL_DATA VERIFONE_SHRE_HOME="$tmp_runtime" ./scripts/protect-runtime.sh allow-reset
 
+      - name: Update script smoke
+        run: |
+          bash -n scripts/production-update.sh
+          test -s scripts/production-update.ps1
+
       - name: Check required docs
         run: |
           test -s README.md
@@ -48,6 +53,7 @@ jobs:
           test -s docs/support-runbook.md
           test -s docs/connectivity-rules.md
           test -s docs/storage-retention-backup.md
+          test -s docs/production-update.md
           test -s docs/technical-specs.md
           test -s docs/environment-promotion.md
           test -s docs/commander-concurrency.md

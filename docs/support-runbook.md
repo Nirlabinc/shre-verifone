@@ -65,6 +65,23 @@ If `LOCAL_ADMIN_TOKEN` is configured, enter it in the dashboard header before us
 
 ## Common Issues
 
+### Updated Files But Old API Still Running
+
+Check:
+
+- `/api/version`
+- `/api/verifone/ping`
+- `/api/heartbeat/worker`
+- process listening on port `5480`
+
+Fix:
+
+```powershell
+npm run update:prod
+```
+
+The production update script stops the old service/process, backs up runtime data, starts the new service/process, and fails if `/api/verifone/ping` is missing.
+
 ### Disk Space Or Runtime Growth
 
 Check:
