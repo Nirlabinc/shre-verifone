@@ -10,6 +10,8 @@
 6. Check queue status.
 7. Generate diagnostics bundle.
 
+Use [Connectivity Rules](connectivity-rules.md) when the issue involves local alias, Verifone Commander, Commander lease, CStoreSKU/Shre activation, message gateway, queue replay, remote access, or add-on connectivity.
+
 ## Useful API Calls
 
 ```http

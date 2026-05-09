@@ -46,6 +46,7 @@ jobs:
           test -s docs/customer-onboarding.md
           test -s docs/developer-onboarding.md
           test -s docs/support-runbook.md
+          test -s docs/connectivity-rules.md
           test -s docs/technical-specs.md
           test -s docs/environment-promotion.md
           test -s docs/commander-concurrency.md

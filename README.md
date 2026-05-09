@@ -70,6 +70,7 @@ Setup, onboarding, support, and specs:
 - [Customer Onboarding](docs/customer-onboarding.md)
 - [Developer Onboarding](docs/developer-onboarding.md)
 - [Support Runbook](docs/support-runbook.md)
+- [Connectivity Rules](docs/connectivity-rules.md)
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)
 - [App Boundary Decision](docs/app-boundary-decision.md)
