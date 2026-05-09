@@ -134,13 +134,26 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(authInitial.response.status, 200);
     assert.equal(authInitial.body.configured, false);
 
-    const authSetup = await json("/api/auth/setup", {
+    const authSetup = await json("/api/setup/first-run", {
       method: "POST",
-      body: JSON.stringify({ loginSecret: "store-local-login-secret" }),
+      body: JSON.stringify({
+        loginSecret: "store-local-login-secret",
+        workspaceName: "Rapid Workspace",
+        corporateName: "Rapid Infosoft LLC",
+        dba: "Rapid Main Store",
+        storeId: "store_001",
+        address: "123 Main St",
+        phone: "555-0100",
+        email: "owner@example.com",
+        contactName: "Nirav Patel",
+        timezone: "America/New_York",
+      }),
     });
     assert.equal(authSetup.response.status, 200);
     assert.equal(authSetup.body.ok, true);
     assert.ok(authSetup.body.session.token);
+    assert.equal(authSetup.body.profile.dba, "Rapid Main Store");
+    assert.equal(authSetup.body.emailVerification.state, "verified");
 
     const authLogin = await json("/api/auth/login", {
       method: "POST",
@@ -180,9 +193,14 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const profile = await json("/api/profile", {
       method: "POST",
       body: JSON.stringify({
-        company: "Rapid Infosoft LLC",
+        workspaceName: "Rapid Workspace",
+        corporateName: "Rapid Infosoft LLC",
+        dba: "Rapid Main Store",
         storeId: "store_001",
-        contactEmail: "info@rapidinfosoft.com",
+        address: "123 Main St",
+        phone: "555-0100",
+        email: "info@rapidinfosoft.com",
+        contactName: "Nirav Patel",
         timezone: "America/New_York",
       }),
     });
@@ -213,6 +231,14 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const verifoneStatus = await json("/api/verifone/status");
     assert.equal(verifoneStatus.response.status, 200);
     assert.equal(verifoneStatus.body.cstoreskuKeyConfigured, true);
+
+    const shreActivationToken = await json("/api/shre/activation-token", {
+      method: "POST",
+      body: JSON.stringify({ activationToken: "marketplace-token-001" }),
+    });
+    assert.equal(shreActivationToken.response.status, 200);
+    assert.equal(shreActivationToken.body.status, "activated");
+    assert.equal(shreActivationToken.body.workspaceId, "workspace_rapid_workspace");
 
     const validation = await json("/api/verifone/validate", {
       method: "POST",

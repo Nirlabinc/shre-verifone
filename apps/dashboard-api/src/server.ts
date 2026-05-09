@@ -15,7 +15,9 @@ const localBaseUrlOverride = process.env.LOCAL_BASE_URL || "";
 const localAdminToken = process.env.LOCAL_ADMIN_TOKEN || "";
 const shreAuthValidateUrl = process.env.SHRE_AUTH_VALIDATE_URL || "";
 const shreAuthSignupUrl = process.env.SHRE_AUTH_SIGNUP_URL || "";
+const shreSetupCaptureUrl = process.env.SHRE_SETUP_CAPTURE_URL || "";
 const shreCostEndpoint = process.env.SHRE_COST_ENDPOINT || "";
+const emailVerificationRequired = process.env.SHRE_EMAIL_VERIFICATION_REQUIRED === "true";
 const commanderAccessMode = process.env.COMMANDER_ACCESS_MODE || process.env.SHRE_MODE || "read_only";
 const appVersion = process.env.APP_VERSION || process.env.npm_package_version || "0.1.0";
 const buildChannel = process.env.BUILD_CHANNEL || process.env.SHRE_ENV || "local";
@@ -110,6 +112,7 @@ function enforceLocalOrigin(req: IncomingMessage, res: ServerResponse): boolean 
 
 function enforceLocalAdmin(req: IncomingMessage, res: ServerResponse, path: string): boolean {
   if (path.startsWith("/api/auth/")) return true;
+  if (path === "/api/setup/first-run") return true;
   if (!localAdminToken) return true;
   if (path === "/api/health" || path === "/api/connector/manifest" || path === "/api/messages/inbound") return true;
   if (validSession(req)) return true;
@@ -274,6 +277,54 @@ function requireString(body: JsonObject, key: string): string {
     throw new Error(`${key} is required`);
   }
   return value.trim();
+}
+
+function optionalString(body: JsonObject, key: string): string {
+  const value = body[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function captureFirstRunSetup(profile: JsonObject): Promise<JsonObject> {
+  const now = new Date().toISOString();
+  const payload = {
+    app: "verifone_cstoresku",
+    connectorId: "verifone-commander",
+    workspaceName: profile.workspaceName,
+    storeId: profile.storeId,
+    corporateName: profile.corporateName,
+    dba: profile.dba,
+    address: profile.address,
+    phone: profile.phone,
+    email: profile.email,
+    contactName: profile.contactName,
+    host: { hostname: hostname(), platform: platform(), arch: arch() },
+  };
+  if (!shreSetupCaptureUrl) {
+    return {
+      state: emailVerificationRequired ? "pending_configuration" : "verified",
+      provider: "local-simulated",
+      capturedAt: now,
+      message: emailVerificationRequired
+        ? "Email verification is required, but SHRE_SETUP_CAPTURE_URL is not configured."
+        : "Local setup captured. Production Shre setup capture is not configured.",
+    };
+  }
+  const response = await fetch(shreSetupCaptureUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = asObject(await response.json().catch(() => ({})));
+  if (!response.ok) {
+    throw new Error(String(data.error || data.message || `Shre setup capture failed with HTTP ${response.status}`));
+  }
+  return {
+    state: String(data.emailVerificationState || data.state || "pending"),
+    provider: String(data.provider || "shre-platform"),
+    verificationId: typeof data.verificationId === "string" ? data.verificationId : "",
+    capturedAt: now,
+    message: String(data.message || "Setup captured by Shre Platform. Verify email to complete activation."),
+  };
 }
 
 function normalizeAccessMode(value: JsonValue): string {
@@ -1108,6 +1159,72 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/setup/first-run" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const loginSecret = requireString(body, "loginSecret");
+      const profile: JsonObject = {
+        workspaceName: requireString(body, "workspaceName"),
+        storeId: optionalString(body, "storeId"),
+        corporateName: optionalString(body, "corporateName"),
+        dba: requireString(body, "dba"),
+        address: optionalString(body, "address"),
+        phone: optionalString(body, "phone"),
+        email: requireString(body, "email").toLowerCase(),
+        contactName: optionalString(body, "contactName"),
+        timezone: optionalString(body, "timezone") || "America/New_York",
+        updatedAt: new Date().toISOString(),
+      };
+      const existing = authState();
+      if (existing.configured === true && !validSession(req) && localAdminToken) {
+        sendJson(res, 401, { error: "Existing login must be authenticated before changing setup" });
+        return;
+      }
+      const verification = await captureFirstRunSetup(profile);
+      store.setJson("profile", "current", profile);
+      store.setJson("setup", "email-verification", verification);
+      store.setJson("auth", "local-login", {
+        configured: true,
+        secretHash: hashSecret(loginSecret),
+        updatedAt: new Date().toISOString(),
+        remoteValidation: {
+          state: shreAuthValidateUrl ? "pending" : "not_configured",
+          lastCheckedAt: null,
+          message: shreAuthValidateUrl ? "Remote validation pending." : "Remote validation endpoint is not configured.",
+        },
+      });
+      store.setJson("onboarding", "current", {
+        completedSteps: ["local-login", "workspace-profile"],
+        currentStep: "verifone",
+        updatedAt: new Date().toISOString(),
+      });
+      store.appendActivity("first_run_setup_completed", {
+        workspaceName: profile.workspaceName,
+        dba: profile.dba,
+        email: profile.email,
+        emailVerificationState: verification.state,
+      });
+      const verified = ["verified", "dev_verified", "simulated_verified"].includes(String(verification.state));
+      if (emailVerificationRequired && !verified) {
+        sendJson(res, 202, { ok: true, session: null, profile, emailVerification: verification, message: "Email verification required before dashboard access." });
+        return;
+      }
+      sendJson(res, 200, { ok: true, session: createSession(), profile, emailVerification: verification });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/setup/email-verification") {
+    sendJson(res, 200, store.getJson("setup", "email-verification", {
+      state: "not_started",
+      provider: shreSetupCaptureUrl ? "shre-platform" : "local-simulated",
+      required: emailVerificationRequired,
+    }));
+    return;
+  }
+
   if (path === "/api/profile") {
     if (req.method === "GET") {
       sendJson(res, 200, store.getJson("profile", "current", {}));
@@ -1186,6 +1303,37 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       store.setJson("connections", "verifone", connection);
       store.appendActivity("cstoresku_key_saved", { configured: true });
       sendJson(res, 200, { ok: true, cstoreskuKeyConfigured: true, connection: redactConnection(connection) });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/shre/activation-token" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const activationToken = requireString(body, "activationToken");
+      const profile = store.getJson<JsonObject>("profile", "current", {});
+      const registration = store.saveConnectorRegistration({
+        connectorId: "verifone-commander",
+        connectorName: "Verifone Commander",
+        tenantId: optionalString(body, "tenantId") || `tenant_${slug(String(profile.corporateName || profile.dba || "local"))}`,
+        workspaceId: optionalString(body, "workspaceId") || `workspace_${slug(String(profile.workspaceName || "default"))}`,
+        storeId: optionalString(body, "storeId") || String(profile.storeId || `store_${slug(String(profile.dba || "main"))}`),
+        app: "verifone_cstoresku",
+        registryUrl: optionalString(body, "registryUrl") || connectorRegistryUrl,
+        sharedSecret: randomBytes(32).toString("hex"),
+        cloudRelayEnabled: true,
+        allowedSources: ["shre-chat", "whatsapp", "claude", "codex"],
+        relatedConnectors: ["rapidrms-api"],
+      });
+      store.setJson("connector", "activation-token", {
+        token: encryptSecret(activationToken),
+        source: "dashboard-ui",
+        storedAt: new Date().toISOString(),
+      });
+      store.appendActivity("shre_activation_token_saved", { workspaceId: registration.workspaceId, storeId: registration.storeId });
+      sendJson(res, 200, { ok: true, status: registration.status, tenantId: registration.tenantId, workspaceId: registration.workspaceId, storeId: registration.storeId });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
     }
@@ -1371,6 +1519,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       remoteAccess: "/api/remote-access",
       mcpTools: "/api/mcp/tools",
       usage: "/api/usage/summary",
+      firstRunSetup: "/api/setup/first-run",
+      emailVerification: "/api/setup/email-verification",
+      shreActivationToken: "/api/shre/activation-token",
       shreSignupActivate: "/api/shre/signup-activate",
       activitySummary: store.activitySummary(),
     });

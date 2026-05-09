@@ -19,11 +19,17 @@ The local install connects your store PC to:
 Have these ready:
 
 - Store number or store ID.
-- Company/tenant name.
-- Workspace name if your Shre account uses multiple workspaces.
+- Workspace name. Reuse the same workspace name when adding more locations under the same company.
+- Corporate name.
+- DBA name. Required.
+- Store address.
+- Store phone number.
+- Store email. Required for Shre Platform capture and email verification.
+- Primary contact name.
 - Verifone Commander IP/URL.
 - Commander username and password.
 - CStoreSKU/RapidRMS application key if required.
+- Shre activation token if provided by Shre Marketplace or support.
 - Shre Auth email/password if cloud or message gateway routing is enabled.
 - Internet access for installation and optional cloud relay.
 - Local network access to Commander.
@@ -36,19 +42,22 @@ See [Credential Acquisition](credential-acquisition.md) for where to obtain the 
 
 1. Install the application.
 2. Open the local dashboard.
-3. Create the local login secret. This only unlocks the dashboard on this store PC.
-4. Enter company and store profile.
+3. Create the local login secret and complete first-time workspace/store setup.
+4. Enter workspace name, corporate name, DBA, address, phone, email, and contact name.
 5. Open `Verifone` and enter Commander URL, username, and password.
 6. If the store has a CStoreSKU/RapidRMS application key, enter it in `Verifone > CStoreSKU Key`.
-7. Test Commander connection.
-8. Use `Settings > Password Workflow` for Commander password updates or expiration maintenance.
-9. Use Shre Auth signup/activation if cloud/message gateway routing is required.
-10. Confirm queue, password status, and health checks are green.
-11. Send a test message through the chosen gateway.
-12. Ask a test sales question and confirm the response uses local data.
-13. Review activity log and diagnostics.
+7. If Shre Marketplace gives an activation token, enter it in `Verifone > Shre Activation`.
+8. Test Commander connection.
+9. Use `Settings > Password Workflow` for Commander password updates or expiration maintenance.
+10. Use Shre Auth signup/activation if cloud/message gateway routing is required.
+11. Confirm queue, password status, and health checks are green.
+12. Send a test message through the chosen gateway.
+13. Ask a test sales question and confirm the response uses local data.
+14. Review activity log and diagnostics.
 
 Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally uses Shre Auth to create or find the tenant/workspace/store and activate the connector. Manual tenant/workspace/store/signing-secret entry should only be used by support.
+
+Production installs should configure `SHRE_SETUP_CAPTURE_URL` so first-run workspace/store data is captured by Shre Platform. Set `SHRE_EMAIL_VERIFICATION_REQUIRED=true` when email verification must be completed before dashboard access. In local/dev mode without a capture URL, the app simulates verification so testing is not blocked.
 
 ## Normal Daily Operation
 

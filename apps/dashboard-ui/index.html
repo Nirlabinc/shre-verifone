@@ -90,7 +90,7 @@
     .drawer main { display: block; min-height: 0; padding: 16px; overflow: auto; }
     .login-panel { display: none; position: fixed; inset: 0; background: rgba(244, 246, 248, 0.96); z-index: 30; align-items: center; justify-content: center; padding: 18px; }
     .login-panel.open { display: flex; }
-    .login-box { width: min(460px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; }
+    .login-box { width: min(760px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; }
     .chat-log { display: grid; gap: 10px; margin-bottom: 12px; max-height: 420px; overflow: auto; }
     .chat-msg { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--panel); }
     .chat-msg.user { margin-left: 12%; background: #eaf1ff; }
@@ -172,11 +172,17 @@
         <form id="profileForm">
           <h2>Store Profile</h2>
           <div class="fields">
-            <label>Company<input name="company" autocomplete="organization"></label>
+            <label>Workspace Name<input name="workspaceName" autocomplete="organization"></label>
+            <label>Corporate<input name="corporateName" autocomplete="organization"></label>
+            <label>DBA <input name="dba" required autocomplete="organization"></label>
             <label>Store ID<input name="storeId" autocomplete="off"></label>
-            <label>Contact Email<input name="contactEmail" type="email" autocomplete="email"></label>
+            <label>Address<input name="address" autocomplete="street-address"></label>
+            <label>Phone<input name="phone" autocomplete="tel"></label>
+            <label>Email <input name="email" required type="email" autocomplete="email"></label>
+            <label>Contact Name<input name="contactName" autocomplete="name"></label>
             <label>Timezone<input name="timezone" value="America/New_York"></label>
           </div>
+          <div class="hint">Use the same workspace name when adding another location so Shre Platform can group the stores together.</div>
           <div class="toolbar"><button class="primary" type="submit">Save Profile</button></div>
         </form>
         <form id="onboardingForm">
@@ -215,6 +221,17 @@
           </div>
           <div id="cstoreskuKeyStatus" class="hint">Key status unknown.</div>
           <div class="toolbar"><button class="primary" type="submit">Save CStoreSKU Key</button></div>
+        </form>
+        <form id="shreActivationTokenForm">
+          <h2>Shre Activation</h2>
+          <div class="fields">
+            <label>Activation Token<input name="activationToken" type="password" autocomplete="off"></label>
+            <label>Tenant ID<input name="tenantId" placeholder="optional support override"></label>
+            <label>Workspace ID<input name="workspaceId" placeholder="optional support override"></label>
+            <label>Store ID<input name="storeId" placeholder="optional support override"></label>
+          </div>
+          <div class="hint">Use this when Shre Platform or support provides a marketplace activation token. Normal signup can still be done from Marketplace.</div>
+          <div class="toolbar"><button class="primary" type="submit">Activate Shre</button></div>
         </form>
       </section>
 
@@ -402,6 +419,18 @@
       <h2 id="loginTitle">Local Login</h2>
       <div id="loginHint" class="hint">Enter the local login secret for this store PC.</div>
       <label>Login Secret<input name="loginSecret" type="password" autocomplete="current-password"></label>
+      <div id="firstRunFields" class="fields" style="display:none">
+        <label>Workspace Name<input name="workspaceName" autocomplete="organization"></label>
+        <label>Corporate<input name="corporateName" autocomplete="organization"></label>
+        <label>DBA <input name="dba" autocomplete="organization"></label>
+        <label>Store ID<input name="storeId" autocomplete="off"></label>
+        <label>Address<input name="address" autocomplete="street-address"></label>
+        <label>Phone<input name="phone" autocomplete="tel"></label>
+        <label>Email <input name="email" type="email" autocomplete="email"></label>
+        <label>Contact Name<input name="contactName" autocomplete="name"></label>
+        <label>Timezone<input name="timezone" value="America/New_York"></label>
+      </div>
+      <div id="firstRunHint" class="hint" style="display:none">Use the same workspace name for additional locations. DBA and email are required so Shre Platform can capture and verify the store account.</div>
       <div class="toolbar"><button class="primary" type="submit">Continue</button></div>
     </form>
   </div>
@@ -461,13 +490,21 @@
           $("loginTitle").textContent = "Local Login";
           $("loginHint").classList.remove("bad");
           $("loginHint").textContent = "Enter the local login secret for this store PC.";
+          $("firstRunFields").style.display = "none";
+          $("firstRunHint").style.display = "none";
+          $("firstRunFields").querySelectorAll("input").forEach((input) => input.required = false);
           return;
         }
         if (!auth.configured) {
           $("loginPanel").classList.add("open");
-          $("loginTitle").textContent = "Create Local Login";
+          $("loginTitle").textContent = "First-Time Setup";
           $("loginHint").classList.remove("bad");
-          $("loginHint").textContent = "Create the local login secret for this store PC.";
+          $("loginHint").textContent = "Create the local login secret and register this store workspace.";
+          $("firstRunFields").style.display = "grid";
+          $("firstRunHint").style.display = "block";
+          $("firstRunFields").querySelector('input[name="workspaceName"]').required = true;
+          $("firstRunFields").querySelector('input[name="dba"]').required = true;
+          $("firstRunFields").querySelector('input[name="email"]').required = true;
           return;
         }
         $("loginPanel").classList.remove("open");
@@ -631,10 +668,15 @@
     $("loginForm").onsubmit = async (event) => {
       event.preventDefault();
       const body = formObject(event.target);
-      $("loginHint").textContent = authConfigured ? "Checking local login secret..." : "Creating local login secret...";
+      $("loginHint").textContent = authConfigured ? "Checking local login secret..." : "Creating workspace and local login...";
       try {
-        const result = await api(authConfigured ? "/api/auth/login" : "/api/auth/setup", { method: "POST", body: JSON.stringify(body) });
+        const result = await api(authConfigured ? "/api/auth/login" : "/api/setup/first-run", { method: "POST", body: JSON.stringify(body) });
         if (result.session?.token) sessionStorage.setItem("localSession", result.session.token);
+        if (!result.session?.token && result.emailVerification?.message) {
+          $("loginHint").textContent = result.emailVerification.message;
+          $("loginHint").classList.add("bad");
+          return;
+        }
         event.target.reset();
         $("loginHint").textContent = "Login accepted.";
         await refresh();
@@ -677,6 +719,7 @@
     };
     $("verifoneForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/verifone/config", { method: "POST", body: JSON.stringify(formObject(event.target)) }); await refresh(); };
     $("cstoreskuKeyForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/cstoresku/key", { method: "POST", body: JSON.stringify(formObject(event.target)) }); event.target.reset(); await refresh(); };
+    $("shreActivationTokenForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/shre/activation-token", { method: "POST", body: JSON.stringify(formObject(event.target)) }); event.target.reset(); await refresh(); };
     $("validateVerifone").onclick = async () => { await api("/api/verifone/validate", { method: "POST", body: JSON.stringify({ daysRemaining: 30 }) }); await refresh(); };
     $("passwordForm").onsubmit = async (event) => {
       event.preventDefault();

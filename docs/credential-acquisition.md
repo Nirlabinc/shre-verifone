@@ -9,8 +9,10 @@ These are separate setup items in the local dashboard.
 | Item | Dashboard Location | Purpose |
 | --- | --- | --- |
 | Local login secret | Setup / first launch | Unlocks this local dashboard on the store PC. It does not connect to Commander or CStoreSKU. |
+| Workspace/store profile | First launch / Setup | Captures workspace, corporate, DBA, address, phone, email, and contact name for Shre Platform. |
 | Verifone connection | Verifone > Verifone Connection | Stores Commander URL, username, and password so the edge app can reach the local Commander/BOS system. |
 | CStoreSKU application key | Verifone > CStoreSKU Key | Stores the CStoreSKU/RapidRMS/Commander integration key when the store has one. |
+| Shre activation token | Verifone > Shre Activation | Links this local install to Shre Marketplace when support or marketplace provides a token. |
 | Commander password update | Settings > Password Workflow | Updates the stored Commander password and password-expiration status. |
 
 Entering only the CStoreSKU key does not complete the POS connection by itself. The Verifone connection must also have Commander URL, username, and password, then validation must pass.
@@ -44,6 +46,18 @@ Do not ask users to email or paste this key into support tickets.
 ## Shre/MIB Tenant, Store Registry, And Activation
 
 Users should not manually create signing secrets. The production flow should use Shre Auth signup/login as the single setup authority. Shre Auth creates or finds the tenant, workspace, and store, activates the connector, and returns local connector credentials to the app.
+
+First-run setup now captures these required store identity values before normal dashboard use:
+
+- Workspace name. Reuse it for additional locations that should be grouped together.
+- Corporate name.
+- DBA. Required.
+- Address.
+- Phone.
+- Email. Required.
+- Contact name.
+
+Production should set `SHRE_SETUP_CAPTURE_URL` to a Shre Platform endpoint that records this setup and starts email verification through SendGrid, Cloudflare-integrated workflow, or the chosen Shre Auth provider. If `SHRE_EMAIL_VERIFICATION_REQUIRED=true`, the local API returns no session until the capture service reports a verified state. Local/dev installs without a capture URL simulate verification so the dashboard remains testable.
 
 Recommended production flow:
 
