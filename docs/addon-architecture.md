@@ -36,6 +36,16 @@ Marketplace add-ons
 
 The local runtime can host all modules, but the installer should only enable the base module unless the marketplace returns add-on entitlements.
 
+## Dashboard Layout
+
+The base Verifone Commander dashboard remains the place where the operator sees marketplace install state and shared configuration for optional add-ons. FCC and Loyalty should each have a dedicated dashboard once activated:
+
+- Base dashboard: install/enable status, tenant/workspace/store link, shared access mode, shared health, queue counts, and links to add-on dashboards.
+- FCC dashboard: FCC health, errors, recovery recommendations, troubleshooting actions, FCC-specific logs, and FCC message tools.
+- Loyalty dashboard: loyalty sync health, loyalty profiles/events, loyalty queue, troubleshooting, and loyalty-specific message tools.
+
+This keeps add-on configuration discoverable without crowding the POS/BOS workflow. Add-on runtime state still persists locally in `runtime.sqlite`; dedicated dashboards should read from the same local API or their own add-on service API.
+
 ## Marketplace IDs
 
 | Module | Connector ID | Default | Dependency |

@@ -64,6 +64,14 @@
     .badge.warning { color: var(--amber); background: #fff4e5; }
     .badge.info { color: var(--blue); background: #eaf1ff; }
     .badge.ok { color: var(--green); background: #dcfae6; }
+    .status-indicator { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; }
+    .status-dot { width: 12px; height: 12px; border-radius: 999px; display: inline-block; box-shadow: 0 0 0 3px #eef2f6; }
+    .status-dot.connected, .status-dot.ok { background: var(--green); box-shadow: 0 0 0 3px #dcfae6; }
+    .status-dot.disconnected, .status-dot.failed, .status-dot.bad { background: var(--red); box-shadow: 0 0 0 3px #fee4e2; }
+    .status-dot.pending, .status-dot.warn, .status-dot.unknown, .status-dot.not_configured { background: var(--amber); box-shadow: 0 0 0 3px #fff4e5; }
+    .status-text.connected, .status-text.ok { color: var(--green); }
+    .status-text.disconnected, .status-text.failed, .status-text.bad { color: var(--red); }
+    .status-text.pending, .status-text.warn, .status-text.unknown, .status-text.not_configured { color: var(--amber); }
     .alert-strip { display: none; margin: 16px 24px 0; border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 12px 14px; background: #fff; }
     .alert-strip.show { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .alert-strip.critical { border-left-color: var(--red); }
@@ -551,7 +559,8 @@
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
         $("mHost").textContent = `${health.host.hostname} | ${health.host.platform} ${health.host.arch}`;
-        $("mVerifone").textContent = verifone.configured ? "Configured" : "Not configured";
+        const verifoneConnectionState = sync.heartbeat?.status === "connected" ? "connected" : sync.heartbeat?.status === "disconnected" ? "disconnected" : verifone.configured ? "pending" : "not_configured";
+        $("mVerifone").innerHTML = statusIndicator(verifoneConnectionState, verifoneConnectionState.replaceAll("_", " "));
         $("mValidation").textContent = verifone.lastValidation ? `${verifone.lastValidation.status} at ${verifone.lastValidation.checkedAt}` : "Not validated";
         $("verifoneFormStatus").textContent = verifone.lastValidation ? `${verifone.lastValidation.status}: ${verifone.lastValidation.message || ""}` : "Connection saved status will appear here after validate.";
         $("verifoneFormStatus").className = `hint ${verifone.lastValidation?.status === "connected" ? "ok" : verifone.lastValidation?.status === "failed" ? "bad" : ""}`;
@@ -605,16 +614,20 @@
     function fmtTime(value) {
       return value ? new Date(value).toLocaleTimeString() : "None";
     }
+    function statusIndicator(status, label = null) {
+      const normalized = String(status || "unknown").toLowerCase();
+      const text = label || normalized.replaceAll("_", " ");
+      return `<span class="status-indicator"><span class="status-dot ${normalized}"></span><span class="status-text ${normalized}">${text}</span></span>`;
+    }
     function renderSync(sync) {
       const heartbeat = sync.heartbeat || {};
       const localPull = sync.localPull || {};
       const cstoresku = sync.cstoresku || {};
       const writeBack = sync.commanderWriteBack || {};
-      $("hbStatus").textContent = heartbeat.status || "unknown";
-      $("hbStatus").className = heartbeat.status === "connected" ? "ok" : heartbeat.status === "disconnected" ? "bad" : "warn";
+      $("hbStatus").innerHTML = statusIndicator(heartbeat.status, heartbeat.status || "unknown");
       $("hbNext").textContent = fmtTime(heartbeat.nextCheckAt);
-      $("hbPull").textContent = localPull.status || "idle";
-      $("hbWrite").textContent = writeBack.status || "blocked";
+      $("hbPull").innerHTML = statusIndicator(localPull.status === "scheduled" ? "connected" : localPull.status === "blocked" ? "failed" : "pending", localPull.status || "idle");
+      $("hbWrite").innerHTML = statusIndicator(writeBack.enabled ? "connected" : "failed", writeBack.status || "blocked");
       $("syncFlowText").textContent = `Verifone pull: ${localPull.enabled ? "enabled" : "disabled"} (${localPull.status || "idle"}). CStoreSKU link: ${cstoresku.linked ? "linked" : "not linked"} (${cstoresku.status || "not_linked"}). Commander write-back: ${writeBack.enabled ? "enabled" : "blocked"} (${writeBack.mode || "read_only"}).`;
       showJson("heartbeatJson", sync);
     }

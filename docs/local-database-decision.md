@@ -34,6 +34,24 @@ Add local Postgres only if we hit one of these needs:
 - Need for server-side roles, row-level security, or remote SQL clients.
 - Queue volume high enough that SQLite write contention becomes measurable.
 
+## Upgrade And Version Persistence
+
+Application updates must not delete the local runtime directory. The local database is stored outside the repo/install package:
+
+```text
+Windows: %USERPROFILE%\.verifone-shre-cstoresku\runtime.sqlite
+macOS/Linux: ~/.verifone-shre-cstoresku/runtime.sqlite
+```
+
+When a new app version is installed or pulled from GitHub, the app code can change, but the local runtime database remains in place unless the user or installer explicitly removes that runtime directory. Stored profile data, Verifone connection state, CStoreSKU key state, queue items, sales snapshots, activity logs, diagnostics bundles, add-on install state, and heartbeat/sync state are designed to persist across app updates.
+
+Installer and release scripts should treat the runtime directory as customer data:
+
+- Do not overwrite or delete `runtime.sqlite`.
+- Run migrations in place when schema changes are added.
+- Keep backup/export tooling before any destructive maintenance action.
+- Only clear runtime data through an explicit support/admin reset workflow.
+
 ## Recommended Future Split
 
 Keep this default:
