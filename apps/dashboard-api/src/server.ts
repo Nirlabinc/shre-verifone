@@ -1,52 +1,21 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { appendFile, readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
+import { readFile, mkdir, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir, hostname, platform, arch, totalmem, freemem, cpus } from "node:os";
 import { createHash, randomBytes, randomUUID, createCipheriv, createDecipheriv } from "node:crypto";
+import { RuntimeStore, type JsonObject, type JsonValue } from "./store.js";
 
 const port = Number(process.env.PORT || 5480);
 const runtimeRoot = process.env.VERIFONE_SHRE_HOME || join(homedir(), ".verifone-shre-cstoresku");
 const uiRoot = resolve("apps/dashboard-ui");
-
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-type JsonObject = { [key: string]: JsonValue };
+let store: RuntimeStore;
 
 async function ensureRuntime(): Promise<void> {
   await mkdir(join(runtimeRoot, "connections"), { recursive: true });
   await mkdir(join(runtimeRoot, "queue"), { recursive: true });
   await mkdir(join(runtimeRoot, "logs"), { recursive: true });
   await mkdir(join(runtimeRoot, "diagnostics"), { recursive: true });
-}
-
-async function readJson<T extends JsonValue>(relativePath: string, fallback: T): Promise<T> {
-  const path = join(runtimeRoot, relativePath);
-  if (!existsSync(path)) return fallback;
-  return JSON.parse(await readFile(path, "utf8")) as T;
-}
-
-async function writeJson(relativePath: string, value: JsonValue): Promise<void> {
-  const path = join(runtimeRoot, relativePath);
-  await mkdir(resolve(path, ".."), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-async function appendActivity(eventName: string, metadata: JsonObject = {}): Promise<void> {
-  await mkdir(join(runtimeRoot, "logs"), { recursive: true });
-  const event = {
-    id: randomUUID(),
-    eventName,
-    metadata,
-    timestamp: new Date().toISOString(),
-  };
-  await appendFile(join(runtimeRoot, "logs", "activity.jsonl"), `${JSON.stringify(event)}\n`, "utf8");
-}
-
-async function readActivity(limit = 100): Promise<JsonValue[]> {
-  const path = join(runtimeRoot, "logs", "activity.jsonl");
-  if (!existsSync(path)) return [];
-  const lines = (await readFile(path, "utf8")).split(/\r?\n/).filter(Boolean);
-  return lines.slice(-limit).map((line) => JSON.parse(line) as JsonValue);
 }
 
 async function requestBody(req: IncomingMessage): Promise<JsonValue> {
@@ -141,6 +110,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       ok: true,
       service: "dashboard-api",
       runtimeRoot,
+      database: store.path(),
       host: {
         hostname: hostname(),
         platform: platform(),
@@ -158,13 +128,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/profile") {
     if (req.method === "GET") {
-      sendJson(res, 200, await readJson("profile.json", {}));
+      sendJson(res, 200, store.getJson("profile", "current", {}));
       return;
     }
     if (req.method === "POST") {
       const body = await requestBody(req);
-      await writeJson("profile.json", body);
-      await appendActivity("profile_saved", { hasStoreId: Boolean(asObject(body).storeId) });
+      store.setJson("profile", "current", body);
+      store.appendActivity("profile_saved", { hasStoreId: Boolean(asObject(body).storeId) });
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -172,7 +142,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/onboarding") {
     if (req.method === "GET") {
-      sendJson(res, 200, await readJson("onboarding.json", {
+      sendJson(res, 200, store.getJson("onboarding", "current", {
         completedSteps: [],
         currentStep: "profile",
         updatedAt: null,
@@ -186,19 +156,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         currentStep: typeof body.currentStep === "string" ? body.currentStep : "profile",
         updatedAt: new Date().toISOString(),
       };
-      await writeJson("onboarding.json", state);
-      await appendActivity("onboarding_updated", { currentStep: state.currentStep });
+      store.setJson("onboarding", "current", state);
+      store.appendActivity("onboarding_updated", { currentStep: state.currentStep });
       sendJson(res, 200, state);
       return;
     }
   }
 
   if (path === "/api/verifone/status") {
-    const connection = await readJson<JsonObject>("connections/verifone.json", {});
+    const connection = store.getJson<JsonObject>("connections", "verifone", {});
     sendJson(res, 200, {
-      configured: existsSync(join(runtimeRoot, "connections", "verifone.json")),
+      configured: Boolean(connection.commanderUrl && connection.username && connection.password),
       connection: redactConnection(connection),
-      lastValidation: await readJson("connections/verifone-status.json", null),
+      lastValidation: store.getJson("connections", "verifone-status", null),
     });
     return;
   }
@@ -213,8 +183,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         applicationKey: typeof body.applicationKey === "string" ? body.applicationKey : "",
         updatedAt: new Date().toISOString(),
       };
-      await writeJson("connections/verifone.json", connection);
-      await appendActivity("verifone_config_saved", { commanderUrl: connection.commanderUrl });
+      store.setJson("connections", "verifone", connection);
+      store.appendActivity("verifone_config_saved", { commanderUrl: connection.commanderUrl });
       sendJson(res, 200, { ok: true, connection: redactConnection(connection) });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
@@ -224,7 +194,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/verifone/validate" && req.method === "POST") {
     const body = asObject(await requestBody(req));
-    const connection = await readJson<JsonObject>("connections/verifone.json", {});
+    const connection = store.getJson<JsonObject>("connections", "verifone", {});
     const configuredPassword = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
     const ok = Boolean(connection.commanderUrl && connection.username && configuredPassword) && body.forceFailure !== true;
     const daysRemaining = typeof body.daysRemaining === "number" ? body.daysRemaining : null;
@@ -235,9 +205,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       message: ok ? "Local validation passed. Live Commander validation is the next integration step." : "Validation failed.",
       daysRemaining,
     };
-    await writeJson("connections/verifone-status.json", validation);
+    store.setJson("connections", "verifone-status", validation);
     if (daysRemaining !== null) {
-      await writeJson("connections/password-status.json", {
+      store.setJson("connections", "password-status", {
         state: daysRemaining <= 0 ? "expired" : daysRemaining <= 15 ? "expiring" : "valid",
         daysRemaining,
         autoResetLastAttempt: null,
@@ -245,13 +215,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         updatedAt: new Date().toISOString(),
       });
     }
-    await appendActivity("verifone_connection_validated", { ok, daysRemaining });
+    store.appendActivity("verifone_connection_validated", { ok, daysRemaining });
     sendJson(res, ok ? 200 : 503, validation);
     return;
   }
 
   if (path === "/api/password/status") {
-    sendJson(res, 200, await readJson("connections/password-status.json", {
+    sendJson(res, 200, store.getJson("connections", "password-status", {
       state: "unknown",
       daysRemaining: null,
       autoResetLastAttempt: null,
@@ -276,8 +246,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       userActionRequired: false,
       message: "Automatic reset completed locally. Live Commander password change is the next integration step.",
     };
-    await writeJson("connections/password-status.json", status);
-    await appendActivity(failed ? "password_auto_reset_failed" : "password_auto_reset_succeeded", {
+    store.setJson("connections", "password-status", status);
+    store.appendActivity(failed ? "password_auto_reset_failed" : "password_auto_reset_succeeded", {
       userActionRequired: status.userActionRequired,
     });
     sendJson(res, failed ? 409 : 200, status);
@@ -288,14 +258,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     try {
       const body = asObject(await requestBody(req));
       const newPassword = requireString(body, "newPassword");
-      const connection = await readJson<JsonObject>("connections/verifone.json", {});
+      const connection = store.getJson<JsonObject>("connections", "verifone", {});
       if (!connection.commanderUrl || !connection.username) {
         badRequest(res, "Verifone connection must be configured before password update");
         return;
       }
       connection.password = encryptSecret(newPassword);
       connection.updatedAt = new Date().toISOString();
-      await writeJson("connections/verifone.json", connection);
+      store.setJson("connections", "verifone", connection);
       const status = {
         state: "valid",
         daysRemaining: typeof body.daysRemaining === "number" ? body.daysRemaining : null,
@@ -303,8 +273,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         userActionRequired: false,
         updatedAt: new Date().toISOString(),
       };
-      await writeJson("connections/password-status.json", status);
-      await appendActivity("password_manual_update_saved", { daysRemaining: status.daysRemaining });
+      store.setJson("connections", "password-status", status);
+      store.appendActivity("password_manual_update_saved", { daysRemaining: status.daysRemaining });
       sendJson(res, 200, status);
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
@@ -313,40 +283,21 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   }
 
   if (path === "/api/queue") {
-    const items = await readJson<JsonValue[]>("queue/items.json", []);
-    const queueStatus = await readJson<JsonObject>("queue/status.json", {});
-    const status = {
-      pending: items.filter((item) => asObject(item).status === "pending").length,
-      failed: items.filter((item) => asObject(item).status === "failed").length,
-      completed: items.filter((item) => asObject(item).status === "completed").length,
-      lastReplayAt: queueStatus.lastReplayAt || null,
-      lastError: queueStatus.lastError || null,
-      items,
-    };
-    sendJson(res, 200, status);
+    sendJson(res, 200, store.queueSummary());
     return;
   }
 
   if (path === "/api/queue/enqueue" && req.method === "POST") {
     try {
       const body = asObject(await requestBody(req));
-      const items = await readJson<JsonValue[]>("queue/items.json", []);
-      const now = new Date().toISOString();
-      const item: JsonObject = {
-        id: randomUUID(),
+      const item = store.enqueue({
         target: requireString(body, "target"),
         entityType: requireString(body, "entityType"),
         entityId: typeof body.entityId === "string" ? body.entityId : "",
         operation: requireString(body, "operation"),
         payload: asObject(body.payload || {}),
-        status: "pending",
-        attemptCount: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-      items.push(item);
-      await writeJson("queue/items.json", items);
-      await appendActivity("queue_item_enqueued", { id: item.id, target: item.target });
+      });
+      store.appendActivity("queue_item_enqueued", { id: item.id, target: item.target });
       sendJson(res, 201, item);
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
@@ -356,29 +307,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/queue/replay" && req.method === "POST") {
     const body = asObject(await requestBody(req));
-    const items = await readJson<JsonValue[]>("queue/items.json", []);
-    const now = new Date().toISOString();
-    const replayed = items.map((item) => {
-      const current = asObject(item);
-      if (current.status !== "pending") return current;
-      const shouldFail = body.forceFailure === true;
-      return {
-        ...current,
-        status: shouldFail ? "failed" : "completed",
-        attemptCount: Number(current.attemptCount || 0) + 1,
-        lastError: shouldFail ? "Replay forced to fail by test/operator request" : null,
-        updatedAt: now,
-      };
+    const result = store.replayQueue(body.forceFailure === true);
+    const items = Array.isArray(result.items) ? result.items : [];
+    store.appendActivity("offline_queue_replayed", {
+      failed: items.filter((item) => asObject(item).status === "failed").length,
+      completed: items.filter((item) => asObject(item).status === "completed").length,
     });
-    const failed = replayed.filter((item) => item.status === "failed").length;
-    const status = {
-      lastReplayAt: now,
-      lastError: failed > 0 ? "One or more queue items failed replay" : null,
-    };
-    await writeJson("queue/items.json", replayed);
-    await writeJson("queue/status.json", status);
-    await appendActivity("offline_queue_replayed", { failed, completed: replayed.filter((item) => item.status === "completed").length });
-    sendJson(res, 200, { ...status, items: replayed });
+    sendJson(res, 200, result);
     return;
   }
 
@@ -410,21 +345,20 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         freeMemoryBytes: freemem(),
       },
       storage,
-      profile: await readJson("profile.json", {}),
-      verifoneStatus: await readJson("connections/verifone-status.json", null),
-      passwordStatus: await readJson("connections/password-status.json", null),
-      queue: await readJson("queue/items.json", []),
-      activity: await readActivity(200),
+      profile: store.getJson("profile", "current", {}),
+      verifoneStatus: store.getJson("connections", "verifone-status", null),
+      passwordStatus: store.getJson("connections", "password-status", null),
+      queue: store.queueSummary(),
+      activity: store.activity(200),
     };
-    const relativePath = `diagnostics/bundle-${bundle.id}.json`;
-    await writeJson(relativePath, bundle);
-    await appendActivity("diagnostics_bundle_created", { id: bundle.id });
-    sendJson(res, 201, { ok: true, id: bundle.id, path: join(runtimeRoot, relativePath) });
+    const saved = store.saveDiagnosticBundle(bundle);
+    store.appendActivity("diagnostics_bundle_created", { id: bundle.id });
+    sendJson(res, 201, saved);
     return;
   }
 
   if (path === "/api/activity") {
-    sendJson(res, 200, { events: await readActivity(100) });
+    sendJson(res, 200, { events: store.activity(100) });
     return;
   }
 
@@ -439,6 +373,7 @@ async function serveUi(res: ServerResponse): Promise<void> {
 
 async function main(): Promise<void> {
   await ensureRuntime();
+  store = new RuntimeStore(runtimeRoot);
   const server = createServer((req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     handleRequest(req, res, url.pathname).catch((error: unknown) => {

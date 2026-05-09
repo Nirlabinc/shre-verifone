@@ -1,22 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, access } from "node:fs/promises";
+import { mkdtemp, rm, access, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const port = 5580 + Math.floor(Math.random() * 200);
+const port = 20_000 + Math.floor(Math.random() * 20_000);
 const baseUrl = `http://127.0.0.1:${port}`;
 
-async function waitForHealth() {
+async function waitForHealth(child) {
   const deadline = Date.now() + 10_000;
+  let exited = false;
+  child.once("exit", () => {
+    exited = true;
+  });
   while (Date.now() < deadline) {
+    if (exited) throw new Error("dashboard-api exited before becoming healthy");
     try {
       const response = await fetch(`${baseUrl}/api/health`);
       if (response.ok) return;
     } catch {
-      await new Promise((resolve) => setTimeout(resolve, 150));
     }
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
   throw new Error("dashboard-api did not become healthy");
 }
@@ -42,16 +47,27 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       PORT: String(port),
       VERIFONE_SHRE_HOME: runtimeRoot,
     },
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    output += chunk.toString();
   });
 
   try {
-    await waitForHealth();
+    await waitForHealth(child).catch((error) => {
+      throw new Error(`${error.message}\n${output}`);
+    });
 
     const health = await json("/api/health");
     assert.equal(health.response.status, 200);
     assert.equal(health.body.ok, true);
     assert.equal(health.body.runtimeRoot, runtimeRoot);
+    assert.match(health.body.database, /runtime\.sqlite$/);
+    await access(health.body.database);
 
     const onboarding = await json("/api/onboarding", {
       method: "POST",
@@ -129,7 +145,9 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const bundle = await json("/api/diagnostics/bundle", { method: "POST", body: JSON.stringify({}) });
     assert.equal(bundle.response.status, 201);
     assert.equal(bundle.body.ok, true);
+    assert.equal(bundle.body.storage, "sqlite:diagnostic_bundles");
     await access(bundle.body.path);
+    assert.ok((await stat(bundle.body.path)).size > 0);
 
     const activity = await json("/api/activity");
     const names = activity.body.events.map((event) => event.eventName);

@@ -35,6 +35,8 @@ Status: complete.
 - Add diagnostics tables.
 - Add profile/config tables.
 
+Status: complete for the dashboard API runtime. Remaining expansion: add dedicated typed tables for sync commands, Shre exports, and chat audit records when those features are implemented.
+
 ## Milestone 3: Verifone Workflow
 
 - Import Phase 1 config logic.

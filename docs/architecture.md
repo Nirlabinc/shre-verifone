@@ -109,44 +109,32 @@ Owns Shre integration:
 
 ## Runtime Storage
 
-The current implementation uses local JSON/JSONL files so the local-first API can be tested end to end immediately. Production should move the same contracts onto SQLite.
+The current implementation uses SQLite for local-first runtime state.
 
-Current runtime files:
-
-```text
-profile.json
-onboarding.json
-connections/verifone.json
-connections/verifone-status.json
-connections/password-status.json
-queue/items.json
-queue/status.json
-logs/activity.jsonl
-diagnostics/bundle-*.json
-```
-
-Recommended SQLite database:
+Current runtime database:
 
 ```text
 runtime.sqlite
 ```
 
+SQLite WAL sidecar files may also exist while the dashboard API is running:
+
+```text
+runtime.sqlite-wal
+runtime.sqlite-shm
+```
+
 Tables:
 
-- `profile`
-- `connections`
-- `password_status`
-- `sync_commands`
-- `sync_jobs`
-- `sync_attempts`
+- `schema_migrations`
+- `app_state`
+- `activity_log`
 - `outbound_queue`
-- `inbound_snapshots`
-- `entity_versions`
+- `sync_attempts`
 - `conflicts`
-- `diagnostic_events`
-- `shre_events`
-- `shre_exports`
-- `chat_audit_log`
+- `diagnostic_bundles`
+
+The `app_state` table stores current profile, onboarding, Verifone connection, Verifone status, password status, and queue replay status as JSON documents. Dedicated tables are used where replay/history matters.
 
 ## Local Ports
 

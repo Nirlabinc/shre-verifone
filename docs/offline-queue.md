@@ -75,4 +75,9 @@ The dashboard API currently implements:
 - `GET /api/queue`
 - `POST /api/queue/replay`
 
-The current store is `queue/items.json` plus `queue/status.json`. This is intentionally simple for the first E2E milestone. Milestone 2 moves the same behavior into SQLite tables.
+The current store is SQLite:
+
+- Queue items: `outbound_queue`
+- Replay status: `app_state` with scope `queue`, key `status`
+
+The E2E test verifies enqueue and replay against a temporary `runtime.sqlite` database.

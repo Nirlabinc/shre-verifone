@@ -134,10 +134,7 @@ Runtime files live under:
 Expected future configuration:
 
 ```text
-profile.json
-connections/verifone.json
-connections/shre.json
-queue/events.jsonl
+runtime.sqlite
 logs/
 diagnostics/
 ```
@@ -175,5 +172,6 @@ Implemented now:
 - Diagnostics bundle endpoint.
 - Activity log endpoint.
 - E2E API test for the local-first flow.
+- SQLite-backed runtime store with migrations.
 
-Next implementation step: replace JSON file stores with SQLite migrations and wire live Commander/Shre tenant integrations behind the existing API contracts.
+Next implementation step: wire live Commander/Shre tenant integrations behind the existing API contracts, then add typed tables for sync commands, Shre exports, and chat audit records.
