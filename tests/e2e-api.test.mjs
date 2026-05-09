@@ -238,6 +238,48 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(queueItem.response.status, 201);
     assert.equal(queueItem.body.status, "pending");
 
+    const initialAccessMode = await json("/api/access-mode");
+    assert.equal(initialAccessMode.response.status, 200);
+    assert.equal(initialAccessMode.body.mode, "read_only");
+
+    const blockedCommanderWrite = await json("/api/queue/enqueue", {
+      method: "POST",
+      body: JSON.stringify({
+        target: "commander",
+        entityType: "inventory",
+        entityId: "sku-001",
+        operation: "update_inventory",
+        payload: { sku: "sku-001", quantity: 12 },
+      }),
+    });
+    assert.equal(blockedCommanderWrite.response.status, 403);
+    assert.equal(blockedCommanderWrite.body.accessMode, "read_only");
+
+    const writeMode = await json("/api/access-mode", {
+      method: "POST",
+      body: JSON.stringify({ mode: "read_write" }),
+    });
+    assert.equal(writeMode.response.status, 200);
+    assert.equal(writeMode.body.mode, "read_write");
+
+    const allowedCommanderWrite = await json("/api/queue/enqueue", {
+      method: "POST",
+      body: JSON.stringify({
+        target: "commander",
+        entityType: "inventory",
+        entityId: "sku-001",
+        operation: "update_inventory",
+        payload: { sku: "sku-001", quantity: 12 },
+      }),
+    });
+    assert.equal(allowedCommanderWrite.response.status, 201);
+
+    const writeOnlyMode = await json("/api/access-mode", {
+      method: "POST",
+      body: JSON.stringify({ mode: "write_only" }),
+    });
+    assert.equal(writeOnlyMode.body.mode, "write_only");
+
     const connector = await json("/api/connector/activate", {
       method: "POST",
       body: JSON.stringify({
@@ -298,9 +340,20 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       method: "POST",
       body: JSON.stringify({ query: "What were sales today?", businessDate: "2026-05-09" }),
     });
-    assert.equal(salesQuery.response.status, 200);
-    assert.equal(salesQuery.body.status, "answered");
-    assert.match(salesQuery.body.answer, /\$1842\.55/);
+    assert.equal(salesQuery.response.status, 403);
+
+    await json("/api/access-mode", {
+      method: "POST",
+      body: JSON.stringify({ mode: "read_write" }),
+    });
+
+    const allowedSalesQuery = await json("/api/sales/query", {
+      method: "POST",
+      body: JSON.stringify({ query: "What were sales today?", businessDate: "2026-05-09" }),
+    });
+    assert.equal(allowedSalesQuery.response.status, 200);
+    assert.equal(allowedSalesQuery.body.status, "answered");
+    assert.match(allowedSalesQuery.body.answer, /\$1842\.55/);
 
     const unsignedInbound = await json("/api/messages/inbound", {
       method: "POST",
@@ -452,6 +505,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const activity = await json("/api/activity");
     const names = activity.body.events.map((event) => event.eventName);
     assert.ok(names.includes("api_request_completed"));
+    assert.ok(names.includes("access_mode_updated"));
     assert.ok(names.includes("shre_auth_signup_activated"));
     assert.ok(names.includes("profile_saved"));
     assert.ok(names.includes("verifone_connection_validated"));

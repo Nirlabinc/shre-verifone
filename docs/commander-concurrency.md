@@ -62,6 +62,23 @@ For external clients:
 - Record every sync attempt.
 - Add jitter to scheduled sync jobs so many stores do not call cloud or Commander at exactly the same time.
 
+## Access Modes
+
+The dashboard exposes Commander access mode:
+
+```http
+GET  /api/access-mode
+POST /api/access-mode
+```
+
+Modes:
+
+- `read_only`: capture/read data only. Inventory updates and Commander write commands are blocked.
+- `read_write`: capture/read data and allow queued writes.
+- `write_only`: allow queued writes and block sales/read query workflows.
+
+Use `read_only` for initial installs and analytics-only customers. Move to `read_write` only after the store owner approves inventory updates back to Commander and support validates the write workflow. `write_only` is mainly for controlled support jobs where reads should be disabled.
+
 ## Future Improvement
 
 Add a queue worker that automatically:

@@ -122,6 +122,23 @@ The first chat implementation uses local tools only. Sales questions use the loc
 
 ## Commander Concurrency
 
+## Commander Access Mode
+
+Commander access is controlled separately from Shre entitlement:
+
+```http
+GET  /api/access-mode
+POST /api/access-mode
+```
+
+Supported modes:
+
+- `read_only`: default. Allows local capture/query of Commander data and blocks Commander/inventory writes.
+- `read_write`: allows both read capture and queued inventory/write commands.
+- `write_only`: blocks local sales/read queries and allows queued Commander/inventory writes.
+
+The default comes from `COMMANDER_ACCESS_MODE`, falling back to `SHRE_MODE`, then `read_only`. Inventory updates and Commander write commands must go through `outbound_queue` and the Commander lease. Direct writes to Commander are not allowed from chat or gateway handlers.
+
 All local Commander-facing work should be:
 
 1. Queued in `outbound_queue`.

@@ -243,6 +243,20 @@
           </div>
           <div class="toolbar"><button class="primary" type="submit">Activate Connector</button></div>
         </form>
+        <form id="accessModeForm">
+          <h2>Commander Access Mode</h2>
+          <div class="fields">
+            <label>Mode
+              <select name="mode">
+                <option value="read_only">Read Only</option>
+                <option value="read_write">Read / Write</option>
+                <option value="write_only">Write Only</option>
+              </select>
+            </label>
+          </div>
+          <div class="hint">Read mode captures sales and status data. Write mode allows inventory updates to be queued back to Commander. Writes are blocked unless mode is Read / Write or Write Only.</div>
+          <div class="toolbar"><button class="primary" type="submit">Save Access Mode</button></div>
+        </form>
         <div class="card">
           <h2>Runtime Manifest</h2>
           <pre id="manifestJson">Loading</pre>
@@ -415,7 +429,7 @@
           return;
         }
         $("loginPanel").classList.remove("open");
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -427,7 +441,8 @@
           api("/api/activity"),
           api("/api/messages/audit"),
           api("/api/notifications"),
-          api("/api/usage/summary")
+          api("/api/usage/summary"),
+          api("/api/access-mode")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
@@ -436,6 +451,7 @@
         $("mValidation").textContent = verifone.lastValidation ? `${verifone.lastValidation.status} at ${verifone.lastValidation.checkedAt}` : "Not validated";
         $("mConnector").textContent = connector.status || "local_only";
         $("mTenant").textContent = connector.tenantId ? `${connector.tenantId} / ${connector.workspaceId || "no_workspace"} / ${connector.storeId}` : "No cloud tenant mapped";
+        document.querySelector('#accessModeForm select[name="mode"]').value = accessMode.mode || "read_only";
         $("mQueue").textContent = `${queue.pending || 0} pending`;
         $("mQueueErr").textContent = queue.lastError || `${queue.completed || 0} completed, ${queue.failed || 0} failed`;
         $("passwordStatus").textContent = password.state || "unknown";
@@ -593,6 +609,11 @@
       body.cloudRelayEnabled = body.cloudRelayEnabled === "true";
       body.relatedConnectors = ["rapidrms-api"];
       await api("/api/connector/activate", { method: "POST", body: JSON.stringify(body) });
+      await refresh();
+    };
+    $("accessModeForm").onsubmit = async (event) => {
+      event.preventDefault();
+      await api("/api/access-mode", { method: "POST", body: JSON.stringify(formObject(event.target)) });
       await refresh();
     };
     $("shreSignupForm").onsubmit = async (event) => {

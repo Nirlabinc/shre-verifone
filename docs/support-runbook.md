@@ -18,6 +18,7 @@ GET /api/connector/status
 GET /api/verifone/status
 GET /api/password/status
 GET /api/queue
+GET /api/access-mode
 GET /api/connector/manifest
 GET /api/notifications
 GET /api/readiness
@@ -75,6 +76,7 @@ Do not request or store passwords in tickets.
 Check:
 
 - `/api/queue`
+- `/api/access-mode`
 - Commander connectivity.
 - SQL connectivity.
 - Shre/cloud connectivity if queue target is Shre.
@@ -104,6 +106,17 @@ Run `POST /api/usage/replay` after billing/network recovery. This replays usage 
 ### Multiple Clients Hitting Commander
 
 The local app uses a Commander lease and queue to avoid competing from this application. If external POS systems or third-party tools hit Commander directly, coordinate polling intervals and schedule heavy pulls outside peak sales periods.
+
+### Inventory Updates Blocked
+
+Check:
+
+- `/api/access-mode`
+- `/api/queue`
+- `/api/commander/lease/status`
+- Activity log for `access_mode_updated`
+
+Inventory writes require `read_write` or `write_only`. Keep stores in `read_only` until write-back has been approved and validated.
 
 ## Diagnostics Bundle
 

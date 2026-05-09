@@ -16,6 +16,7 @@ const localAdminToken = process.env.LOCAL_ADMIN_TOKEN || "";
 const shreAuthValidateUrl = process.env.SHRE_AUTH_VALIDATE_URL || "";
 const shreAuthSignupUrl = process.env.SHRE_AUTH_SIGNUP_URL || "";
 const shreCostEndpoint = process.env.SHRE_COST_ENDPOINT || "";
+const commanderAccessMode = process.env.COMMANDER_ACCESS_MODE || process.env.SHRE_MODE || "read_only";
 const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
 
@@ -270,6 +271,52 @@ function requireString(body: JsonObject, key: string): string {
     throw new Error(`${key} is required`);
   }
   return value.trim();
+}
+
+function normalizeAccessMode(value: JsonValue): string {
+  const mode = typeof value === "string" ? value : commanderAccessMode;
+  return ["read_only", "read_write", "write_only"].includes(mode) ? mode : "read_only";
+}
+
+function accessModeState(): JsonObject {
+  return store.getJson<JsonObject>("config", "access-mode", {
+    mode: normalizeAccessMode(commanderAccessMode),
+    updatedAt: null,
+    source: "env-default",
+  });
+}
+
+function accessMode(): string {
+  return normalizeAccessMode(accessModeState().mode);
+}
+
+function commanderWritesAllowed(): boolean {
+  return accessMode() === "read_write" || accessMode() === "write_only";
+}
+
+function commanderReadsAllowed(): boolean {
+  return accessMode() === "read_write" || accessMode() === "read_only";
+}
+
+function isCommanderWriteOperation(item: JsonObject): boolean {
+  const target = String(item.target || "").toLowerCase();
+  const entityType = String(item.entityType || "").toLowerCase();
+  const operation = String(item.operation || "").toLowerCase();
+  if (target === "commander") return true;
+  if (entityType.includes("inventory") || entityType.includes("price") || entityType.includes("item")) {
+    return /\b(write|push|update|sync|set|change|adjust)\b/.test(operation);
+  }
+  return /\b(update commander|send to commander|inventory_write|price_update|push_inventory)\b/.test(operation);
+}
+
+function blockCommanderWriteIfNeeded(res: ServerResponse, item: JsonObject): boolean {
+  if (!isCommanderWriteOperation(item) || commanderWritesAllowed()) return false;
+  sendJson(res, 403, {
+    error: "Commander write blocked",
+    accessMode: accessMode(),
+    message: "Inventory/Commander writes require access mode read_write or write_only.",
+  });
+  return true;
 }
 
 function secretKey(): Buffer {
@@ -553,6 +600,7 @@ function currentNotifications(): JsonObject {
   const sales = store.latestSalesSnapshot();
   const auth = authState();
   const usage = store.usageSummary(25);
+  const mode = accessMode();
 
   if (!connection.commanderUrl || !connection.username || !connection.password) {
     items.push(notification(
@@ -614,6 +662,24 @@ function currentNotifications(): JsonObject {
       "warning",
       "Marketplace connector is not activated",
       "Cloud/message gateway routing needs tenant and store registration.",
+      "Open marketplace registration",
+    ));
+  }
+
+  if (mode === "read_only") {
+    items.push(notification(
+      "commander_read_only",
+      "info",
+      "Commander writes are disabled",
+      "Inventory updates and Commander write commands are blocked in read-only mode.",
+      "Open marketplace registration",
+    ));
+  } else if (mode === "write_only") {
+    items.push(notification(
+      "commander_write_only",
+      "warning",
+      "Commander reads are disabled",
+      "Sales read/query workflows are blocked in write-only mode.",
       "Open marketplace registration",
     ));
   }
@@ -713,6 +779,7 @@ function currentReadiness(): JsonObject {
   add("workspace_id", Boolean(connector.workspaceId), "critical", "Workspace ID is present.");
   add("store_id", Boolean(connector.storeId), "critical", "Store ID is present.");
   add("connector_secret", Boolean(activeConnectorSharedSecret()), "critical", "Connector signing secret is available.");
+  add("access_mode_configured", ["read_only", "read_write", "write_only"].includes(accessMode()), "critical", "Commander access mode is configured.");
   add("cloud_relay", connector.cloudRelayEnabled === true, "warning", "Cloud relay is enabled.");
   add("entitlement_active", !["suspended", "deactivated", "rejected"].includes(String(remote.entitlementState || remote.state || "")), "critical", "Entitlement is active or not blocking local work.");
   add("verifone_configured", Boolean(connection.commanderUrl && connection.username && connection.password), "critical", "Verifone connection is configured.");
@@ -1045,6 +1112,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   if (path === "/api/queue/enqueue" && req.method === "POST") {
     try {
       const body = asObject(await requestBody(req));
+      if (blockCommanderWriteIfNeeded(res, body)) return;
       const item = store.enqueue({
         target: requireString(body, "target"),
         entityType: requireString(body, "entityType"),
@@ -1119,6 +1187,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       messageAudit: "/api/messages/audit",
       notifications: "/api/notifications",
       readiness: "/api/readiness",
+      accessMode: "/api/access-mode",
       usage: "/api/usage/summary",
       shreSignupActivate: "/api/shre/signup-activate",
       activitySummary: store.activitySummary(),
@@ -1134,6 +1203,30 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   if (path === "/api/readiness") {
     sendJson(res, 200, currentReadiness());
     return;
+  }
+
+  if (path === "/api/access-mode") {
+    if (req.method === "GET") {
+      sendJson(res, 200, accessModeState());
+      return;
+    }
+    if (req.method === "POST") {
+      try {
+        const body = asObject(await requestBody(req));
+        const mode = normalizeAccessMode(requireString(body, "mode"));
+        const state = {
+          mode,
+          updatedAt: new Date().toISOString(),
+          source: "dashboard-api",
+        };
+        store.setJson("config", "access-mode", state);
+        store.appendActivity("access_mode_updated", { mode });
+        sendJson(res, 200, state);
+      } catch (error) {
+        badRequest(res, error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
   }
 
   if (path === "/api/diagnostics/bundle" && req.method === "POST") {
@@ -1258,6 +1351,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   }
 
   if (path === "/api/sales/query" && req.method === "POST") {
+    if (!commanderReadsAllowed()) {
+      sendJson(res, 403, {
+        error: "Commander read blocked",
+        accessMode: accessMode(),
+        message: "Sales reads require access mode read_only or read_write.",
+      });
+      return;
+    }
     const body = asObject(await requestBody(req));
     const query = typeof body.query === "string" && body.query.trim() ? body.query.trim() : "sales";
     const businessDate = typeof body.businessDate === "string" && body.businessDate.trim()
@@ -1305,6 +1406,22 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       }
       const userId = String(inbound.userId || "");
       const classification = classifyMessage(messageText);
+      if (classification.target === "commander" && !commanderWritesAllowed()) {
+        sendJson(res, 403, {
+          error: "Commander write blocked",
+          accessMode: accessMode(),
+          message: "Commander write commands are blocked in read-only mode.",
+        });
+        return;
+      }
+      if (classification.intent === "sales_query" && !commanderReadsAllowed()) {
+        sendJson(res, 403, {
+          error: "Commander read blocked",
+          accessMode: accessMode(),
+          message: "Sales reads are blocked in write-only mode.",
+        });
+        return;
+      }
       const connectorResponse = classification.intent === "sales_query"
         ? store.answerSalesQuery(messageText, typeof inbound.businessDate === "string" && inbound.businessDate ? inbound.businessDate : undefined)
         : {
@@ -1393,6 +1510,22 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId : String(connector.workspaceId || "");
       const storeId = typeof body.storeId === "string" ? body.storeId : String(connector.storeId || "");
       const classification = classifyMessage(messageText);
+      if (classification.target === "commander" && !commanderWritesAllowed()) {
+        sendJson(res, 403, {
+          error: "Commander write blocked",
+          accessMode: accessMode(),
+          message: "Commander write commands are blocked in read-only mode.",
+        });
+        return;
+      }
+      if (classification.intent === "sales_query" && !commanderReadsAllowed()) {
+        sendJson(res, 403, {
+          error: "Commander read blocked",
+          accessMode: accessMode(),
+          message: "Sales reads are blocked in write-only mode.",
+        });
+        return;
+      }
       const connectorResponse = classification.intent === "sales_query"
         ? store.answerSalesQuery(messageText, typeof body.businessDate === "string" ? body.businessDate : undefined)
         : {

@@ -109,6 +109,7 @@ SHRE_EVENTS_ENDPOINT=https://events.shre.ai
 SHRE_TENANT_ID=
 SHRE_APP=verifone_cstoresku
 SHRE_MODE=read_only
+COMMANDER_ACCESS_MODE=read_only
 SHRE_BOOTSTRAP_KEY=
 SHRE_AUTH_SIGNUP_URL=https://shre-auth.aros.live/api/connectors/verifone-commander/signup-activate
 ```
