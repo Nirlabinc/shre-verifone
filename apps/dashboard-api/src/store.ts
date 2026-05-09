@@ -44,10 +44,14 @@ interface ChatAuditRow {
   created_at: string;
 }
 
+export interface RuntimeStoreOptions {
+  connectorRegistryUrl: string;
+}
+
 export class RuntimeStore {
   private readonly db: Database.Database;
 
-  constructor(private readonly runtimeRoot: string) {
+  constructor(private readonly runtimeRoot: string, private readonly options: RuntimeStoreOptions) {
     mkdirSync(runtimeRoot, { recursive: true });
     this.db = new Database(join(runtimeRoot, "runtime.sqlite"));
     this.db.pragma("journal_mode = WAL");
@@ -169,11 +173,14 @@ export class RuntimeStore {
   saveConnectorRegistration(registration: JsonObject): JsonObject {
     const current = {
       connectorId: registration.connectorId || "verifone-commander",
+      connectorName: registration.connectorName || "Verifone Commander",
       tenantId: registration.tenantId || "",
       storeId: registration.storeId || "",
       app: registration.app || "verifone_cstoresku",
       mode: registration.mode || "local_first",
       cloudRelayEnabled: registration.cloudRelayEnabled === true,
+      registryUrl: registration.registryUrl || this.options.connectorRegistryUrl,
+      relatedConnectors: Array.isArray(registration.relatedConnectors) ? registration.relatedConnectors : ["rapidrms-api"],
       activatedAt: new Date().toISOString(),
       status: registration.tenantId ? "activated" : "local_only",
     };
@@ -184,11 +191,14 @@ export class RuntimeStore {
   connectorStatus(): JsonObject {
     const registration = this.getJson<JsonObject>("connector", "registration", {
       connectorId: "verifone-commander",
+      connectorName: "Verifone Commander",
       tenantId: "",
       storeId: "",
       app: "verifone_cstoresku",
       mode: "local_first",
       cloudRelayEnabled: false,
+      registryUrl: this.options.connectorRegistryUrl,
+      relatedConnectors: ["rapidrms-api"],
       activatedAt: null,
       status: "local_only",
     });
@@ -196,7 +206,28 @@ export class RuntimeStore {
       ...registration,
       localDatabase: this.path(),
       inboundEndpoint: "/api/messages/inbound",
+      registryUrl: registration.registryUrl || this.options.connectorRegistryUrl,
       cloudActivationRequiredForGatewayRouting: true,
+    };
+  }
+
+  connectorCatalog(): JsonObject {
+    return {
+      registryUrl: this.options.connectorRegistryUrl,
+      connectors: [
+        {
+          connectorId: "rapidrms-api",
+          connectorName: "RapidRMS API",
+          role: "Backoffice/cloud API connector for CStoreSKU/RapidRMS data and management APIs.",
+          existing: true,
+        },
+        {
+          connectorId: "verifone-commander",
+          connectorName: "Verifone Commander",
+          role: "Store-local connector for Commander POS communication, sync commands, password status, diagnostics, and local queue actions.",
+          existing: false,
+        },
+      ],
     };
   }
 

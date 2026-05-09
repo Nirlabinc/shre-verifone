@@ -12,6 +12,7 @@ services:
       SHRE_TENANT_ID: ${SHRE_TENANT_ID:-}
       SHRE_APP: ${SHRE_APP:-verifone_cstoresku}
       SHRE_MODE: ${SHRE_MODE:-read_only}
+      CONNECTOR_REGISTRY_URL: ${CONNECTOR_REGISTRY_URL:-https://connector.aros.live}
     volumes:
       - verifone-shre-runtime:/runtime
     ports:
@@ -31,6 +32,7 @@ services:
       SHRE_APP: ${SHRE_APP:-verifone_cstoresku}
       SHRE_MODE: ${SHRE_MODE:-read_only}
       SHRE_BOOTSTRAP_KEY: ${SHRE_BOOTSTRAP_KEY:-}
+      CONNECTOR_REGISTRY_URL: ${CONNECTOR_REGISTRY_URL:-https://connector.aros.live}
     volumes:
       - verifone-shre-runtime:/runtime
     restart: unless-stopped

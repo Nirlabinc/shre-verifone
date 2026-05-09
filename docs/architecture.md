@@ -28,6 +28,7 @@ remote
 ├─ Shre control plane
 ├─ Shre events plane
 ├─ MIB/Shre connector registry
+│  https://connector.aros.live
 ├─ message gateways
 ├─ Shre Cortex/RAG/training services
 └─ Rapid Infosoft support/operations
@@ -144,6 +145,8 @@ Tables:
 The `app_state` table stores current profile, onboarding, Verifone connection, Verifone status, password status, and queue replay status as JSON documents. Dedicated tables are used where replay/history matters.
 
 See [Connector Flow](connector-flow.md) for cloud-to-local message routing.
+
+See [Local Database Decision](local-database-decision.md) for why SQLite remains the default local database instead of Postgres.
 
 ## Local Ports
 

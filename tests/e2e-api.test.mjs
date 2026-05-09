@@ -46,6 +46,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       ...process.env,
       PORT: String(port),
       VERIFONE_SHRE_HOME: runtimeRoot,
+      CONNECTOR_REGISTRY_URL: "https://connector.aros.live",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -142,15 +143,24 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       method: "POST",
       body: JSON.stringify({
         connectorId: "verifone-commander",
+        connectorName: "Verifone Commander",
         tenantId: "tenant_rapid_001",
         storeId: "store_001",
         app: "verifone_cstoresku",
         cloudRelayEnabled: true,
+        relatedConnectors: ["rapidrms-api"],
       }),
     });
     assert.equal(connector.response.status, 200);
     assert.equal(connector.body.status, "activated");
     assert.equal(connector.body.cloudRelayEnabled, true);
+    assert.equal(connector.body.registryUrl, "https://connector.aros.live");
+    assert.deepEqual(connector.body.relatedConnectors, ["rapidrms-api"]);
+
+    const catalog = await json("/api/connectors/catalog");
+    assert.equal(catalog.response.status, 200);
+    assert.equal(catalog.body.registryUrl, "https://connector.aros.live");
+    assert.deepEqual(catalog.body.connectors.map((item) => item.connectorId), ["rapidrms-api", "verifone-commander"]);
 
     const inbound = await json("/api/messages/inbound", {
       method: "POST",

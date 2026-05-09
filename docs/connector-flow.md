@@ -2,9 +2,15 @@
 
 ## Short Answer
 
-For production cloud message routing, activate/register `verifone-commander` under the MIB/Shre platform.
+For production cloud message routing, activate/register `verifone-commander` under the MIB/Shre platform at:
+
+```text
+https://connector.aros.live
+```
 
 Local-only mode does not require cloud activation. Cloud-routed mode does.
+
+`https://connector.aros.live/health` was reachable during implementation and returned HTTP `200`.
 
 ## End-To-End Flow
 
@@ -44,6 +50,26 @@ Recommended app slug:
 verifone_cstoresku
 ```
 
+## Connector Relationship
+
+You already have a RapidRMS API connector. The Verifone Commander connector should be added as a second connector, not as a replacement.
+
+```text
+rapidrms-api
+  -> backoffice/cloud API, CStoreSKU/RapidRMS data, management APIs
+
+verifone-commander
+  -> store-local Commander POS access, local sync commands, password status,
+     diagnostics, offline queue, local sales/chat context
+```
+
+The two connectors can be linked by tenant ID and store ID. The cloud can decide which connector to call based on the user request:
+
+- Sales/reporting question: usually local `verifone-commander` first, with RapidRMS API as an enrichment source if needed.
+- Backoffice management request: `rapidrms-api`.
+- POS sync or Commander command: `verifone-commander`.
+- Health/diagnostics: `verifone-commander`.
+
 ## Local-First Behavior
 
 The local install remains the system of action.
@@ -55,6 +81,12 @@ The local install remains the system of action.
 - Cloud can enrich, route, and learn from approved data, but does not need to be in the critical path for local operations.
 
 ## Current Implemented Local APIs
+
+Connector catalog:
+
+```http
+GET /api/connectors/catalog
+```
 
 Connector status:
 
@@ -73,10 +105,13 @@ Example:
 ```json
 {
   "connectorId": "verifone-commander",
+  "connectorName": "Verifone Commander",
   "tenantId": "tenant_rapid_001",
   "storeId": "store_001",
   "app": "verifone_cstoresku",
-  "cloudRelayEnabled": true
+  "cloudRelayEnabled": true,
+  "registryUrl": "https://connector.aros.live",
+  "relatedConnectors": ["rapidrms-api"]
 }
 ```
 
@@ -129,14 +164,17 @@ This is intentionally simple for the first E2E milestone. Later, Shre can provid
 Recommended registration fields:
 
 - `connectorId`
+- `connectorName`
 - `tenantId`
 - `storeId`
 - `app`
+- `registryUrl`
 - `environment`
 - `allowedSources`
 - `allowedIntents`
 - `readOnly`
 - `cloudRelayEnabled`
+- `relatedConnectors`
 - `localEndpointId`
 - `publicKey` or tunnel identity
 

@@ -8,6 +8,7 @@ import { RuntimeStore, type JsonObject, type JsonValue } from "./store.js";
 
 const port = Number(process.env.PORT || 5480);
 const runtimeRoot = process.env.VERIFONE_SHRE_HOME || join(homedir(), ".verifone-shre-cstoresku");
+const connectorRegistryUrl = process.env.CONNECTOR_REGISTRY_URL || "https://connector.aros.live";
 const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
 
@@ -387,11 +388,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     const body = asObject(await requestBody(req));
     const registration = store.saveConnectorRegistration({
       connectorId: typeof body.connectorId === "string" ? body.connectorId : "verifone-commander",
+      connectorName: typeof body.connectorName === "string" ? body.connectorName : "Verifone Commander",
       tenantId: typeof body.tenantId === "string" ? body.tenantId : "",
       storeId: typeof body.storeId === "string" ? body.storeId : "",
       app: typeof body.app === "string" ? body.app : "verifone_cstoresku",
       mode: typeof body.mode === "string" ? body.mode : "local_first",
       cloudRelayEnabled: body.cloudRelayEnabled === true,
+      registryUrl: typeof body.registryUrl === "string" ? body.registryUrl : connectorRegistryUrl,
+      relatedConnectors: Array.isArray(body.relatedConnectors) ? body.relatedConnectors : ["rapidrms-api"],
     });
     store.appendActivity("connector_activated", {
       connectorId: registration.connectorId,
@@ -399,6 +403,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       cloudRelayEnabled: registration.cloudRelayEnabled === true,
     });
     sendJson(res, 200, registration);
+    return;
+  }
+
+  if (path === "/api/connectors/catalog") {
+    sendJson(res, 200, store.connectorCatalog());
     return;
   }
 
@@ -472,7 +481,7 @@ async function serveUi(res: ServerResponse): Promise<void> {
 
 async function main(): Promise<void> {
   await ensureRuntime();
-  store = new RuntimeStore(runtimeRoot);
+  store = new RuntimeStore(runtimeRoot, { connectorRegistryUrl });
   const server = createServer((req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     handleRequest(req, res, url.pathname).catch((error: unknown) => {
