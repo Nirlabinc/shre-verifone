@@ -37,3 +37,4 @@ jobs:
           test -s docs/support-runbook.md
           test -s docs/technical-specs.md
           test -s docs/commander-concurrency.md
+          test -s docs/app-boundary-decision.md

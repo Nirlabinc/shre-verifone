@@ -65,6 +65,7 @@ Setup, onboarding, support, and specs:
 - [Support Runbook](docs/support-runbook.md)
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)
+- [App Boundary Decision](docs/app-boundary-decision.md)
 
 ## Shre SDK Findings
 

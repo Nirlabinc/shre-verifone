@@ -10,6 +10,8 @@ Rationale:
 - Phase 2 needs a browser dashboard, API, local queue, Shre connector, diagnostics, and AI data governance.
 - Keeping Phase 2 separate avoids destabilizing the installer-only release.
 
+The Phase 2 app should remain one local application package with separate internal services for Verifone/CStoreSKU and Shre SDK work. See [App Boundary Decision](app-boundary-decision.md).
+
 ## Local-First Federation
 
 The store machine owns operational continuity. Remote Shre services are additive.
