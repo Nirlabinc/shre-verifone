@@ -447,11 +447,14 @@
         if (auth.configured && !auth.authenticated && !sessionStorage.getItem("localAdminToken")) {
           $("loginPanel").classList.add("open");
           $("loginTitle").textContent = "Local Login";
+          $("loginHint").classList.remove("bad");
+          $("loginHint").textContent = "Enter the local login secret for this store PC.";
           return;
         }
         if (!auth.configured) {
           $("loginPanel").classList.add("open");
           $("loginTitle").textContent = "Create Local Login";
+          $("loginHint").classList.remove("bad");
           $("loginHint").textContent = "Create the local login secret for this store PC.";
           return;
         }
@@ -614,15 +617,28 @@
     $("loginForm").onsubmit = async (event) => {
       event.preventDefault();
       const body = formObject(event.target);
-      const result = await api(authConfigured ? "/api/auth/login" : "/api/auth/setup", { method: "POST", body: JSON.stringify(body) });
-      if (result.session?.token) sessionStorage.setItem("localSession", result.session.token);
-      await refresh();
+      $("loginHint").textContent = authConfigured ? "Checking local login secret..." : "Creating local login secret...";
+      try {
+        const result = await api(authConfigured ? "/api/auth/login" : "/api/auth/setup", { method: "POST", body: JSON.stringify(body) });
+        if (result.session?.token) sessionStorage.setItem("localSession", result.session.token);
+        event.target.reset();
+        $("loginHint").textContent = "Login accepted.";
+        await refresh();
+      } catch (error) {
+        $("loginHint").textContent = error.message || "Login failed.";
+        $("loginHint").classList.add("bad");
+      }
     };
     $("loginSetupForm").onsubmit = async (event) => {
       event.preventDefault();
-      const result = await api("/api/auth/setup", { method: "POST", body: JSON.stringify(formObject(event.target)) });
-      if (result.session?.token) sessionStorage.setItem("localSession", result.session.token);
-      await refresh();
+      try {
+        const result = await api("/api/auth/setup", { method: "POST", body: JSON.stringify(formObject(event.target)) });
+        if (result.session?.token) sessionStorage.setItem("localSession", result.session.token);
+        event.target.reset();
+        await refresh();
+      } catch (error) {
+        setStatus(error.message || "Login setup failed", "bad");
+      }
     };
     $("validateLogin").onclick = async () => { await api("/api/auth/validate", { method: "POST", body: "{}" }); await refresh(); };
     $("chatForm").onsubmit = async (event) => {
