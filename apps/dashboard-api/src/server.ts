@@ -332,6 +332,36 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/commander/lease/status") {
+    sendJson(res, 200, store.commanderLeaseStatus());
+    return;
+  }
+
+  if (path === "/api/commander/lease/acquire" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const owner = typeof body.owner === "string" && body.owner.trim() ? body.owner.trim() : "dashboard-api";
+    const ttlSeconds = typeof body.ttlSeconds === "number" ? body.ttlSeconds : 120;
+    const lease = store.acquireCommanderLease(owner, ttlSeconds);
+    store.appendActivity(lease.acquired ? "commander_lease_acquired" : "commander_lease_blocked", {
+      owner,
+      activeOwner: lease.owner,
+    });
+    sendJson(res, lease.acquired ? 200 : 423, lease);
+    return;
+  }
+
+  if (path === "/api/commander/lease/release" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const owner = typeof body.owner === "string" && body.owner.trim() ? body.owner.trim() : "dashboard-api";
+    const release = store.releaseCommanderLease(owner);
+    store.appendActivity(release.released ? "commander_lease_released" : "commander_lease_release_blocked", {
+      owner,
+      activeOwner: release.owner,
+    });
+    sendJson(res, release.released ? 200 : 409, release);
+    return;
+  }
+
   if (path === "/api/diagnostics") {
     sendJson(res, 200, {
       runtimeRoot,

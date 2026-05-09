@@ -182,6 +182,28 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(audit.response.status, 200);
     assert.equal(audit.body.messages.at(-1).intent, "sales_query");
 
+    const lease = await json("/api/commander/lease/acquire", {
+      method: "POST",
+      body: JSON.stringify({ owner: "worker-a", ttlSeconds: 60 }),
+    });
+    assert.equal(lease.response.status, 200);
+    assert.equal(lease.body.acquired, true);
+
+    const blockedLease = await json("/api/commander/lease/acquire", {
+      method: "POST",
+      body: JSON.stringify({ owner: "worker-b", ttlSeconds: 60 }),
+    });
+    assert.equal(blockedLease.response.status, 423);
+    assert.equal(blockedLease.body.acquired, false);
+    assert.equal(blockedLease.body.owner, "worker-a");
+
+    const releaseLease = await json("/api/commander/lease/release", {
+      method: "POST",
+      body: JSON.stringify({ owner: "worker-a" }),
+    });
+    assert.equal(releaseLease.response.status, 200);
+    assert.equal(releaseLease.body.released, true);
+
     const replay = await json("/api/queue/replay", { method: "POST", body: JSON.stringify({}) });
     assert.equal(replay.response.status, 200);
     assert.equal(replay.body.items.every((item) => item.status === "completed"), true);

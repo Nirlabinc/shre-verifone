@@ -141,12 +141,15 @@ Tables:
 - `conflicts`
 - `diagnostic_bundles`
 - `chat_audit_log`
+- `commander_locks`
 
 The `app_state` table stores current profile, onboarding, Verifone connection, Verifone status, password status, and queue replay status as JSON documents. Dedicated tables are used where replay/history matters.
 
 See [Connector Flow](connector-flow.md) for cloud-to-local message routing.
 
 See [Local Database Decision](local-database-decision.md) for why SQLite remains the default local database instead of Postgres.
+
+See [Commander Concurrency](commander-concurrency.md) for how local Commander calls are serialized to reduce device contention.
 
 ## Local Ports
 

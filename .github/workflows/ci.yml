@@ -31,3 +31,9 @@ jobs:
           test -s docs/architecture.md
           test -s docs/shre-sdk-evaluation.md
           test -s docs/data-governance.md
+          test -s docs/setup-tree.md
+          test -s docs/customer-onboarding.md
+          test -s docs/developer-onboarding.md
+          test -s docs/support-runbook.md
+          test -s docs/technical-specs.md
+          test -s docs/commander-concurrency.md

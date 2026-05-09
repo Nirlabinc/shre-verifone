@@ -57,6 +57,15 @@ Message gateway and connector routing are documented in [docs/connector-flow.md]
 
 Local database choice is documented in [docs/local-database-decision.md](docs/local-database-decision.md). The current default is SQLite, not Postgres.
 
+Setup, onboarding, support, and specs:
+
+- [Setup Tree](docs/setup-tree.md)
+- [Customer Onboarding](docs/customer-onboarding.md)
+- [Developer Onboarding](docs/developer-onboarding.md)
+- [Support Runbook](docs/support-runbook.md)
+- [Technical Specs](docs/technical-specs.md)
+- [Commander Concurrency](docs/commander-concurrency.md)
+
 ## Shre SDK Findings
 
 The existing Shre SDK family uses the same wire contract across Swift, .NET, Python, and the private platform SDK:
@@ -181,5 +190,6 @@ Implemented now:
 - Inbound message gateway endpoint.
 - Chat/message audit log.
 - Connector catalog for existing `rapidrms-api` and new `verifone-commander`.
+- Commander lease endpoints to prevent this local app from competing with itself against Commander.
 
 Next implementation step: wire live Commander/Shre tenant integrations behind the existing API contracts, then add secure cloud relay authentication and local command authorization.

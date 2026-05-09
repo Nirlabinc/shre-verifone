@@ -44,6 +44,13 @@ interface ChatAuditRow {
   created_at: string;
 }
 
+interface CommanderLockRow {
+  resource: string;
+  owner: string;
+  expires_at: string;
+  updated_at: string;
+}
+
 export interface RuntimeStoreOptions {
   connectorRegistryUrl: string;
 }
@@ -297,6 +304,57 @@ export class RuntimeStore {
     }));
   }
 
+  acquireCommanderLease(owner: string, ttlSeconds: number): JsonObject {
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const expiresAt = new Date(now.getTime() + Math.max(5, ttlSeconds) * 1000).toISOString();
+    const existing = this.db.prepare("select resource, owner, expires_at, updated_at from commander_locks where resource = 'commander'").get() as CommanderLockRow | undefined;
+    if (existing && existing.expires_at > nowIso && existing.owner !== owner) {
+      return {
+        acquired: false,
+        resource: existing.resource,
+        owner: existing.owner,
+        expiresAt: existing.expires_at,
+        updatedAt: existing.updated_at,
+      };
+    }
+    this.db.prepare(`
+      insert into commander_locks (resource, owner, expires_at, updated_at)
+      values ('commander', ?, ?, ?)
+      on conflict(resource) do update set owner = excluded.owner, expires_at = excluded.expires_at, updated_at = excluded.updated_at
+    `).run(owner, expiresAt, nowIso);
+    return {
+      acquired: true,
+      resource: "commander",
+      owner,
+      expiresAt,
+      updatedAt: nowIso,
+    };
+  }
+
+  releaseCommanderLease(owner: string): JsonObject {
+    const existing = this.commanderLeaseStatus();
+    if (existing.owner && existing.owner !== owner && existing.active === true) {
+      return { released: false, reason: "lease_owned_by_another_worker", ...existing };
+    }
+    this.db.prepare("delete from commander_locks where resource = 'commander'").run();
+    return { released: true, resource: "commander", owner };
+  }
+
+  commanderLeaseStatus(): JsonObject {
+    const row = this.db.prepare("select resource, owner, expires_at, updated_at from commander_locks where resource = 'commander'").get() as CommanderLockRow | undefined;
+    if (!row) {
+      return { active: false, resource: "commander", owner: "", expiresAt: null, updatedAt: null };
+    }
+    return {
+      active: row.expires_at > new Date().toISOString(),
+      resource: row.resource,
+      owner: row.owner,
+      expiresAt: row.expires_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   private queueItems(): JsonObject[] {
     const rows = this.db.prepare(`
       select id, target, entity_type, entity_id, operation, payload_json,
@@ -417,6 +475,13 @@ export class RuntimeStore {
         status text not null,
         response_json text not null,
         created_at text not null
+      );
+
+      create table if not exists commander_locks (
+        resource text primary key,
+        owner text not null,
+        expires_at text not null,
+        updated_at text not null
       );
 
       insert or ignore into schema_migrations (version, applied_at)
