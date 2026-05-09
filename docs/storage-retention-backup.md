@@ -26,6 +26,7 @@ Retention choices:
 - 3 months
 - 6 months
 - 1 year
+- Custom days from 1 to 3650
 
 The selected retention applies to activity logs, diagnostics bundles, chat audit, reported usage records, completed/failed queue rows, and sales snapshots. Pending queue items are not deleted by retention cleanup.
 
@@ -55,7 +56,7 @@ Example policy:
 
 ```json
 {
-  "retentionDays": 30,
+  "retentionDays": 45,
   "backupEnabled": true,
   "backupTarget": "both",
   "localBackupPath": "C:\\VerifoneCommanderBackups",

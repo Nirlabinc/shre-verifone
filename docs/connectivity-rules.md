@@ -142,8 +142,10 @@ Fix path:
 
 1. Confirm workspace ID, tenant ID, and store ID match the marketplace registration.
 2. Confirm CStoreSKU key is not being confused with Verifone credentials.
-3. If login validation is offline, let local work continue and check background validation once Shre Auth is reachable.
-4. If account is suspended, block metered cloud work, notify the user, and replay usage/queue items after reactivation.
+3. If CStoreSKU key is configured but link status is not `linked`, `synced`, `active`, or `ready`, the top dashboard alert must show CStoreSKU attention.
+4. If login validation is offline, let local work continue and check background validation once Shre Auth is reachable.
+5. If Shre connector is activated but cloud relay signing secret is missing, the top dashboard alert must show connector attention.
+6. If account is suspended, block metered cloud work, notify the user, and replay usage/queue items after reactivation.
 
 ### 6. Message Gateway And Remote Commands
 

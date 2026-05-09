@@ -130,19 +130,19 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const storagePolicy = await json("/api/storage/policy", {
       method: "POST",
       body: JSON.stringify({
-        retentionDays: 14,
+        retentionDays: 45,
         backupEnabled: true,
         backupTarget: "both",
         localBackupPath: backupRoot,
       }),
     });
     assert.equal(storagePolicy.response.status, 200);
-    assert.equal(storagePolicy.body.retentionDays, 14);
+    assert.equal(storagePolicy.body.retentionDays, 45);
     assert.equal(storagePolicy.body.shrePlatformSynologyEnabled, true);
 
     const storageAnalysis = await json("/api/storage/analysis");
     assert.equal(storageAnalysis.response.status, 200);
-    assert.equal(storageAnalysis.body.policy.retentionDays, 14);
+    assert.equal(storageAnalysis.body.policy.retentionDays, 45);
     assert.equal(storageAnalysis.body.analysis.risk.length > 0, true);
 
     const backup = await json("/api/storage/backup", {
@@ -156,7 +156,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
 
     const retention = await json("/api/storage/retention/apply", { method: "POST", body: JSON.stringify({}) });
     assert.equal(retention.response.status, 200);
-    assert.equal(retention.body.retentionDays, 14);
+    assert.equal(retention.body.retentionDays, 45);
 
     const version = await json("/api/version");
     assert.equal(version.response.status, 200);
@@ -302,6 +302,11 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(syncStatus.response.status, 200);
     assert.equal(syncStatus.body.cstoresku.linked, true);
     assert.equal(syncStatus.body.commanderWriteBack.status, "blocked_by_access_mode");
+
+    const notificationsAfterActivation = await json("/api/notifications");
+    assert.equal(notificationsAfterActivation.response.status, 200);
+    const notificationIds = notificationsAfterActivation.body.items.map((item) => item.id);
+    assert.equal(notificationIds.includes("connector_not_activated"), false);
 
     const passwordStatus = await json("/api/password/status");
     assert.equal(passwordStatus.body.state, "expiring");

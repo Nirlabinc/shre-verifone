@@ -939,6 +939,8 @@ function currentNotifications(): JsonObject {
   });
   const queue = store.queueSummary();
   const connector = store.connectorStatus();
+  const sync = syncState();
+  const cstoresku = asObject(sync.cstoresku || {});
   const sales = store.latestSalesSnapshot();
   const auth = authState();
   const usage = store.usageSummary(25);
@@ -1006,6 +1008,41 @@ function currentNotifications(): JsonObject {
       "Cloud/message gateway routing needs tenant and store registration.",
       "Open marketplace registration",
     ));
+  } else {
+    if (connector.cloudRelayEnabled === true && !activeConnectorSharedSecret()) {
+      items.push(notification(
+        "connector_secret_missing",
+        "critical",
+        "Shre connector needs signing secret",
+        "Cloud/message gateway routing is activated but no connector signing secret is available.",
+        "Open marketplace registration",
+      ));
+    }
+    const remote = asObject(auth.remoteValidation || {});
+    if (connector.cloudRelayEnabled === true && remote.state === "offline_pending") {
+      items.push(notification(
+        "shre_connector_validation_offline",
+        "warning",
+        "Shre connector validation is offline",
+        "Local work can continue, but cloud relay and billing validation need Shre Auth connectivity.",
+        "Review login status",
+      ));
+    }
+  }
+
+  if (connection.applicationKey) {
+    const cstoreskuStatus = String(cstoresku.status || "not_linked");
+    const linked = cstoresku.linked === true;
+    const healthyStatuses = new Set(["linked", "synced", "active", "ready"]);
+    if (!linked || !healthyStatuses.has(cstoreskuStatus)) {
+      items.push(notification(
+        "cstoresku_link_attention",
+        "critical",
+        "CStoreSKU link needs attention",
+        `CStoreSKU key is configured, but link status is ${cstoreskuStatus}.`,
+        "Open Verifone setup",
+      ));
+    }
   }
 
   if (mode === "read_only") {
@@ -1201,7 +1238,7 @@ async function diskFreeBytes(path: string): Promise<number | null> {
 function storagePolicy(): JsonObject {
   const fallbackBackupPath = join(homedir(), "VerifoneCommanderBackups");
   const policy = store.getJson<JsonObject>("storage", "policy", {});
-  const retentionDays = retentionOptions.includes(Number(policy.retentionDays)) ? Number(policy.retentionDays) : 30;
+  const retentionDays = normalizeRetentionDays(policy.retentionDays, 30);
   return {
     retentionDays,
     retentionOptions,
@@ -1217,7 +1254,7 @@ function storagePolicy(): JsonObject {
 
 function normalizeStoragePolicy(body: JsonObject): JsonObject {
   const current = storagePolicy();
-  const retentionDays = retentionOptions.includes(Number(body.retentionDays)) ? Number(body.retentionDays) : Number(current.retentionDays);
+  const retentionDays = normalizeRetentionDays(body.retentionDays, Number(current.retentionDays));
   const backupTarget = ["local_folder", "shre_platform_synology", "both"].includes(String(body.backupTarget)) ? String(body.backupTarget) : String(current.backupTarget);
   return {
     retentionDays,
@@ -1229,6 +1266,12 @@ function normalizeStoragePolicy(body: JsonObject): JsonObject {
     updatedAt: new Date().toISOString(),
     lastBackup: current.lastBackup || null,
   };
+}
+
+function normalizeRetentionDays(value: JsonValue | undefined, fallback: number): number {
+  const days = Math.floor(Number(value));
+  if (!Number.isFinite(days)) return fallback;
+  return Math.min(3650, Math.max(1, days));
 }
 
 async function storageOverview(): Promise<JsonObject> {

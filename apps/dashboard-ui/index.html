@@ -266,8 +266,10 @@
                 <option value="90">3 months</option>
                 <option value="180">6 months</option>
                 <option value="365">1 year</option>
+                <option value="custom">Custom</option>
               </select>
             </label>
+            <label>Custom Days<input name="customRetentionDays" type="number" min="1" max="3650" placeholder="45"></label>
             <label>Backup Target
               <select name="backupTarget">
                 <option value="local_folder">Local backup folder</option>
@@ -709,6 +711,16 @@
       const policy = storage.policy || {};
       const analysis = storage.analysis || {};
       document.querySelector('#storagePolicyForm select[name="retentionDays"]').value = String(policy.retentionDays || 30);
+      const retentionSelect = document.querySelector('#storagePolicyForm select[name="retentionDays"]');
+      const customRetention = document.querySelector('#storagePolicyForm input[name="customRetentionDays"]');
+      const presetValues = Array.from(retentionSelect.options).map((option) => option.value);
+      if (presetValues.includes(String(policy.retentionDays || 30))) {
+        retentionSelect.value = String(policy.retentionDays || 30);
+        customRetention.value = "";
+      } else {
+        retentionSelect.value = "custom";
+        customRetention.value = String(policy.retentionDays || "");
+      }
       document.querySelector('#storagePolicyForm select[name="backupTarget"]').value = policy.backupTarget || "local_folder";
       document.querySelector('#storagePolicyForm select[name="backupEnabled"]').value = policy.backupEnabled ? "true" : "false";
       document.querySelector('#storagePolicyForm input[name="localBackupPath"]').value = policy.localBackupPath || "";
@@ -886,7 +898,8 @@
     $("storagePolicyForm").onsubmit = async (event) => {
       event.preventDefault();
       const body = formObject(event.target);
-      body.retentionDays = Number(body.retentionDays || 30);
+      body.retentionDays = body.retentionDays === "custom" ? Number(body.customRetentionDays || 30) : Number(body.retentionDays || 30);
+      delete body.customRetentionDays;
       body.backupEnabled = body.backupEnabled === "true";
       body.shrePlatformSynologyEnabled = body.backupTarget === "shre_platform_synology" || body.backupTarget === "both";
       await api("/api/storage/policy", { method: "POST", body: JSON.stringify(body) });

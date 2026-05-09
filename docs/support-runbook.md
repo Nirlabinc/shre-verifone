@@ -46,6 +46,8 @@ Every API response includes an `x-request-id` header. The activity log records `
 
 The dashboard header and Overview screen show notifications from `/api/notifications` when Verifone is disconnected, password action is required, queue work fails or waits, marketplace activation is missing, or local sales data has not been ingested.
 
+Activated connectors also surface top alerts. If CStoreSKU key is configured but the local sync status is not healthy, or if Shre cloud relay is activated without a signing secret or cannot validate, `/api/notifications` returns a warning or critical alert.
+
 `GET /api/readiness` is the go-live checklist endpoint. `ready: true` means no critical local blockers remain. `productionReady: true` also requires production Shre Auth signup and usage billing endpoints to be configured.
 
 If login validation shows `offline_pending`, the user can continue local work. Confirm internet access and `SHRE_AUTH_VALIDATE_URL`, then use `POST /api/auth/validate` or wait for background retry.
