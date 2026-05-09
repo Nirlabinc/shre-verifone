@@ -52,6 +52,31 @@ Installer and release scripts should treat the runtime directory as customer dat
 - Keep backup/export tooling before any destructive maintenance action.
 - Only clear runtime data through an explicit support/admin reset workflow.
 
+## Runtime Protection Guard
+
+Installer/update scripts must run the runtime guard before making changes:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/protect-runtime.ps1 -MarkProtected -Assert
+```
+
+```sh
+./scripts/protect-runtime.sh mark
+```
+
+The guard creates a `.runtime-protected` marker in the runtime directory and fails destructive reset unless the support/admin override is explicit:
+
+```powershell
+$env:ALLOW_VERIFONE_RUNTIME_RESET="I_UNDERSTAND_DELETE_LOCAL_DATA"
+powershell -ExecutionPolicy Bypass -File scripts/protect-runtime.ps1 -AllowReset
+```
+
+```sh
+ALLOW_VERIFONE_RUNTIME_RESET=I_UNDERSTAND_DELETE_LOCAL_DATA ./scripts/protect-runtime.sh allow-reset
+```
+
+This is an installer safety lock, not a replacement for OS permissions. A local machine administrator can still manually remove files, but our update path must not delete the runtime folder by default.
+
 ## Recommended Future Split
 
 Keep this default:

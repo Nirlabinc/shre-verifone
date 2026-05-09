@@ -29,6 +29,7 @@ Download installer
 | Install | Node/runtime dependencies | bundled installer or package manager | yes | install folder | One-command install should install or bundle these. |
 | Install | service port | default `5480` or installer option | yes | service config/env | Default local URL is `http://localhost:5480`; alias can expose `http://cstoresku:5480`. |
 | Install | runtime path | default user profile or installer option | yes | filesystem | Default is `%USERPROFILE%\.verifone-shre-cstoresku` or `~/.verifone-shre-cstoresku`. |
+| Install | runtime protection marker | installer/update script | yes | runtime folder | `.runtime-protected` prevents accidental installer deletion; reset requires explicit support override. |
 | Security | local login secret | user creates on first launch | yes | encrypted `app_state` hash | Secret itself is never stored. Login works offline. |
 | Security | local admin token | installer/support generated optional value | no | service env | Used for service/admin access when configured. |
 | Security | install encryption secret | generated locally or set by installer | yes | `.install-secret` or env | Protects SQLite JSON state at rest. |
