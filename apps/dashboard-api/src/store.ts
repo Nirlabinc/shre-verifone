@@ -297,6 +297,7 @@ export class RuntimeStore {
       connectorId: registration.connectorId || "verifone-commander",
       connectorName: registration.connectorName || "Verifone Commander",
       tenantId: registration.tenantId || "",
+      workspaceId: registration.workspaceId || "",
       storeId: registration.storeId || "",
       app: registration.app || "verifone_cstoresku",
       mode: registration.mode || "local_first",
@@ -315,6 +316,7 @@ export class RuntimeStore {
       connectorId: "verifone-commander",
       connectorName: "Verifone Commander",
       tenantId: "",
+      workspaceId: "",
       storeId: "",
       app: "verifone_cstoresku",
       mode: "local_first",
@@ -626,6 +628,7 @@ export class RuntimeStore {
   saveChatAudit(entry: {
     source: string;
     tenantId?: string;
+    workspaceId?: string;
     storeId?: string;
     userId?: string;
     messageText: string;

@@ -139,7 +139,7 @@ The inbound endpoint accepts the canonical local payload plus gateway-shaped pay
 - `source`, `channel`, or `provider`
 - `messageText`, `text`, `prompt`, `content`, or `query`
 - `message.text`, `message.content`, or the latest `messages[].content`
-- `tenantId`/`storeId` directly or through `context`
+- `tenantId`/`workspaceId`/`storeId` directly or through `context`
 - optional `businessDate` directly or through `context`
 
 Example:
@@ -148,6 +148,7 @@ Example:
 {
   "source": "whatsapp",
   "tenantId": "tenant_rapid_001",
+  "workspaceId": "workspace_ops_001",
   "storeId": "store_001",
   "userId": "operator_1",
   "messageId": "msg_001",
@@ -161,6 +162,7 @@ Gateway-shaped example:
 {
   "provider": "anthropic",
   "tenantId": "tenant_rapid_001",
+  "workspaceId": "workspace_ops_001",
   "storeId": "store_001",
   "message": { "id": "msg_claude_001" },
   "messages": [

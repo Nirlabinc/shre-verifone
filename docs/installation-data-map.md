@@ -34,6 +34,7 @@ Download installer
 | Security | install encryption secret | generated locally or set by installer | yes | `.install-secret` or env | Protects SQLite JSON state at rest. |
 | Store profile | company/legal name | user or Shre tenant registry | yes | `profile/current` | Example: Rapid Infosoft LLC customer tenant. |
 | Store profile | tenant ID | Shre Auth/MIB signup activation | yes for cloud relay | connector registration | Auto-generated or looked up by Shre Auth so the user does not manually copy it. |
+| Store profile | workspace ID | Shre Auth/MIB signup activation | yes for cloud relay | profile and connector registration | Auto-generated or looked up by Shre Auth. Groups stores/connectors under the tenant. |
 | Store profile | store ID | Shre Auth/MIB signup activation, CStoreSKU/RapidRMS import, or support | yes | profile and connector registration | Auto-generated or looked up during signup activation. |
 | Store profile | contact email/timezone | user | recommended | `profile/current` | Used for support and local timestamp display. |
 | Verifone | Commander URL/IP | user/support/local network discovery | yes | encrypted connection state | Example: `http://192.168.1.50`. |
@@ -66,9 +67,10 @@ Cloud/gateway setup adds:
 
 - Shre Auth email/password.
 - Company name.
+- Workspace name.
 - Store name or store code.
 - Connector activation choice.
-- Advanced support mode can accept tenant ID, store ID, and connector signing secret directly.
+- Advanced support mode can accept tenant ID, workspace ID, store ID, and connector signing secret directly.
 
 ## What The App Discovers
 
@@ -86,7 +88,7 @@ Cloud/gateway setup adds:
 ## What Comes From Shre/MIB
 
 - Shre Auth signup/activation endpoint.
-- Tenant ID and store registry record.
+- Tenant ID, workspace ID, and store registry record.
 - Connector registry URL.
 - Connector signing secret or activation token.
 - Allowed channels and routing policy.
@@ -103,7 +105,7 @@ Detailed credential steps are in [Credential Acquisition](credential-acquisition
 3. Local login is configured and tested offline.
 4. Commander connection validates successfully.
 5. Password status is valid or expiration workflow is configured.
-6. Connector is activated with the correct tenant/store.
+6. Connector is activated with the correct tenant/workspace/store.
 7. Signed inbound test message succeeds.
 8. Local sales snapshot or live ingest exists.
 9. Sales question returns local data.

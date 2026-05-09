@@ -87,7 +87,7 @@ The existing Shre SDK family uses the same wire contract across Swift, .NET, Pyt
 - Events endpoint: `/v1/events/batch`
 - Heartbeat endpoint: `/v1/sdk/heartbeat`
 - Required context: `tenantId`, `app`
-- Optional context: `storeId`, `userId`, `role`
+- Optional context: `workspaceId`, `storeId`, `userId`, `role`
 - Events are idempotent by `eventId`
 - Local queue with retry/backoff is expected
 - Read-only mode is the default for analytics

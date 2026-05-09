@@ -223,6 +223,7 @@
             <label>Email<input name="email" type="email" autocomplete="email" placeholder="owner@example.com"></label>
             <label>Password<input name="password" type="password" autocomplete="new-password"></label>
             <label>Company<input name="company" autocomplete="organization"></label>
+            <label>Workspace<input name="workspaceName" placeholder="Operations"></label>
             <label>Store Name<input name="storeName" placeholder="Main Store"></label>
             <label>Store Code<input name="storeCode" placeholder="store_001"></label>
           </div>
@@ -233,6 +234,7 @@
           <h2>Manual Marketplace Registration</h2>
           <div class="fields">
             <label>Tenant ID<input name="tenantId" placeholder="tenant_rapid_001"></label>
+            <label>Workspace ID<input name="workspaceId" placeholder="workspace_ops_001"></label>
             <label>Store ID<input name="storeId" placeholder="store_001"></label>
             <label>Registry URL<input name="registryUrl" value="https://connector.aros.live"></label>
             <label>Cloud Relay
@@ -433,7 +435,7 @@
         $("mVerifone").textContent = verifone.configured ? "Configured" : "Not configured";
         $("mValidation").textContent = verifone.lastValidation ? `${verifone.lastValidation.status} at ${verifone.lastValidation.checkedAt}` : "Not validated";
         $("mConnector").textContent = connector.status || "local_only";
-        $("mTenant").textContent = connector.tenantId ? `${connector.tenantId} / ${connector.storeId}` : "No cloud tenant mapped";
+        $("mTenant").textContent = connector.tenantId ? `${connector.tenantId} / ${connector.workspaceId || "no_workspace"} / ${connector.storeId}` : "No cloud tenant mapped";
         $("mQueue").textContent = `${queue.pending || 0} pending`;
         $("mQueueErr").textContent = queue.lastError || `${queue.completed || 0} completed, ${queue.failed || 0} failed`;
         $("passwordStatus").textContent = password.state || "unknown";

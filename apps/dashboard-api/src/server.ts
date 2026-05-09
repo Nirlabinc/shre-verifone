@@ -176,6 +176,7 @@ async function validateLoginRemote(reason: string): Promise<void> {
         app: "verifone_cstoresku",
         connectorId: connector.connectorId || "verifone-commander",
         tenantId: connector.tenantId || "",
+        workspaceId: connector.workspaceId || "",
         storeId: connector.storeId || "",
         reason,
       }),
@@ -397,6 +398,7 @@ function normalizeInboundMessage(body: JsonObject, registration: JsonObject): Js
   return {
     source,
     tenantId: typeof body.tenantId === "string" ? body.tenantId : String(context.tenantId || registration.tenantId || ""),
+    workspaceId: typeof body.workspaceId === "string" ? body.workspaceId : String(context.workspaceId || registration.workspaceId || ""),
     storeId: typeof body.storeId === "string" ? body.storeId : String(context.storeId || registration.storeId || ""),
     userId: String(body.userId || body.senderId || body.from || message.from || context.userId || ""),
     messageId: String(body.messageId || body.id || message.id || randomUUID()),
@@ -418,6 +420,7 @@ async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
   const email = requireString(body, "email").toLowerCase();
   const password = requireString(body, "password");
   const company = requireString(body, "company");
+  const workspaceName = typeof body.workspaceName === "string" && body.workspaceName.trim() ? body.workspaceName.trim() : company;
   const storeName = typeof body.storeName === "string" && body.storeName.trim() ? body.storeName.trim() : "Main Store";
   const storeCode = typeof body.storeCode === "string" && body.storeCode.trim() ? body.storeCode.trim() : slug(storeName);
   const localManifest = store.connectorManifest(localBaseUrlFromString(typeof body.localBaseUrl === "string" ? body.localBaseUrl : ""));
@@ -438,6 +441,7 @@ async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
         email,
         password,
         company,
+        workspaceName,
         storeName,
         storeCode,
         app: "verifone_cstoresku",
@@ -456,6 +460,7 @@ async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
     activation = {
       status: "activated",
       tenantId: `tenant_${slug(company)}_${createHash("sha256").update(email).digest("hex").slice(0, 8)}`,
+      workspaceId: `workspace_${slug(workspaceName)}_${createHash("sha256").update(`${email}|${workspaceName}`).digest("hex").slice(0, 8)}`,
       storeId: `store_${slug(storeCode)}_${createHash("sha256").update(base).digest("hex").slice(0, 8)}`,
       connectorId: "verifone-commander",
       connectorName: "Verifone Commander",
@@ -471,15 +476,17 @@ async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
   }
 
   const tenantId = String(activation.tenantId || "");
+  const workspaceId = String(activation.workspaceId || activation.workspace || "");
   const storeId = String(activation.storeId || "");
   const sharedSecret = String(activation.sharedSecret || activation.connectorSharedSecret || "");
-  if (!tenantId || !storeId || !sharedSecret) {
-    throw new Error("Shre activation response must include tenantId, storeId, and sharedSecret");
+  if (!tenantId || !workspaceId || !storeId || !sharedSecret) {
+    throw new Error("Shre activation response must include tenantId, workspaceId, storeId, and sharedSecret");
   }
   const registration = store.saveConnectorRegistration({
     connectorId: String(activation.connectorId || "verifone-commander"),
     connectorName: String(activation.connectorName || "Verifone Commander"),
     tenantId,
+    workspaceId,
     storeId,
     app: "verifone_cstoresku",
     mode: String(activation.mode || "local_first"),
@@ -498,6 +505,8 @@ async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
   store.setJson("profile", "current", {
     ...store.getJson<JsonObject>("profile", "current", {}),
     company,
+    workspaceId,
+    workspaceName,
     storeId,
     contactEmail: email,
   });
@@ -515,6 +524,7 @@ async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
     ok: true,
     registration,
     tenantId,
+    workspaceId,
     storeId,
     connectorId: registration.connectorId,
     registryUrl: registration.registryUrl,
@@ -1129,6 +1139,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       connectorName: typeof body.connectorName === "string" ? body.connectorName : "Verifone Commander",
       tenantId: typeof body.tenantId === "string" ? body.tenantId : "",
       storeId: typeof body.storeId === "string" ? body.storeId : "",
+      workspaceId: typeof body.workspaceId === "string" ? body.workspaceId : "",
       app: typeof body.app === "string" ? body.app : "verifone_cstoresku",
       mode: typeof body.mode === "string" ? body.mode : "local_first",
       cloudRelayEnabled: body.cloudRelayEnabled === true,
@@ -1230,9 +1241,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const messageText = requireString(inbound, "messageText");
       const source = String(inbound.source || "unknown");
       const tenantId = String(inbound.tenantId || "");
+      const workspaceId = String(inbound.workspaceId || "");
       const storeId = String(inbound.storeId || "");
-      if (registration.status === "activated" && (tenantId !== registration.tenantId || storeId !== registration.storeId)) {
-        sendJson(res, 403, { error: "Inbound tenant/store does not match local connector activation" });
+      if (registration.status === "activated" && (
+        tenantId !== registration.tenantId ||
+        storeId !== registration.storeId ||
+        (registration.workspaceId && workspaceId !== registration.workspaceId)
+      )) {
+        sendJson(res, 403, { error: "Inbound tenant/workspace/store does not match local connector activation" });
         return;
       }
       const allowedSources = new Set(["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "shre-cli", "unknown"]);
@@ -1256,6 +1272,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         payload: {
           source,
           tenantId,
+          workspaceId,
           storeId,
           userId,
           messageText,
@@ -1274,6 +1291,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         mode: registration.cloudRelayEnabled ? "cloud_relay" : "local_first",
         source,
         tenantId,
+        workspaceId,
         storeId,
         intent: classification.intent,
         queuedOperation: queueItem.id,
@@ -1284,6 +1302,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
           schemaVersion: "2026-05-09",
           connectorId: registration.connectorId || "verifone-commander",
           tenantId,
+          workspaceId,
           storeId,
           source,
           messageId: String(inbound.messageId || ""),
@@ -1296,6 +1315,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const audit = store.saveChatAudit({
         source,
         tenantId,
+        workspaceId,
         storeId,
         userId,
         messageText,
@@ -1323,6 +1343,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const messageText = requireString(body, "messageText");
       const connector = store.connectorStatus();
       const tenantId = typeof body.tenantId === "string" ? body.tenantId : String(connector.tenantId || "");
+      const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId : String(connector.workspaceId || "");
       const storeId = typeof body.storeId === "string" ? body.storeId : String(connector.storeId || "");
       const classification = classifyMessage(messageText);
       const connectorResponse = classification.intent === "sales_query"
@@ -1340,6 +1361,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const audit = store.saveChatAudit({
         source: "local-chat",
         tenantId,
+        workspaceId,
         storeId,
         userId: typeof body.userId === "string" ? body.userId : "local-dashboard",
         messageText,

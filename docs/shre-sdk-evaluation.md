@@ -31,6 +31,7 @@ The language SDKs use a consistent event SDK contract:
 Required configuration:
 
 - `tenantId`
+- `workspaceId`
 - `app`
 
 Optional context:

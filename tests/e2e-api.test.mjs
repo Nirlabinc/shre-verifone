@@ -123,6 +123,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
         email: "owner@example.com",
         password: "shre-login-password",
         company: "Rapid Infosoft LLC",
+        workspaceName: "Operations",
         storeName: "Store 001",
         storeCode: "store_001",
       }),
@@ -131,6 +132,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(shreSignup.body.ok, true);
     assert.equal(shreSignup.body.simulated, true);
     assert.match(shreSignup.body.tenantId, /^tenant_/);
+    assert.match(shreSignup.body.workspaceId, /^workspace_/);
     assert.match(shreSignup.body.storeId, /^store_/);
     assert.equal(shreSignup.body.cloudRelayEnabled, true);
 
@@ -215,6 +217,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
         connectorId: "verifone-commander",
         connectorName: "Verifone Commander",
         tenantId: "tenant_rapid_001",
+        workspaceId: "workspace_ops_001",
         storeId: "store_001",
         app: "verifone_cstoresku",
         cloudRelayEnabled: true,
@@ -224,6 +227,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(connector.response.status, 200);
     assert.equal(connector.body.status, "activated");
     assert.equal(connector.body.cloudRelayEnabled, true);
+    assert.equal(connector.body.workspaceId, "workspace_ops_001");
     assert.equal(connector.body.registryUrl, "https://connector.aros.live");
     assert.deepEqual(connector.body.relatedConnectors, ["rapidrms-api"]);
 
@@ -272,6 +276,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       body: JSON.stringify({
         source: "whatsapp",
         tenantId: "tenant_rapid_001",
+        workspaceId: "workspace_ops_001",
         storeId: "store_001",
         userId: "operator_1",
         messageId: "msg_001",
@@ -300,10 +305,12 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(inbound.body.queuedOperation);
     assert.equal(inbound.body.gatewayResponse.status, "answered");
     assert.equal(inbound.body.gatewayResponse.source, "whatsapp");
+    assert.equal(inbound.body.gatewayResponse.workspaceId, "workspace_ops_001");
 
     const claudeInbound = signedBody({
       provider: "anthropic",
       tenantId: "tenant_rapid_001",
+      workspaceId: "workspace_ops_001",
       storeId: "store_001",
       message: { id: "msg_claude_001" },
       messages: [{ role: "user", content: "Show sales today" }],

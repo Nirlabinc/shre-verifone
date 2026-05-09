@@ -20,6 +20,7 @@ Have these ready:
 
 - Store number or store ID.
 - Company/tenant name.
+- Workspace name if your Shre account uses multiple workspaces.
 - Verifone Commander IP/URL.
 - Commander username and password.
 - CStoreSKU/RapidRMS application key if required.
@@ -44,7 +45,7 @@ See [Credential Acquisition](credential-acquisition.md) for where to obtain the 
 9. Ask a test sales question and confirm the response uses local data.
 10. Review activity log and diagnostics.
 
-Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally uses Shre Auth to create or find the tenant/store and activate the connector. Manual tenant/store/signing-secret entry should only be used by support.
+Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally uses Shre Auth to create or find the tenant/workspace/store and activate the connector. Manual tenant/workspace/store/signing-secret entry should only be used by support.
 
 ## Normal Daily Operation
 
