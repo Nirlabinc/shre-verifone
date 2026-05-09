@@ -32,7 +32,7 @@ Runtime manifest:
 GET /api/connector/manifest
 ```
 
-The runtime manifest is preferred during activation because it includes the active local base URL.
+The runtime manifest is preferred during activation because it includes the active local base URL. If the user opens `http://cstoresku:5480`, the runtime manifest emits `cstoresku` endpoints unless `LOCAL_BASE_URL` is configured.
 
 ## Registration Flow
 

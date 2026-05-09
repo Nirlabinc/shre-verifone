@@ -163,6 +163,14 @@ Recommended defaults:
 
 Keep all APIs bound to localhost by default.
 
+The preferred user-facing loopback alias is:
+
+```text
+http://cstoresku:5480
+```
+
+This is a hosts-file alias for `127.0.0.1`, not LAN exposure. `cstoresku.local` is optional and may conflict with mDNS. See [Local Alias](local-alias.md).
+
 ## Container Strategy
 
 Development and production should support:
@@ -181,3 +189,5 @@ Development and production should support:
 - Treat Shre `bootstrapKey` as a secret.
 - Use read-only Shre mode unless the local service must perform remote actions.
 - Tenant isolation is mandatory on all Shre requests.
+- Cloud relay inbound requests must be signed with timestamp, nonce, tenant ID, agent ID, and HMAC signature.
+- Mutating JSON APIs reject non-JSON content types and cross-origin browser origins.

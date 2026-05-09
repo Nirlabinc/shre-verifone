@@ -62,6 +62,7 @@ Local database choice is documented in [docs/local-database-decision.md](docs/lo
 Setup, onboarding, support, and specs:
 
 - [Setup Tree](docs/setup-tree.md)
+- [Local Alias](docs/local-alias.md)
 - [Customer Onboarding](docs/customer-onboarding.md)
 - [Developer Onboarding](docs/developer-onboarding.md)
 - [Support Runbook](docs/support-runbook.md)
@@ -105,8 +106,11 @@ npm run dev:api
 Open:
 
 ```text
+http://cstoresku:5480
 http://localhost:5480
 ```
+
+To enable the `cstoresku` loopback alias, see [docs/local-alias.md](docs/local-alias.md). The alias maps to the same local machine and does not expose the service to the LAN.
 
 Build:
 

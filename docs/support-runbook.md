@@ -2,7 +2,7 @@
 
 ## First Checks
 
-1. Open the dashboard: `http://localhost:5480`.
+1. Open the dashboard: `http://cstoresku:5480` or `http://localhost:5480`.
 2. Check `/api/health`.
 3. Check connector status.
 4. Check Verifone status.
@@ -23,6 +23,14 @@ POST /api/sales/query
 GET /api/activity
 POST /api/diagnostics/bundle
 ```
+
+## Alias Troubleshooting
+
+- Run `npm run alias:check` on Windows.
+- Confirm the hosts file contains the managed `cstoresku` block.
+- Try `http://localhost:5480` if `http://cstoresku:5480` does not resolve.
+- Clear browser DNS cache or restart the browser after changing hosts entries.
+- In Docker, confirm the API is published as `127.0.0.1:5480:5480` and the container has `HOST=0.0.0.0`.
 
 ## Common Issues
 

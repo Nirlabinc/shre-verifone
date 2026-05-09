@@ -6,6 +6,7 @@ services:
     command: ["node", "dist/apps/dashboard-api/src/server.js"]
     environment:
       PORT: "5480"
+      HOST: "0.0.0.0"
       VERIFONE_SHRE_HOME: /runtime
       SHRE_ENDPOINT: ${SHRE_ENDPOINT:-https://apiauth.shre.ai}
       SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://events.shre.ai}
@@ -13,10 +14,12 @@ services:
       SHRE_APP: ${SHRE_APP:-verifone_cstoresku}
       SHRE_MODE: ${SHRE_MODE:-read_only}
       CONNECTOR_REGISTRY_URL: ${CONNECTOR_REGISTRY_URL:-https://connector.aros.live}
+      CONNECTOR_SHARED_SECRET: ${CONNECTOR_SHARED_SECRET:-}
+      LOCAL_BASE_URL: ${LOCAL_BASE_URL:-http://cstoresku:5480}
     volumes:
       - verifone-shre-runtime:/runtime
     ports:
-      - "5480:5480"
+      - "127.0.0.1:5480:5480"
     restart: unless-stopped
 
   shre-connector:

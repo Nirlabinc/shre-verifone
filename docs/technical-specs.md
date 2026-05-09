@@ -6,6 +6,8 @@
 - TypeScript.
 - SQLite with WAL.
 - Local HTTP API on port `5480`.
+- Default host bind: `127.0.0.1`.
+- Supported loopback aliases: `cstoresku`, optional `cstoresku.local`.
 - Docker Compose support.
 
 ## Local Storage

@@ -4,9 +4,11 @@ import { spawn } from "node:child_process";
 import { mkdtemp, rm, access, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHmac, randomUUID } from "node:crypto";
 
 const port = 20_000 + Math.floor(Math.random() * 20_000);
 const baseUrl = `http://127.0.0.1:${port}`;
+const connectorSecret = "test-connector-secret";
 
 async function waitForHealth(child) {
   const deadline = Date.now() + 10_000;
@@ -38,6 +40,26 @@ async function json(path, options = {}) {
   return { response, body };
 }
 
+function signedBody(body, tenantId = "tenant_rapid_001") {
+  const text = JSON.stringify(body);
+  const timestamp = String(Date.now());
+  const nonce = randomUUID();
+  const agentId = "e2e-agent";
+  const signature = createHmac("sha256", connectorSecret)
+    .update(`${timestamp}.${nonce}.${tenantId}.${agentId}.${text}`)
+    .digest("hex");
+  return {
+    body: text,
+    headers: {
+      "x-shre-timestamp": timestamp,
+      "x-shre-nonce": nonce,
+      "x-shre-tenant-id": tenantId,
+      "x-shre-agent-id": agentId,
+      "x-shre-signature": `sha256=${signature}`,
+    },
+  };
+}
+
 test("local-first onboarding, password, queue, and diagnostics flow", async () => {
   const runtimeRoot = await mkdtemp(join(tmpdir(), "verifone-shre-e2e-"));
   const child = spawn(process.execPath, ["dist/apps/dashboard-api/src/server.js"], {
@@ -45,8 +67,10 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     env: {
       ...process.env,
       PORT: String(port),
+      HOST: "127.0.0.1",
       VERIFONE_SHRE_HOME: runtimeRoot,
       CONNECTOR_REGISTRY_URL: "https://connector.aros.live",
+      CONNECTOR_SHARED_SECRET: connectorSecret,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -100,6 +124,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     });
     assert.equal(config.response.status, 200);
     assert.equal(config.body.connection.password, "***");
+    assert.equal(config.body.connection.applicationKey, "***");
 
     const validation = await json("/api/verifone/validate", {
       method: "POST",
@@ -192,7 +217,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(salesQuery.body.status, "answered");
     assert.match(salesQuery.body.answer, /\$1842\.55/);
 
-    const inbound = await json("/api/messages/inbound", {
+    const unsignedInbound = await json("/api/messages/inbound", {
       method: "POST",
       body: JSON.stringify({
         source: "whatsapp",
@@ -203,12 +228,47 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
         messageText: "What were sales today?",
       }),
     });
+    assert.equal(unsignedInbound.response.status, 401);
+
+    const signedInbound = signedBody({
+      source: "whatsapp",
+      tenantId: "tenant_rapid_001",
+      storeId: "store_001",
+      userId: "operator_1",
+      messageId: "msg_001",
+      messageText: "What were sales today?",
+    });
+    const inbound = await json("/api/messages/inbound", {
+      method: "POST",
+      ...signedInbound,
+    });
     assert.equal(inbound.response.status, 202);
     assert.equal(inbound.body.intent, "sales_query");
     assert.equal(inbound.body.mode, "cloud_relay");
     assert.equal(inbound.body.connectorResponse.status, "answered");
     assert.match(inbound.body.message, /\$1842\.55/);
     assert.ok(inbound.body.queuedOperation);
+
+    const replayedInbound = await json("/api/messages/inbound", {
+      method: "POST",
+      ...signedInbound,
+    });
+    assert.equal(replayedInbound.response.status, 401);
+    assert.equal(replayedInbound.body.reason, "replayed_nonce");
+
+    const mismatchedInbound = signedBody({
+      source: "whatsapp",
+      tenantId: "tenant_wrong",
+      storeId: "store_001",
+      userId: "operator_1",
+      messageId: "msg_002",
+      messageText: "What were sales today?",
+    }, "tenant_wrong");
+    const mismatch = await json("/api/messages/inbound", {
+      method: "POST",
+      ...mismatchedInbound,
+    });
+    assert.equal(mismatch.response.status, 403);
 
     const audit = await json("/api/messages/audit");
     assert.equal(audit.response.status, 200);

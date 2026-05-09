@@ -183,7 +183,9 @@ This is intentionally simple for the first E2E milestone. Later, Shre can provid
 ## Security Rules
 
 - Cloud gateway must authenticate to local connector before production exposure.
-- Local API should stay bound to localhost unless a secure tunnel/agent is installed.
+- Local API should stay bound to loopback unless a secure tunnel/agent is installed.
+- `cstoresku` is a loopback hosts-file alias, not LAN/cloud exposure.
+- Cloud relay inbound requests must include timestamp, nonce, tenant ID, agent ID, and HMAC signature.
 - Tenant ID and store ID must match local activation.
 - Passwords and secrets are never included in message audits.
 - Write-capable commands should require explicit operator permission.

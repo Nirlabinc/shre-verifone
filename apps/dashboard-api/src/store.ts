@@ -61,6 +61,11 @@ interface SalesSnapshotRow {
   created_at: string;
 }
 
+interface NonceRow {
+  nonce: string;
+  expires_at: string;
+}
+
 export interface RuntimeStoreOptions {
   connectorRegistryUrl: string;
 }
@@ -341,7 +346,8 @@ export class RuntimeStore {
       },
       relatedConnectors: ["rapidrms-api"],
       security: {
-        requiredHeaders: ["x-shre-tenant-id", "x-shre-agent-id", "x-shre-signature"],
+        requiredHeaders: ["x-shre-tenant-id", "x-shre-agent-id", "x-shre-timestamp", "x-shre-nonce", "x-shre-signature"],
+        signature: "hmac-sha256(timestamp.nonce.tenantId.agentId.rawBody)",
         localCredentialStorage: "encrypted-local-secret",
         writesRequireCommanderLease: true,
       },
@@ -430,6 +436,17 @@ export class RuntimeStore {
       businessDate: String(snapshot.businessDate),
       data: snapshot,
     };
+  }
+
+  consumeConnectorNonce(nonce: string, ttlSeconds = 300): boolean {
+    const now = new Date();
+    const nowIso = now.toISOString();
+    this.db.prepare("delete from connector_nonces where expires_at <= ?").run(nowIso);
+    const existing = this.db.prepare("select nonce, expires_at from connector_nonces where nonce = ?").get(nonce) as NonceRow | undefined;
+    if (existing) return false;
+    const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString();
+    this.db.prepare("insert into connector_nonces (nonce, expires_at, created_at) values (?, ?, ?)").run(nonce, expiresAt, nowIso);
+    return true;
   }
 
   saveChatAudit(entry: {
@@ -690,6 +707,12 @@ export class RuntimeStore {
 
       create index if not exists idx_sales_snapshots_business_date
       on sales_snapshots (business_date, created_at);
+
+      create table if not exists connector_nonces (
+        nonce text primary key,
+        expires_at text not null,
+        created_at text not null
+      );
 
       insert or ignore into schema_migrations (version, applied_at)
       values (1, datetime('now'));

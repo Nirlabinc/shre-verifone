@@ -11,6 +11,9 @@
     "dev:api": "node --watch dist/apps/dashboard-api/src/server.js",
     "start:api": "node dist/apps/dashboard-api/src/server.js",
     "start:shre": "node dist/services/shre-connector/src/worker.js",
+    "alias:check": "powershell -ExecutionPolicy Bypass -File scripts/configure-local-alias.ps1 -Check",
+    "alias:install": "powershell -ExecutionPolicy Bypass -File scripts/configure-local-alias.ps1 -Install",
+    "alias:remove": "powershell -ExecutionPolicy Bypass -File scripts/configure-local-alias.ps1 -Remove",
     "test:e2e": "npm run build && node --test tests/e2e-api.test.mjs",
     "check": "npm run build && npm run test:e2e"
   },

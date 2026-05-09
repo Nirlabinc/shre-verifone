@@ -67,7 +67,14 @@
     "diagnostics"
   ],
   "security": {
-    "requiredHeaders": ["x-shre-tenant-id", "x-shre-agent-id", "x-shre-signature"],
+    "requiredHeaders": [
+      "x-shre-tenant-id",
+      "x-shre-agent-id",
+      "x-shre-timestamp",
+      "x-shre-nonce",
+      "x-shre-signature"
+    ],
+    "signature": "hmac-sha256(timestamp.nonce.tenantId.agentId.rawBody)",
     "localCredentialStorage": "encrypted-local-secret",
     "writesRequireCommanderLease": true
   }

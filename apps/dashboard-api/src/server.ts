@@ -3,12 +3,15 @@ import { readFile, mkdir, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir, hostname, platform, arch, totalmem, freemem, cpus } from "node:os";
-import { createHash, randomBytes, randomUUID, createCipheriv, createDecipheriv } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, createCipheriv, createDecipheriv, timingSafeEqual } from "node:crypto";
 import { RuntimeStore, type JsonObject, type JsonValue } from "./store.js";
 
 const port = Number(process.env.PORT || 5480);
+const host = process.env.HOST || "127.0.0.1";
 const runtimeRoot = process.env.VERIFONE_SHRE_HOME || join(homedir(), ".verifone-shre-cstoresku");
 const connectorRegistryUrl = process.env.CONNECTOR_REGISTRY_URL || "https://connector.aros.live";
+const connectorSharedSecret = process.env.CONNECTOR_SHARED_SECRET || "";
+const localBaseUrlOverride = process.env.LOCAL_BASE_URL || "";
 const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
 
@@ -20,22 +23,66 @@ async function ensureRuntime(): Promise<void> {
 }
 
 async function requestBody(req: IncomingMessage): Promise<JsonValue> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(Buffer.from(chunk));
-  const text = Buffer.concat(chunks).toString("utf8").trim();
+  const text = await requestText(req);
   return text ? JSON.parse(text) as JsonValue : {};
+}
+
+async function requestText(req: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  for (const chunk of chunks) bytes += chunk.byteLength;
+  if (bytes > 1_000_000) throw new Error("Request body too large");
+  return Buffer.concat(chunks).toString("utf8").trim();
 }
 
 function sendJson(res: ServerResponse, statusCode: number, body: JsonValue): void {
   res.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
   });
   res.end(JSON.stringify(body, null, 2));
 }
 
 function badRequest(res: ServerResponse, message: string): void {
   sendJson(res, 400, { error: message });
+}
+
+function isMutating(method: string | undefined): boolean {
+  return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+}
+
+function enforceJsonRequest(req: IncomingMessage, res: ServerResponse): boolean {
+  if (!isMutating(req.method)) return true;
+  const contentType = String(req.headers["content-type"] || "");
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    sendJson(res, 415, { error: "application/json content type is required" });
+    return false;
+  }
+  return true;
+}
+
+function localOrigins(req: IncomingMessage): Set<string> {
+  const hostHeader = String(req.headers.host || `localhost:${port}`);
+  return new Set([
+    `http://${hostHeader}`,
+    `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
+    `http://cstoresku:${port}`,
+    `http://cstoresku.local:${port}`,
+  ]);
+}
+
+function enforceLocalOrigin(req: IncomingMessage, res: ServerResponse): boolean {
+  if (!isMutating(req.method)) return true;
+  const origin = String(req.headers.origin || "");
+  if (origin && !localOrigins(req).has(origin)) {
+    sendJson(res, 403, { error: "Cross-origin local API request blocked" });
+    return false;
+  }
+  return true;
 }
 
 function asObject(value: JsonValue): JsonObject {
@@ -80,9 +127,35 @@ function decryptSecret(value: string): string {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }
 
+function verifyConnectorSignature(req: IncomingMessage, bodyText: string, registration: JsonObject): { ok: boolean; reason?: string } {
+  if (!connectorSharedSecret) {
+    return registration.cloudRelayEnabled === true
+      ? { ok: false, reason: "connector_shared_secret_required_when_cloud_relay_enabled" }
+      : { ok: true };
+  }
+  const timestamp = String(req.headers["x-shre-timestamp"] || "");
+  const nonce = String(req.headers["x-shre-nonce"] || "");
+  const tenantId = String(req.headers["x-shre-tenant-id"] || "");
+  const agentId = String(req.headers["x-shre-agent-id"] || "");
+  const signature = String(req.headers["x-shre-signature"] || "");
+  if (!timestamp || !nonce || !tenantId || !agentId || !signature) return { ok: false, reason: "missing_signature_headers" };
+  const time = Number(timestamp);
+  if (!Number.isFinite(time) || Math.abs(Date.now() - time) > 5 * 60_000) {
+    return { ok: false, reason: "signature_timestamp_outside_allowed_window" };
+  }
+  if (!store.consumeConnectorNonce(nonce)) return { ok: false, reason: "replayed_nonce" };
+  const expected = createHmac("sha256", connectorSharedSecret).update(`${timestamp}.${nonce}.${tenantId}.${agentId}.${bodyText}`).digest("hex");
+  const provided = signature.startsWith("sha256=") ? signature.slice("sha256=".length) : signature;
+  const expectedBuffer = Buffer.from(expected, "hex");
+  const providedBuffer = Buffer.from(provided, "hex");
+  if (expectedBuffer.length !== providedBuffer.length) return { ok: false, reason: "signature_mismatch" };
+  return timingSafeEqual(expectedBuffer, providedBuffer) ? { ok: true } : { ok: false, reason: "signature_mismatch" };
+}
+
 function redactConnection(connection: JsonObject): JsonObject {
   const redacted: JsonObject = { ...connection };
   if (typeof redacted.password === "string" && redacted.password) redacted.password = "***";
+  if (typeof redacted.applicationKey === "string" && redacted.applicationKey) redacted.applicationKey = "***";
   return redacted;
 }
 
@@ -101,8 +174,11 @@ function classifyMessage(messageText: string): { intent: string; target: string;
 }
 
 function localBaseUrl(req: IncomingMessage): string {
-  const host = req.headers.host || `localhost:${port}`;
-  return `http://${host}`;
+  if (localBaseUrlOverride) return localBaseUrlOverride.replace(/\/$/, "");
+  const requestHost = String(req.headers.host || `localhost:${port}`);
+  const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `cstoresku:${port}`, `cstoresku.local:${port}`]);
+  const safeHost = allowedHosts.has(requestHost.toLowerCase()) ? requestHost : `localhost:${port}`;
+  return `http://${safeHost}`;
 }
 
 async function directorySize(path: string): Promise<{ files: number; bytes: number }> {
@@ -124,6 +200,8 @@ async function directorySize(path: string): Promise<{ files: number; bytes: numb
 }
 
 async function handleApi(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+  if (!enforceJsonRequest(req, res) || !enforceLocalOrigin(req, res)) return;
+
   if (path === "/api/health") {
     const storage = await directorySize(runtimeRoot);
     sendJson(res, 200, {
@@ -200,7 +278,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         commanderUrl: requireString(body, "commanderUrl"),
         username: requireString(body, "username"),
         password: encryptSecret(requireString(body, "password")),
-        applicationKey: typeof body.applicationKey === "string" ? body.applicationKey : "",
+        applicationKey: typeof body.applicationKey === "string" && body.applicationKey ? encryptSecret(body.applicationKey) : "",
         updatedAt: new Date().toISOString(),
       };
       store.setJson("connections", "verifone", connection);
@@ -481,12 +559,27 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/messages/inbound" && req.method === "POST") {
     try {
-      const body = asObject(await requestBody(req));
+      const bodyText = await requestText(req);
+      const registration = store.connectorStatus();
+      const signature = verifyConnectorSignature(req, bodyText, registration);
+      if (!signature.ok) {
+        sendJson(res, 401, { error: "Invalid connector signature", reason: signature.reason || "invalid_signature" });
+        return;
+      }
+      const body = asObject(bodyText ? JSON.parse(bodyText) as JsonValue : {});
       const messageText = requireString(body, "messageText");
       const source = typeof body.source === "string" ? body.source : "unknown";
-      const registration = store.connectorStatus();
       const tenantId = typeof body.tenantId === "string" ? body.tenantId : String(registration.tenantId || "");
       const storeId = typeof body.storeId === "string" ? body.storeId : String(registration.storeId || "");
+      if (registration.status === "activated" && (tenantId !== registration.tenantId || storeId !== registration.storeId)) {
+        sendJson(res, 403, { error: "Inbound tenant/store does not match local connector activation" });
+        return;
+      }
+      const allowedSources = new Set(["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "unknown"]);
+      if (!allowedSources.has(source)) {
+        sendJson(res, 403, { error: "Inbound source is not allowed" });
+        return;
+      }
       const userId = typeof body.userId === "string" ? body.userId : "";
       const classification = classifyMessage(messageText);
       const connectorResponse = classification.intent === "sales_query"
@@ -550,7 +643,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
 async function serveUi(res: ServerResponse): Promise<void> {
   const html = await readFile(join(uiRoot, "index.html"), "utf8");
-  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:;",
+  });
   res.end(html);
 }
 
@@ -563,8 +662,8 @@ async function main(): Promise<void> {
       sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
     });
   });
-  server.listen(port, () => {
-    console.log(`dashboard-api listening on http://localhost:${port}`);
+  server.listen(port, host, () => {
+    console.log(`dashboard-api listening on http://${host}:${port}`);
   });
 }
 

@@ -36,8 +36,27 @@ npm run start:api
 Open:
 
 ```text
+http://cstoresku:5480
 http://localhost:5480
 ```
+
+## Local Alias
+
+Windows:
+
+```powershell
+npm run alias:check
+Start-Process powershell -Verb RunAs -ArgumentList '-ExecutionPolicy Bypass -File scripts\configure-local-alias.ps1 -Install'
+```
+
+macOS/Linux:
+
+```bash
+./scripts/configure-local-alias.sh check
+sudo ./scripts/configure-local-alias.sh install
+```
+
+See [Local Alias](local-alias.md).
 
 ## Runtime Folder
 
@@ -59,6 +78,9 @@ $env:VERIFONE_SHRE_HOME="C:\temp\verifone-shre"
 PORT=5480
 VERIFONE_SHRE_HOME=
 CONNECTOR_REGISTRY_URL=https://connector.aros.live
+CONNECTOR_SHARED_SECRET=
+HOST=127.0.0.1
+LOCAL_BASE_URL=http://cstoresku:5480
 SHRE_ENDPOINT=https://apiauth.shre.ai
 SHRE_EVENTS_ENDPOINT=https://events.shre.ai
 SHRE_TENANT_ID=
