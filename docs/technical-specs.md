@@ -32,10 +32,13 @@ Tables:
 - `sales_snapshots`
 - `connector_nonces`
 - `usage_events`
+- storage policy and backup status in encrypted app state
 
 Activity logging records `api_request_completed` for API request/response visibility. Business events such as queue replay, connector activation, inbound messages, diagnostics bundle creation, and sales queries are recorded separately.
 
 Runtime JSON content is encrypted at rest with AES-256-GCM. The SQLite table names remain visible, but app state, queue payloads, chat audit content, activity metadata, diagnostics bundles, and sales item details are stored as encrypted JSON blobs.
+
+Storage retention and backup APIs are documented in [Storage, Retention, And Backup](storage-retention-backup.md). The dashboard exposes retention choices from 7 days to 1 year, forecasts required disk space, creates encrypted local SQLite backups, and preserves pending queue items during retention cleanup.
 
 ## Connector Registry
 

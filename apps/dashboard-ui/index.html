@@ -254,6 +254,35 @@
           </div>
           <div class="toolbar"><button class="primary" type="submit">Manual Update</button><button id="failAutoReset" class="secondary" type="button">Simulate Auto Reset Failure</button></div>
         </form>
+        <form id="storagePolicyForm">
+          <h2>Storage, Backup & Retention</h2>
+          <div class="fields">
+            <label>Preserve Data
+              <select name="retentionDays">
+                <option value="7">7 days</option>
+                <option value="14">14 days</option>
+                <option value="30">1 month</option>
+                <option value="60">2 months</option>
+                <option value="90">3 months</option>
+                <option value="180">6 months</option>
+                <option value="365">1 year</option>
+              </select>
+            </label>
+            <label>Backup Target
+              <select name="backupTarget">
+                <option value="local_folder">Local backup folder</option>
+                <option value="shre_platform_synology">Shre Platform / Synology</option>
+                <option value="both">Both</option>
+              </select>
+            </label>
+            <label>Local Backup Folder<input name="localBackupPath" placeholder="C:\VerifoneCommanderBackups"></label>
+            <label>Enable Backup
+              <select name="backupEnabled"><option value="false">Disabled</option><option value="true">Enabled</option></select>
+            </label>
+          </div>
+          <div class="hint" id="storagePolicyHint">Storage policy loading.</div>
+          <div class="toolbar"><button class="primary" type="submit">Save Storage Policy</button><button id="runBackup" class="secondary" type="button">Backup Now</button><button id="applyRetention" class="secondary" type="button">Apply Retention</button></div>
+        </form>
       </section>
 
       <section id="heartbeat">
@@ -263,7 +292,8 @@
           <div class="mini"><span class="label">Local Pull</span><strong id="hbPull">Idle</strong></div>
           <div class="mini"><span class="label">Write Back</span><strong id="hbWrite">Blocked</strong></div>
         </div>
-        <div class="toolbar" style="margin-bottom:12px"><button id="runHeartbeat" class="primary" type="button">Run Heartbeat</button><button id="refreshHeartbeat" class="secondary" type="button">Refresh</button></div>
+        <div class="toolbar" style="margin-bottom:12px"><button id="pingCommander" class="secondary" type="button">Ping Commander</button><button id="runHeartbeat" class="primary" type="button">Run Heartbeat</button><button id="refreshHeartbeat" class="secondary" type="button">Refresh</button></div>
+        <div id="pingResult" class="hint">Ping checks current reachability without changing heartbeat schedule.</div>
         <div class="card">
           <h2>Sync Flow</h2>
           <div id="syncFlowText" class="hint">Loading</div>
@@ -409,6 +439,8 @@
           <div class="mini"><span class="label">Activity Events</span><strong id="hEvents">0</strong></div>
           <div class="mini"><span class="label">Messages</span><strong id="hMessages">0</strong></div>
           <div class="mini"><span class="label">Storage</span><strong id="hStorage">0 KB</strong></div>
+          <div class="mini"><span class="label">Disk Free</span><strong id="hDiskFree">Unknown</strong></div>
+          <div class="mini"><span class="label">Storage Risk</span><strong id="hStorageRisk">Unknown</strong></div>
         </div>
         <div class="toolbar" style="margin-bottom:12px"><button id="createBundle" class="primary" type="button">Create Diagnostics Bundle</button><button id="refreshHealth" class="secondary" type="button">Refresh</button></div>
         <div class="folder-tabs" id="healthTabs">
@@ -536,7 +568,7 @@
           return;
         }
         $("loginPanel").classList.remove("open");
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -554,7 +586,8 @@
           api("/api/adapters"),
           api("/api/remote-access"),
           api("/api/mcp/tools"),
-          api("/api/sync/status")
+          api("/api/sync/status"),
+          api("/api/storage/analysis")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
@@ -577,7 +610,7 @@
         $("passwordHint").textContent = password.daysRemaining == null ? "No expiration value recorded" : `${password.daysRemaining} days remaining`;
         $("onboardingSteps").textContent = `Current: ${onboarding.currentStep || "profile"} | Completed: ${(onboarding.completedSteps || []).join(", ") || "none"}`;
         showJson("manifestJson", manifest);
-        showJson("diagnosticsJson", { health, diagnostics });
+        showJson("diagnosticsJson", { health, diagnostics, storage });
         showJson("adapterJson", adapters);
         showJson("mcpJson", mcpTools);
         renderAddons(addons.addOns || []);
@@ -598,6 +631,9 @@
         $("hEvents").textContent = diagnostics.activitySummary?.total || 0;
         $("hMessages").textContent = (messageAudit.messages || []).length;
         $("hStorage").textContent = `${Math.round((health.storage?.bytes || 0) / 1024)} KB`;
+        $("hDiskFree").textContent = formatBytes(health.disk?.freeBytes);
+        $("hStorageRisk").innerHTML = statusIndicator(storage.analysis?.risk || "unknown", storage.analysis?.risk || "unknown");
+        renderStoragePolicy(storage);
         renderNotifications(notifications);
       } catch (error) {
         setStatus(error.message, "bad");
@@ -613,6 +649,14 @@
     }
     function fmtTime(value) {
       return value ? new Date(value).toLocaleTimeString() : "None";
+    }
+    function formatBytes(value) {
+      if (value == null || Number.isNaN(Number(value))) return "Unknown";
+      const bytes = Number(value);
+      if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+      if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+      if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+      return `${bytes} B`;
     }
     function statusIndicator(status, label = null) {
       const normalized = String(status || "unknown").toLowerCase();
@@ -660,6 +704,16 @@
           <div class="hint">${item.action}</div>
         </div>
       `).join("");
+    }
+    function renderStoragePolicy(storage) {
+      const policy = storage.policy || {};
+      const analysis = storage.analysis || {};
+      document.querySelector('#storagePolicyForm select[name="retentionDays"]').value = String(policy.retentionDays || 30);
+      document.querySelector('#storagePolicyForm select[name="backupTarget"]').value = policy.backupTarget || "local_folder";
+      document.querySelector('#storagePolicyForm select[name="backupEnabled"]').value = policy.backupEnabled ? "true" : "false";
+      document.querySelector('#storagePolicyForm input[name="localBackupPath"]').value = policy.localBackupPath || "";
+      $("storagePolicyHint").textContent = `Runtime: ${formatBytes(storage.storage?.bytes)}. Projected for ${policy.retentionDays || 30} days: ${formatBytes(analysis.projectedRuntimeBytes)}. Recommended free space: ${formatBytes(analysis.recommendedMinimumFreeBytes)}. Backup: ${policy.lastBackup?.createdAt || "not yet run"}.`;
+      $("storagePolicyHint").className = `hint ${analysis.risk === "high" ? "bad" : analysis.risk === "medium" ? "warn" : "ok"}`;
     }
     function renderQueue(items) {
       $("queueRows").innerHTML = items.map((item) => `<tr><td><span class="badge ${item.status}">${item.status}</span></td><td>${item.target}</td><td>${item.operation}</td><td>${item.entityType}:${item.entityId || ""}</td><td>${item.attemptCount || 0}</td><td class="mono">${JSON.stringify(item.payload || {})}</td><td>${item.updatedAt}</td></tr>`).join("") || '<tr><td colspan="7">No queue items</td></tr>';
@@ -808,6 +862,19 @@
       }
       await refresh();
     };
+    $("pingCommander").onclick = async () => {
+      $("pingResult").textContent = "Pinging Commander...";
+      $("pingResult").className = "hint";
+      try {
+        const result = await api("/api/verifone/ping", { method: "POST", body: "{}" });
+        $("pingResult").textContent = `${result.status}: ${result.message}`;
+        $("pingResult").className = `hint ${result.ok ? "ok" : "bad"}`;
+      } catch (error) {
+        $("pingResult").textContent = error.message || "Ping failed.";
+        $("pingResult").className = "hint bad";
+      }
+      await refresh();
+    };
     $("passwordForm").onsubmit = async (event) => {
       event.preventDefault();
       const body = formObject(event.target);
@@ -816,6 +883,21 @@
       await refresh();
     };
     $("failAutoReset").onclick = async () => { await api("/api/password/auto-reset", { method: "POST", body: JSON.stringify({ forceFailure: true, daysRemaining: 3 }) }); await refresh(); };
+    $("storagePolicyForm").onsubmit = async (event) => {
+      event.preventDefault();
+      const body = formObject(event.target);
+      body.retentionDays = Number(body.retentionDays || 30);
+      body.backupEnabled = body.backupEnabled === "true";
+      body.shrePlatformSynologyEnabled = body.backupTarget === "shre_platform_synology" || body.backupTarget === "both";
+      await api("/api/storage/policy", { method: "POST", body: JSON.stringify(body) });
+      await refresh();
+    };
+    $("runBackup").onclick = async () => {
+      const localBackupPath = document.querySelector('#storagePolicyForm input[name="localBackupPath"]').value;
+      await api("/api/storage/backup", { method: "POST", body: JSON.stringify({ localBackupPath }) });
+      await refresh();
+    };
+    $("applyRetention").onclick = async () => { await api("/api/storage/retention/apply", { method: "POST", body: "{}" }); await refresh(); };
     $("connectorForm").onsubmit = async (event) => {
       event.preventDefault();
       const body = formObject(event.target);

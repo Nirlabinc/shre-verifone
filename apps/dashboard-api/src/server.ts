@@ -1,5 +1,5 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { chmod, readFile, mkdir, readdir, stat } from "node:fs/promises";
+import { chmod, readFile, mkdir, readdir, stat, statfs } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir, hostname, platform, arch, totalmem, freemem, cpus } from "node:os";
@@ -24,6 +24,8 @@ const buildChannel = process.env.BUILD_CHANNEL || process.env.SHRE_ENV || "local
 const buildSha = process.env.BUILD_SHA || "dev";
 const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
+
+const retentionOptions = [7, 14, 30, 60, 90, 180, 365];
 
 async function ensureRuntime(): Promise<void> {
   await mkdir(join(runtimeRoot, "connections"), { recursive: true });
@@ -505,6 +507,23 @@ function validateVerifoneConnection(body: JsonObject = {}): JsonObject {
   }
   store.appendActivity("verifone_connection_validated", { ok, daysRemaining, backoffSeconds });
   return validation;
+}
+
+function pingVerifoneConnection(body: JsonObject = {}): JsonObject {
+  const connection = store.getJson<JsonObject>("connections", "verifone", {});
+  const configuredPassword = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
+  const ok = Boolean(connection.commanderUrl && connection.username && configuredPassword) && body.forceFailure !== true;
+  const result = {
+    ok,
+    status: ok ? "reachable" : "unreachable",
+    checkedAt: new Date().toISOString(),
+    commanderUrlConfigured: Boolean(connection.commanderUrl),
+    usernameConfigured: Boolean(connection.username),
+    passwordConfigured: Boolean(configuredPassword),
+    message: ok ? "Commander ping succeeded." : "Commander ping failed or Verifone connection is incomplete.",
+  };
+  store.appendActivity("verifone_connection_pinged", { ok, status: result.status });
+  return result;
 }
 
 const addonDefinitions: JsonObject[] = [
@@ -1170,12 +1189,72 @@ async function directorySize(path: string): Promise<{ files: number; bytes: numb
   return { files, bytes };
 }
 
+async function diskFreeBytes(path: string): Promise<number | null> {
+  try {
+    const info = await statfs(path);
+    return Number(info.bavail) * Number(info.bsize);
+  } catch {
+    return null;
+  }
+}
+
+function storagePolicy(): JsonObject {
+  const fallbackBackupPath = join(homedir(), "VerifoneCommanderBackups");
+  const policy = store.getJson<JsonObject>("storage", "policy", {});
+  const retentionDays = retentionOptions.includes(Number(policy.retentionDays)) ? Number(policy.retentionDays) : 30;
+  return {
+    retentionDays,
+    retentionOptions,
+    backupEnabled: policy.backupEnabled === true,
+    backupTarget: typeof policy.backupTarget === "string" ? policy.backupTarget : "local_folder",
+    localBackupPath: typeof policy.localBackupPath === "string" && policy.localBackupPath.trim() ? policy.localBackupPath.trim() : fallbackBackupPath,
+    shrePlatformSynologyEnabled: policy.shrePlatformSynologyEnabled === true,
+    remoteArchiveStatus: policy.shrePlatformSynologyEnabled === true ? "configured_pending_cloud_upload" : "not_configured",
+    lastBackup: policy.lastBackup || null,
+    updatedAt: policy.updatedAt || null,
+  };
+}
+
+function normalizeStoragePolicy(body: JsonObject): JsonObject {
+  const current = storagePolicy();
+  const retentionDays = retentionOptions.includes(Number(body.retentionDays)) ? Number(body.retentionDays) : Number(current.retentionDays);
+  const backupTarget = ["local_folder", "shre_platform_synology", "both"].includes(String(body.backupTarget)) ? String(body.backupTarget) : String(current.backupTarget);
+  return {
+    retentionDays,
+    retentionOptions,
+    backupEnabled: body.backupEnabled === true || body.backupEnabled === "true",
+    backupTarget,
+    localBackupPath: typeof body.localBackupPath === "string" && body.localBackupPath.trim() ? body.localBackupPath.trim() : String(current.localBackupPath),
+    shrePlatformSynologyEnabled: body.shrePlatformSynologyEnabled === true || body.shrePlatformSynologyEnabled === "true" || backupTarget === "shre_platform_synology" || backupTarget === "both",
+    updatedAt: new Date().toISOString(),
+    lastBackup: current.lastBackup || null,
+  };
+}
+
+async function storageOverview(): Promise<JsonObject> {
+  const storage = await directorySize(runtimeRoot);
+  const freeBytes = await diskFreeBytes(runtimeRoot);
+  const policy = storagePolicy();
+  return {
+    policy,
+    runtimeRoot,
+    database: store.path(),
+    storage,
+    disk: {
+      freeBytes,
+    },
+    analysis: store.storageAnalysis(Number(policy.retentionDays), storage.bytes, freeBytes),
+  };
+}
+
 async function handleApi(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (!enforceJsonRequest(req, res) || !enforceLocalOrigin(req, res)) return;
   if (!enforceLocalAdmin(req, res, path)) return;
 
   if (path === "/api/health") {
     const storage = await directorySize(runtimeRoot);
+    const freeBytes = await diskFreeBytes(runtimeRoot);
+    const policy = storagePolicy();
     sendJson(res, 200, {
       ok: true,
       service: "dashboard-api",
@@ -1191,6 +1270,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         freeMemoryBytes: freemem(),
       },
       storage,
+      disk: { freeBytes },
+      retention: {
+        days: policy.retentionDays,
+        backupEnabled: policy.backupEnabled,
+        backupTarget: policy.backupTarget,
+        storageRisk: store.storageAnalysis(Number(policy.retentionDays), storage.bytes, freeBytes).risk,
+      },
       timestamp: new Date().toISOString(),
       version: versionInfo(),
     });
@@ -1485,6 +1571,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/verifone/ping" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const ping = pingVerifoneConnection(body);
+    sendJson(res, ping.ok === true ? 200 : 503, ping);
+    return;
+  }
+
   if (path === "/api/verifone/heartbeat") {
     if (req.method === "GET") {
       sendJson(res, 200, syncState());
@@ -1672,6 +1765,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       shreActivationToken: "/api/shre/activation-token",
       syncStatus: "/api/sync/status",
       heartbeat: "/api/verifone/heartbeat",
+      verifonePing: "/api/verifone/ping",
+      storagePolicy: "/api/storage/policy",
+      storageAnalysis: "/api/storage/analysis",
+      storageBackup: "/api/storage/backup",
+      storageRetentionApply: "/api/storage/retention/apply",
       shreSignupActivate: "/api/shre/signup-activate",
       activitySummary: store.activitySummary(),
     });
@@ -1711,6 +1809,62 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       }
       return;
     }
+  }
+
+  if (path === "/api/storage/policy") {
+    if (req.method === "GET") {
+      sendJson(res, 200, storagePolicy());
+      return;
+    }
+    if (req.method === "POST") {
+      const policy = normalizeStoragePolicy(asObject(await requestBody(req)));
+      store.setJson("storage", "policy", policy);
+      store.appendActivity("storage_policy_updated", {
+        retentionDays: policy.retentionDays,
+        backupEnabled: policy.backupEnabled,
+        backupTarget: policy.backupTarget,
+      });
+      sendJson(res, 200, policy);
+      return;
+    }
+  }
+
+  if (path === "/api/storage/analysis") {
+    sendJson(res, 200, await storageOverview());
+    return;
+  }
+
+  if (path === "/api/storage/backup" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const current = storagePolicy();
+    const backupPath = typeof body.localBackupPath === "string" && body.localBackupPath.trim() ? body.localBackupPath.trim() : String(current.localBackupPath);
+    const backup = store.backupRuntime(backupPath);
+    const next = {
+      ...current,
+      backupEnabled: true,
+      lastBackup: {
+        createdAt: backup.createdAt,
+        path: backup.path,
+        target: "local_folder",
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    store.setJson("storage", "policy", next);
+    store.appendActivity("runtime_backup_created", { path: backup.path });
+    sendJson(res, 201, { ...backup, policy: next });
+    return;
+  }
+
+  if (path === "/api/storage/retention/apply" && req.method === "POST") {
+    const policy = storagePolicy();
+    const result = store.applyRetention(Number(policy.retentionDays));
+    store.appendActivity("storage_retention_applied", {
+      retentionDays: result.retentionDays,
+      cutoff: result.cutoff,
+      deletions: result.deletions,
+    });
+    sendJson(res, 200, { ...result, overview: await storageOverview() });
+    return;
   }
 
   if (path === "/api/addons") {

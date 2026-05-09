@@ -18,6 +18,7 @@ Use [Connectivity Rules](connectivity-rules.md) when the issue involves local al
 GET /api/health
 GET /api/connector/status
 GET /api/verifone/status
+POST /api/verifone/ping
 GET /api/password/status
 GET /api/queue
 GET /api/access-mode
@@ -31,6 +32,10 @@ GET /api/readiness
 GET /api/auth/status
 GET /api/usage/summary
 POST /api/usage/replay
+GET /api/storage/policy
+GET /api/storage/analysis
+POST /api/storage/backup
+POST /api/storage/retention/apply
 GET /api/messages/contract
 POST /api/sales/query
 GET /api/activity
@@ -56,6 +61,17 @@ If `LOCAL_ADMIN_TOKEN` is configured, enter it in the dashboard header before us
 - In Docker, confirm the API is published as `127.0.0.1:5480:5480` and the container has `HOST=0.0.0.0`.
 
 ## Common Issues
+
+### Disk Space Or Runtime Growth
+
+Check:
+
+- `/api/storage/analysis`
+- `/api/storage/policy`
+- Runtime folder free space in `/api/health`
+- Backup target availability
+
+Use [Storage, Retention, And Backup](storage-retention-backup.md) before deleting anything. Create a backup first, then apply retention cleanup. Pending queue items are preserved by retention cleanup.
 
 ### Runtime Folder Protection
 

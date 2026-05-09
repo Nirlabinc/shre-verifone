@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -150,6 +150,107 @@ export class RuntimeStore {
       total: rows.reduce((sum, row) => sum + row.count, 0),
       byEvent: rows.map((row) => ({ eventName: row.event_name, count: row.count })),
     };
+  }
+
+  storageAnalysis(retentionDays: number, runtimeBytes: number, freeBytes: number | null): JsonObject {
+    const tables = [
+      { name: "activity_log", countSql: "select count(*) as count from activity_log", bytesSql: "select coalesce(sum(length(metadata_json)), 0) as bytes from activity_log", dateSql: "select min(created_at) as oldest, max(created_at) as newest from activity_log" },
+      { name: "outbound_queue", countSql: "select count(*) as count from outbound_queue", bytesSql: "select coalesce(sum(length(payload_json)), 0) as bytes from outbound_queue", dateSql: "select min(created_at) as oldest, max(created_at) as newest from outbound_queue" },
+      { name: "diagnostic_bundles", countSql: "select count(*) as count from diagnostic_bundles", bytesSql: "select coalesce(sum(length(bundle_json)), 0) as bytes from diagnostic_bundles", dateSql: "select min(created_at) as oldest, max(created_at) as newest from diagnostic_bundles" },
+      { name: "chat_audit_log", countSql: "select count(*) as count from chat_audit_log", bytesSql: "select coalesce(sum(length(message_text) + length(response_json)), 0) as bytes from chat_audit_log", dateSql: "select min(created_at) as oldest, max(created_at) as newest from chat_audit_log" },
+      { name: "sales_snapshots", countSql: "select count(*) as count from sales_snapshots", bytesSql: "select coalesce(sum(length(top_items_json)), 0) as bytes from sales_snapshots", dateSql: "select min(created_at) as oldest, max(created_at) as newest from sales_snapshots" },
+      { name: "usage_events", countSql: "select count(*) as count from usage_events", bytesSql: "select coalesce(sum(length(metadata_json)), 0) as bytes from usage_events", dateSql: "select min(created_at) as oldest, max(created_at) as newest from usage_events" },
+    ];
+    const observedDates = tables.flatMap((table) => {
+      const row = this.db.prepare(table.dateSql).get() as { oldest: string | null; newest: string | null };
+      return [row.oldest, row.newest].filter((value): value is string => Boolean(value));
+    });
+    const observedDays = observedDates.length
+      ? Math.max(1, Math.ceil((Math.max(...observedDates.map((value) => Date.parse(value))) - Math.min(...observedDates.map((value) => Date.parse(value)))) / 86_400_000) + 1)
+      : 1;
+    const tableStats = tables.map((table) => {
+      const count = this.db.prepare(table.countSql).get() as { count: number };
+      const bytes = this.db.prepare(table.bytesSql).get() as { bytes: number };
+      const dates = this.db.prepare(table.dateSql).get() as { oldest: string | null; newest: string | null };
+      return {
+        table: table.name,
+        rows: count.count,
+        encryptedPayloadBytes: bytes.bytes,
+        averageRowsPerDay: Number((count.count / observedDays).toFixed(2)),
+        oldestAt: dates.oldest,
+        newestAt: dates.newest,
+      };
+    });
+    const projectedRuntimeBytes = Math.ceil((runtimeBytes / observedDays) * Math.max(retentionDays, 1));
+    const reserveBytes = 2 * 1024 * 1024 * 1024;
+    const recommendedMinimumFreeBytes = Math.max(reserveBytes, projectedRuntimeBytes * 3);
+    const risk = freeBytes == null
+      ? "unknown"
+      : freeBytes < recommendedMinimumFreeBytes
+        ? "high"
+        : freeBytes < recommendedMinimumFreeBytes * 1.5
+          ? "medium"
+          : "low";
+    return {
+      observedDays,
+      currentRuntimeBytes: runtimeBytes,
+      projectedRuntimeBytes,
+      recommendedMinimumFreeBytes,
+      freeBytes,
+      risk,
+      tables: tableStats,
+      notes: [
+        "Projection uses current encrypted runtime size divided by observed data days.",
+        "Keep at least 2 GB free, or three times projected retained runtime size, whichever is larger.",
+        "Remote Shre Platform/Synology backup should be used for long-term archive once the cloud target is enabled.",
+      ],
+    };
+  }
+
+  backupRuntime(backupRoot: string): JsonObject {
+    const createdAt = new Date().toISOString();
+    const safeStamp = createdAt.replace(/[:.]/g, "-");
+    const target = resolve(backupRoot, `verifone-commander-backup-${safeStamp}`);
+    mkdirSync(target, { recursive: true });
+    securePath(target, 0o700);
+    const databasePath = join(target, basename(this.path()));
+    this.db.backup(databasePath);
+    securePath(databasePath, 0o600);
+    const secretPath = join(this.runtimeRoot, ".install-secret");
+    const copied: string[] = [databasePath];
+    if (existsSync(secretPath)) {
+      const targetSecret = join(target, ".install-secret");
+      copyFileSync(secretPath, targetSecret);
+      securePath(targetSecret, 0o600);
+      copied.push(targetSecret);
+    }
+    const manifest = {
+      createdAt,
+      app: "verifone-commander-shre-cstoresku",
+      sourceRuntimeRoot: this.runtimeRoot,
+      files: copied.map((file) => basename(file)),
+      encrypted: true,
+      restoreNote: "Restore runtime.sqlite and .install-secret together. Without .install-secret, encrypted JSON state cannot be decrypted.",
+    };
+    const manifestPath = join(target, "backup-manifest.json");
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), { encoding: "utf8", mode: 0o600 });
+    copied.push(manifestPath);
+    return { ok: true, createdAt, path: target, files: copied };
+  }
+
+  applyRetention(retentionDays: number): JsonObject {
+    const cutoff = new Date(Date.now() - Math.max(retentionDays, 1) * 86_400_000).toISOString();
+    const deletions = [
+      ["activity_log", this.db.prepare("delete from activity_log where created_at < ?").run(cutoff).changes],
+      ["diagnostic_bundles", this.db.prepare("delete from diagnostic_bundles where created_at < ?").run(cutoff).changes],
+      ["chat_audit_log", this.db.prepare("delete from chat_audit_log where created_at < ?").run(cutoff).changes],
+      ["usage_events", this.db.prepare("delete from usage_events where created_at < ? and status in ('reported', 'report_failed')").run(cutoff).changes],
+      ["outbound_queue", this.db.prepare("delete from outbound_queue where updated_at < ? and status in ('completed', 'failed')").run(cutoff).changes],
+      ["sales_snapshots", this.db.prepare("delete from sales_snapshots where created_at < ?").run(cutoff).changes],
+    ].map(([table, deleted]) => ({ table, deleted }));
+    this.db.pragma("wal_checkpoint(TRUNCATE)");
+    this.db.pragma("optimize");
+    return { ok: true, cutoff, retentionDays, deletions };
   }
 
   enqueue(item: {

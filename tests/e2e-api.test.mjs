@@ -66,6 +66,7 @@ function signedBody(body, tenantId = "tenant_rapid_001") {
 
 test("local-first onboarding, password, queue, and diagnostics flow", async () => {
   const runtimeRoot = await mkdtemp(join(tmpdir(), "verifone-shre-e2e-"));
+  const backupRoot = await mkdtemp(join(tmpdir(), "verifone-shre-backup-e2e-"));
   const signupRequests = [];
   const shreAuthServer = createServer(async (req, res) => {
     const chunks = [];
@@ -123,7 +124,39 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(health.body.version.cacheKey);
     assert.equal(health.body.runtimeRoot, runtimeRoot);
     assert.match(health.body.database, /runtime\.sqlite$/);
+    assert.equal(health.body.retention.days, 30);
     await access(health.body.database);
+
+    const storagePolicy = await json("/api/storage/policy", {
+      method: "POST",
+      body: JSON.stringify({
+        retentionDays: 14,
+        backupEnabled: true,
+        backupTarget: "both",
+        localBackupPath: backupRoot,
+      }),
+    });
+    assert.equal(storagePolicy.response.status, 200);
+    assert.equal(storagePolicy.body.retentionDays, 14);
+    assert.equal(storagePolicy.body.shrePlatformSynologyEnabled, true);
+
+    const storageAnalysis = await json("/api/storage/analysis");
+    assert.equal(storageAnalysis.response.status, 200);
+    assert.equal(storageAnalysis.body.policy.retentionDays, 14);
+    assert.equal(storageAnalysis.body.analysis.risk.length > 0, true);
+
+    const backup = await json("/api/storage/backup", {
+      method: "POST",
+      body: JSON.stringify({ localBackupPath: backupRoot }),
+    });
+    assert.equal(backup.response.status, 201);
+    assert.equal(backup.body.ok, true);
+    await access(join(backup.body.path, "runtime.sqlite"));
+    await access(join(backup.body.path, ".install-secret"));
+
+    const retention = await json("/api/storage/retention/apply", { method: "POST", body: JSON.stringify({}) });
+    assert.equal(retention.response.status, 200);
+    assert.equal(retention.body.retentionDays, 14);
 
     const version = await json("/api/version");
     assert.equal(version.response.status, 200);
@@ -234,6 +267,13 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const verifoneStatus = await json("/api/verifone/status");
     assert.equal(verifoneStatus.response.status, 200);
     assert.equal(verifoneStatus.body.cstoreskuKeyConfigured, true);
+
+    const ping = await json("/api/verifone/ping", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    assert.equal(ping.response.status, 200);
+    assert.equal(ping.body.status, "reachable");
 
     const shreActivationToken = await json("/api/shre/activation-token", {
       method: "POST",
@@ -607,16 +647,21 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(names.includes("remote_access_updated"));
     assert.ok(names.includes("shre_auth_signup_activated"));
     assert.ok(names.includes("profile_saved"));
+    assert.ok(names.includes("verifone_connection_pinged"));
     assert.ok(names.includes("verifone_connection_validated"));
     assert.ok(names.includes("sales_snapshot_saved"));
     assert.ok(names.includes("sales_query_answered"));
     assert.ok(names.includes("inbound_message_queued"));
     assert.ok(names.includes("usage_reports_replayed"));
     assert.ok(names.includes("offline_queue_replayed"));
+    assert.ok(names.includes("storage_policy_updated"));
+    assert.ok(names.includes("runtime_backup_created"));
+    assert.ok(names.includes("storage_retention_applied"));
   } finally {
     child.kill("SIGTERM");
     await new Promise((resolve) => child.once("exit", resolve));
     await new Promise((resolve) => shreAuthServer.close(resolve));
     await rm(runtimeRoot, { recursive: true, force: true });
+    await rm(backupRoot, { recursive: true, force: true });
   }
 });

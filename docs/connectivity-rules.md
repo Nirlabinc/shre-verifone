@@ -18,7 +18,7 @@ This runbook is the first place to check when a store reports that Verifone Comm
 | Browser dashboard | Browser -> local API | Use loopback alias only unless remote access is explicitly enabled. | `GET /api/health` |
 | Local login | Browser -> local secure vault | Login secret is local and works offline. Background validation resumes when Shre Auth is reachable. | `GET /api/auth/status` |
 | Runtime database | API -> SQLite runtime | State, queue, logs, sales snapshots, and setup data persist across app updates. | `GET /api/health` and runtime guard |
-| Verifone Commander | API -> Commander | Validate credentials, then heartbeat and scheduled pulls use backoff and the Commander lease. | `GET /api/verifone/heartbeat`, `GET /api/sync/status` |
+| Verifone Commander | API -> Commander | Ping checks immediate reachability. Validate updates connection state. Heartbeat and scheduled pulls use backoff and the Commander lease. | `POST /api/verifone/ping`, `GET /api/verifone/heartbeat`, `GET /api/sync/status` |
 | Commander concurrency | API scheduler -> Commander | One local lease holder at a time. External POS traffic must be accounted for in polling intervals. | `GET /api/commander/lease/status` |
 | CStoreSKU | API -> CStoreSKU/RapidRMS connector | CStoreSKU key is separate from Verifone credentials. Link it only after local setup is complete. | `GET /api/connector/status` |
 | Shre activation | API -> Shre Auth | Dev/QA uses `https://shre-auth.shre.ai`; beta/prod uses `https://shre-auth.aros.live`. | `POST /api/shre/signup-activate` |
@@ -81,6 +81,7 @@ First checks:
 
 ```http
 GET /api/verifone/status
+POST /api/verifone/ping
 GET /api/verifone/heartbeat
 GET /api/sync/status
 GET /api/activity
@@ -198,6 +199,7 @@ Fix path:
 | Dashboard does not open | `GET /api/health` | API not running, wrong port, alias issue | Start API, use localhost, repair alias |
 | Login secret accepted but setup blocked | `GET /api/auth/status` | Missing setup fields or admin token | Complete setup, enter admin token |
 | Verifone validate button shows no connection | `GET /api/verifone/heartbeat` | Bad URL, credentials, firewall, timeout | Correct config, validate again |
+| Need immediate Commander reachability check | `POST /api/verifone/ping` | Commander may be down or config incomplete | Ping first, then validate if credentials changed |
 | Pulls stop after a disconnect | `GET /api/sync/status` | Heartbeat backoff or Commander unreachable | Wait for retry or fix network |
 | Commander becomes slow | `GET /api/commander/lease/status` | Competing pollers or peak traffic | Reduce pull frequency, coordinate external clients |
 | Sales chat says data source required | `POST /api/sales/query` | No local sales snapshot | Repair Verifone ingest and backfill |
