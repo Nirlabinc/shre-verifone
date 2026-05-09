@@ -82,6 +82,12 @@ The local install remains the system of action.
 
 ## Current Implemented Local APIs
 
+Connector marketplace manifest:
+
+```http
+GET /api/connector/manifest
+```
+
 Connector catalog:
 
 ```http
@@ -140,6 +146,29 @@ Message audit:
 GET /api/messages/audit
 ```
 
+Sales snapshot ingest:
+
+```http
+POST /api/sales/snapshot
+```
+
+Sales query:
+
+```http
+POST /api/sales/query
+```
+
+Example:
+
+```json
+{
+  "query": "What were sales today?",
+  "businessDate": "2026-05-09"
+}
+```
+
+When a local sales snapshot exists, the API returns an immediate answer from `runtime.sqlite`. If no snapshot exists yet, it returns `202` with `requiresDataSource: true` and the inbound message remains queued.
+
 ## Current Message Classification
 
 The local API classifies inbound messages into:
@@ -177,6 +206,8 @@ Recommended registration fields:
 - `relatedConnectors`
 - `localEndpointId`
 - `publicKey` or tunnel identity
+
+See [Shre Marketplace Registration](shre-marketplace-registration.md) for the static manifest, runtime manifest, registration steps, and public-release gaps.
 
 ## Production Routing Recommendation
 

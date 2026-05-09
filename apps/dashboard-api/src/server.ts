@@ -100,6 +100,11 @@ function classifyMessage(messageText: string): { intent: string; target: string;
   return { intent: "general_question", target: "shre", operation: "answer" };
 }
 
+function localBaseUrl(req: IncomingMessage): string {
+  const host = req.headers.host || `localhost:${port}`;
+  return `http://${host}`;
+}
+
 async function directorySize(path: string): Promise<{ files: number; bytes: number }> {
   if (!existsSync(path)) return { files: 0, bytes: 0 };
   let files = 0;
@@ -371,6 +376,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       password: "/api/password/status",
       queue: "/api/queue",
       connector: "/api/connector/status",
+      manifest: "/api/connector/manifest",
+      salesQuery: "/api/sales/query",
       messages: "/api/messages/inbound",
     });
     return;
@@ -414,6 +421,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/connector/manifest") {
+    sendJson(res, 200, store.connectorManifest(localBaseUrl(req)));
+    return;
+  }
+
   if (path === "/api/connector/activate" && req.method === "POST") {
     const body = asObject(await requestBody(req));
     const registration = store.saveConnectorRegistration({
@@ -441,6 +453,32 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/sales/snapshot" && req.method === "POST") {
+    const snapshot = store.saveSalesSnapshot(asObject(await requestBody(req)));
+    store.appendActivity("sales_snapshot_saved", {
+      businessDate: snapshot.businessDate,
+      source: snapshot.source,
+    });
+    sendJson(res, 201, snapshot);
+    return;
+  }
+
+  if (path === "/api/sales/query" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const query = typeof body.query === "string" && body.query.trim() ? body.query.trim() : "sales";
+    const businessDate = typeof body.businessDate === "string" && body.businessDate.trim()
+      ? body.businessDate.trim()
+      : undefined;
+    const result = store.answerSalesQuery(query, businessDate);
+    store.appendActivity("sales_query_answered", {
+      status: result.status,
+      businessDate: result.businessDate,
+      requiresDataSource: result.requiresDataSource,
+    });
+    sendJson(res, result.status === "answered" ? 200 : 202, result);
+    return;
+  }
+
   if (path === "/api/messages/inbound" && req.method === "POST") {
     try {
       const body = asObject(await requestBody(req));
@@ -451,6 +489,12 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const storeId = typeof body.storeId === "string" ? body.storeId : String(registration.storeId || "");
       const userId = typeof body.userId === "string" ? body.userId : "";
       const classification = classifyMessage(messageText);
+      const connectorResponse = classification.intent === "sales_query"
+        ? store.answerSalesQuery(messageText)
+        : {
+            status: "queued",
+            answer: "Message accepted locally and queued for processing.",
+          };
       const queueItem = store.enqueue({
         target: classification.target,
         entityType: "message",
@@ -471,7 +515,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         mode: registration.cloudRelayEnabled ? "cloud_relay" : "local_first",
         intent: classification.intent,
         queuedOperation: queueItem.id,
-        message: "Message accepted locally and queued for processing.",
+        message: String(connectorResponse.answer || "Message accepted locally and queued for processing."),
+        connectorResponse,
       };
       const audit = store.saveChatAudit({
         source,
@@ -480,7 +525,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         userId,
         messageText,
         intent: classification.intent,
-        status: "queued",
+        status: connectorResponse.status === "answered" ? "answered" : "queued",
         response,
       });
       store.appendActivity("inbound_message_queued", {

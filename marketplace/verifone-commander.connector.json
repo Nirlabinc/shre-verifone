@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "2026-05-09",
+  "connectorId": "verifone-commander",
+  "connectorName": "Verifone Commander Connector",
+  "publisher": {
+    "name": "Rapid Infosoft LLC",
+    "author": "Nirav Patel",
+    "email": "info@rapidinfosoft.com"
+  },
+  "category": "pos",
+  "app": "verifone_cstoresku",
+  "registryUrl": "https://connector.aros.live",
+  "runtime": {
+    "deployment": "local_first",
+    "database": "sqlite",
+    "requiresLocalInstall": true,
+    "supportedPlatforms": [
+      "windows-x64",
+      "linux-x64",
+      "linux-aarch64",
+      "macos-arm64",
+      "macos-x64"
+    ]
+  },
+  "relatedConnectors": ["rapidrms-api"],
+  "inbound": {
+    "localEndpoint": "http://localhost:5480/api/messages/inbound",
+    "supportedSources": ["shre-chat", "message-gateway", "whatsapp", "claude", "codex"],
+    "responseModes": ["immediate-local", "queued-local", "cloud-relay"]
+  },
+  "tools": [
+    {
+      "id": "verifone:sales-query",
+      "name": "Query local Verifone sales",
+      "mutating": false,
+      "localEndpoint": "http://localhost:5480/api/sales/query",
+      "scopes": ["sales.read", "sales.summary.read"]
+    },
+    {
+      "id": "verifone:queue-sync",
+      "name": "Queue or replay Commander sync",
+      "mutating": true,
+      "localEndpoint": "http://localhost:5480/api/queue/enqueue",
+      "scopes": ["sync.write"]
+    },
+    {
+      "id": "verifone:health-check",
+      "name": "Read local connector health",
+      "mutating": false,
+      "localEndpoint": "http://localhost:5480/api/diagnostics",
+      "scopes": ["diagnostics.read"]
+    },
+    {
+      "id": "verifone:password-status",
+      "name": "Read Commander password status",
+      "mutating": false,
+      "localEndpoint": "http://localhost:5480/api/password/status",
+      "scopes": ["credentials.status.read"]
+    }
+  ],
+  "dataScopes": [
+    "tenant",
+    "store",
+    "sales_summary",
+    "item_sales_summary",
+    "sync_status",
+    "diagnostics"
+  ],
+  "security": {
+    "requiredHeaders": ["x-shre-tenant-id", "x-shre-agent-id", "x-shre-signature"],
+    "localCredentialStorage": "encrypted-local-secret",
+    "writesRequireCommanderLease": true
+  }
+}

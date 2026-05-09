@@ -36,7 +36,8 @@ Have these ready:
 6. Activate connector if cloud/message gateway routing is required.
 7. Confirm queue, password status, and health checks are green.
 8. Send a test message through the chosen gateway.
-9. Review activity log and diagnostics.
+9. Ask a test sales question and confirm the response uses local data.
+10. Review activity log and diagnostics.
 
 ## Normal Daily Operation
 
@@ -46,6 +47,7 @@ The application runs locally in the background.
 - Commander actions are serialized with a local lease.
 - Password expiration status is tracked.
 - Activity and chat audit are stored locally.
+- Sales snapshots used by chat answers are stored locally.
 - Cloud routing is optional and does not replace local storage.
 
 ## What Support May Ask For

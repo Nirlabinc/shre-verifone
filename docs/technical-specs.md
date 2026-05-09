@@ -27,6 +27,7 @@ Tables:
 - `diagnostic_bundles`
 - `chat_audit_log`
 - `commander_locks`
+- `sales_snapshots`
 
 ## Connector Registry
 
@@ -51,6 +52,32 @@ rapidrms-api
 verifone-commander
   New store-local connector for Commander POS, sync, diagnostics, queue, and local sales context.
 ```
+
+Marketplace manifest:
+
+```http
+GET /api/connector/manifest
+```
+
+Static manifest:
+
+```text
+marketplace/verifone-commander.connector.json
+```
+
+## Local Sales Query Contract
+
+Sales ingest stores normalized summary rows in `sales_snapshots`.
+
+API:
+
+```http
+POST /api/sales/snapshot
+POST /api/sales/query
+POST /api/messages/inbound
+```
+
+`/api/messages/inbound` classifies sales questions and returns an immediate local SQLite answer when a matching snapshot exists. If no local sales data exists, it queues the request and returns `requiresDataSource: true`.
 
 ## Commander Concurrency
 

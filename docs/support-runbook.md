@@ -18,6 +18,8 @@ GET /api/connector/status
 GET /api/verifone/status
 GET /api/password/status
 GET /api/queue
+GET /api/connector/manifest
+POST /api/sales/query
 GET /api/activity
 POST /api/diagnostics/bundle
 ```
@@ -53,6 +55,16 @@ Check:
 - SQL connectivity.
 - Shre/cloud connectivity if queue target is Shre.
 - Commander lease status.
+
+### Sales Question Does Not Answer
+
+Check:
+
+- Connector is activated for the correct tenant/store.
+- `/api/messages/audit` shows the inbound message.
+- `/api/sales/query` returns an answer for the requested business date.
+- Local Commander sales ingest has written a recent `sales_snapshots` record.
+- If the query returns `requiresDataSource: true`, configure or repair the Commander sales ingest before troubleshooting Shre.
 
 ### Multiple Clients Hitting Commander
 

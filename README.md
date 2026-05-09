@@ -55,6 +55,8 @@ See [docs/architecture.md](docs/architecture.md).
 
 Message gateway and connector routing are documented in [docs/connector-flow.md](docs/connector-flow.md).
 
+Shre marketplace registration is documented in [docs/shre-marketplace-registration.md](docs/shre-marketplace-registration.md). The repo includes a static connector manifest at [marketplace/verifone-commander.connector.json](marketplace/verifone-commander.connector.json), and the running local API exposes the active manifest at `GET /api/connector/manifest`.
+
 Local database choice is documented in [docs/local-database-decision.md](docs/local-database-decision.md). The current default is SQLite, not Postgres.
 
 Setup, onboarding, support, and specs:
@@ -127,6 +129,9 @@ The E2E test starts the dashboard API against a temporary runtime folder and ver
 - Local Verifone validation status.
 - Password expiration/failure/manual-update workflow.
 - Offline queue enqueue/replay.
+- Shre connector manifest.
+- Local sales snapshot ingest and sales query response.
+- Chat/message gateway answer from local SQLite when sales data exists.
 - Diagnostics bundle generation.
 - Activity log events.
 
@@ -188,8 +193,11 @@ Implemented now:
 - E2E API test for the local-first flow.
 - SQLite-backed runtime store with migrations.
 - Connector activation/status endpoints.
+- Shre marketplace connector manifest endpoint.
+- Static marketplace manifest for `connector.aros.live` registration.
 - Inbound message gateway endpoint.
 - Chat/message audit log.
+- Local sales snapshot and sales query endpoints.
 - Connector catalog for existing `rapidrms-api` and new `verifone-commander`.
 - Commander lease endpoints to prevent this local app from competing with itself against Commander.
 

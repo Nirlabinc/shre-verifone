@@ -38,3 +38,5 @@ jobs:
           test -s docs/technical-specs.md
           test -s docs/commander-concurrency.md
           test -s docs/app-boundary-decision.md
+          test -s docs/shre-marketplace-registration.md
+          test -s marketplace/verifone-commander.connector.json

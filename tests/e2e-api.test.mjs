@@ -162,6 +162,36 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(catalog.body.registryUrl, "https://connector.aros.live");
     assert.deepEqual(catalog.body.connectors.map((item) => item.connectorId), ["rapidrms-api", "verifone-commander"]);
 
+    const manifest = await json("/api/connector/manifest");
+    assert.equal(manifest.response.status, 200);
+    assert.equal(manifest.body.connectorId, "verifone-commander");
+    assert.equal(manifest.body.publisher.name, "Rapid Infosoft LLC");
+    assert.equal(manifest.body.runtime.database, "sqlite");
+    assert.ok(manifest.body.tools.some((tool) => tool.id === "verifone:sales-query"));
+    assert.ok(manifest.body.relatedConnectors.includes("rapidrms-api"));
+
+    const snapshot = await json("/api/sales/snapshot", {
+      method: "POST",
+      body: JSON.stringify({
+        businessDate: "2026-05-09",
+        totalSales: 1842.55,
+        transactionCount: 91,
+        topItems: [{ name: "Regular Coffee", quantity: 38, sales: 76.0 }],
+        source: "commander-report-fixture",
+      }),
+    });
+    assert.equal(snapshot.response.status, 201);
+    assert.equal(snapshot.body.businessDate, "2026-05-09");
+    assert.equal(snapshot.body.totalSales, 1842.55);
+
+    const salesQuery = await json("/api/sales/query", {
+      method: "POST",
+      body: JSON.stringify({ query: "What were sales today?", businessDate: "2026-05-09" }),
+    });
+    assert.equal(salesQuery.response.status, 200);
+    assert.equal(salesQuery.body.status, "answered");
+    assert.match(salesQuery.body.answer, /\$1842\.55/);
+
     const inbound = await json("/api/messages/inbound", {
       method: "POST",
       body: JSON.stringify({
@@ -176,6 +206,8 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(inbound.response.status, 202);
     assert.equal(inbound.body.intent, "sales_query");
     assert.equal(inbound.body.mode, "cloud_relay");
+    assert.equal(inbound.body.connectorResponse.status, "answered");
+    assert.match(inbound.body.message, /\$1842\.55/);
     assert.ok(inbound.body.queuedOperation);
 
     const audit = await json("/api/messages/audit");
@@ -219,6 +251,8 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const names = activity.body.events.map((event) => event.eventName);
     assert.ok(names.includes("profile_saved"));
     assert.ok(names.includes("verifone_connection_validated"));
+    assert.ok(names.includes("sales_snapshot_saved"));
+    assert.ok(names.includes("sales_query_answered"));
     assert.ok(names.includes("inbound_message_queued"));
     assert.ok(names.includes("offline_queue_replayed"));
   } finally {

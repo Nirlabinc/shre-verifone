@@ -51,6 +51,16 @@ interface CommanderLockRow {
   updated_at: string;
 }
 
+interface SalesSnapshotRow {
+  id: string;
+  business_date: string;
+  total_sales: number;
+  transaction_count: number;
+  top_items_json: string;
+  source: string;
+  created_at: string;
+}
+
 export interface RuntimeStoreOptions {
   connectorRegistryUrl: string;
 }
@@ -235,6 +245,190 @@ export class RuntimeStore {
           existing: false,
         },
       ],
+    };
+  }
+
+  connectorManifest(localBaseUrl = "http://localhost:5480"): JsonObject {
+    return {
+      schemaVersion: "2026-05-09",
+      connectorId: "verifone-commander",
+      connectorName: "Verifone Commander Connector",
+      publisher: {
+        name: "Rapid Infosoft LLC",
+        author: "Nirav Patel",
+        email: "info@rapidinfosoft.com",
+      },
+      category: "pos",
+      app: "verifone_cstoresku",
+      registryUrl: this.options.connectorRegistryUrl,
+      runtime: {
+        deployment: "local_first",
+        database: "sqlite",
+        requiresLocalInstall: true,
+        supportedPlatforms: ["windows-x64", "linux-x64", "linux-aarch64", "macos-arm64", "macos-x64"],
+      },
+      connectors: [
+        {
+          type: "node",
+          id: "verifone-commander",
+          name: "Verifone Commander",
+          category: "pos",
+          authType: "local-credential",
+        },
+        {
+          type: "app",
+          id: "verifone-commander-dashboard",
+          name: "Verifone Commander Local Dashboard",
+          toolIds: [
+            "verifone:sales-query",
+            "verifone:queue-sync",
+            "verifone:health-check",
+            "verifone:password-status",
+          ],
+        },
+        {
+          type: "pipe",
+          id: "verifone-local-sales-to-shre",
+          name: "Local Sales Snapshot to Shre Learning",
+          sourceNodeId: "verifone-commander",
+          targetNodeId: "shre-rag",
+          direction: "one-way",
+          transport: "local",
+        },
+      ],
+      tools: [
+        {
+          id: "verifone:sales-query",
+          name: "Query local Verifone sales",
+          mutating: false,
+          endpoint: `${localBaseUrl}/api/sales/query`,
+          scopes: ["sales.read", "sales.summary.read"],
+        },
+        {
+          id: "verifone:queue-sync",
+          name: "Queue or replay Commander sync",
+          mutating: true,
+          endpoint: `${localBaseUrl}/api/queue/enqueue`,
+          scopes: ["sync.write"],
+        },
+        {
+          id: "verifone:health-check",
+          name: "Read local connector health",
+          mutating: false,
+          endpoint: `${localBaseUrl}/api/diagnostics`,
+          scopes: ["diagnostics.read"],
+        },
+        {
+          id: "verifone:password-status",
+          name: "Read Commander password status",
+          mutating: false,
+          endpoint: `${localBaseUrl}/api/password/status`,
+          scopes: ["credentials.status.read"],
+        },
+      ],
+      dataScopes: [
+        "tenant",
+        "store",
+        "sales_summary",
+        "item_sales_summary",
+        "sync_status",
+        "diagnostics",
+      ],
+      inbound: {
+        endpoint: `${localBaseUrl}/api/messages/inbound`,
+        supportedSources: ["shre-chat", "message-gateway", "whatsapp", "claude", "codex"],
+        responseModes: ["immediate-local", "queued-local", "cloud-relay"],
+      },
+      relatedConnectors: ["rapidrms-api"],
+      security: {
+        requiredHeaders: ["x-shre-tenant-id", "x-shre-agent-id", "x-shre-signature"],
+        localCredentialStorage: "encrypted-local-secret",
+        writesRequireCommanderLease: true,
+      },
+    };
+  }
+
+  saveSalesSnapshot(snapshot: JsonObject): JsonObject {
+    const now = new Date().toISOString();
+    const id = randomUUID();
+    const businessDate = typeof snapshot.businessDate === "string" && snapshot.businessDate
+      ? snapshot.businessDate
+      : now.slice(0, 10);
+    const totalSales = typeof snapshot.totalSales === "number" ? snapshot.totalSales : 0;
+    const transactionCount = typeof snapshot.transactionCount === "number" ? snapshot.transactionCount : 0;
+    const topItems = Array.isArray(snapshot.topItems) ? snapshot.topItems : [];
+    const source = typeof snapshot.source === "string" && snapshot.source ? snapshot.source : "local-ingest";
+    this.db.prepare(`
+      insert into sales_snapshots (
+        id, business_date, total_sales, transaction_count,
+        top_items_json, source, created_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, businessDate, totalSales, transactionCount, JSON.stringify(topItems), source, now);
+    return {
+      id,
+      businessDate,
+      totalSales,
+      transactionCount,
+      topItems: topItems as JsonValue[],
+      source,
+      createdAt: now,
+    };
+  }
+
+  latestSalesSnapshot(businessDate?: string): JsonObject | null {
+    const row = businessDate
+      ? this.db.prepare(`
+          select id, business_date, total_sales, transaction_count, top_items_json, source, created_at
+          from sales_snapshots
+          where business_date = ?
+          order by created_at desc, rowid desc
+          limit 1
+        `).get(businessDate) as SalesSnapshotRow | undefined
+      : this.db.prepare(`
+          select id, business_date, total_sales, transaction_count, top_items_json, source, created_at
+          from sales_snapshots
+          order by business_date desc, created_at desc, rowid desc
+          limit 1
+        `).get() as SalesSnapshotRow | undefined;
+    if (!row) return null;
+    return {
+      id: row.id,
+      businessDate: row.business_date,
+      totalSales: row.total_sales,
+      transactionCount: row.transaction_count,
+      topItems: JSON.parse(row.top_items_json) as JsonValue[],
+      source: row.source,
+      createdAt: row.created_at,
+    };
+  }
+
+  answerSalesQuery(query: string, businessDate?: string): JsonObject {
+    const snapshot = this.latestSalesSnapshot(businessDate);
+    if (!snapshot) {
+      return {
+        status: "queued",
+        requiresDataSource: true,
+        answer: "Sales data is not available in the local database yet. The connector queued the request until the Commander sales ingest is configured.",
+        query,
+        businessDate: businessDate || null,
+        data: null,
+      };
+    }
+    const topItems = Array.isArray(snapshot.topItems) ? snapshot.topItems : [];
+    const topItem = topItems.length > 0 && typeof topItems[0] === "object" && topItems[0] !== null && !Array.isArray(topItems[0])
+      ? topItems[0] as JsonObject
+      : null;
+    const topItemText = topItem && typeof topItem.name === "string"
+      ? ` Top item: ${topItem.name}${typeof topItem.quantity === "number" ? ` (${topItem.quantity} sold)` : ""}.`
+      : "";
+    return {
+      status: "answered",
+      requiresDataSource: false,
+      answer: `Sales for ${snapshot.businessDate}: $${Number(snapshot.totalSales).toFixed(2)} across ${snapshot.transactionCount} transactions.${topItemText}`,
+      query,
+      businessDate: String(snapshot.businessDate),
+      data: snapshot,
     };
   }
 
@@ -483,6 +677,19 @@ export class RuntimeStore {
         expires_at text not null,
         updated_at text not null
       );
+
+      create table if not exists sales_snapshots (
+        id text primary key,
+        business_date text not null,
+        total_sales real not null default 0,
+        transaction_count integer not null default 0,
+        top_items_json text not null,
+        source text not null,
+        created_at text not null
+      );
+
+      create index if not exists idx_sales_snapshots_business_date
+      on sales_snapshots (business_date, created_at);
 
       insert or ignore into schema_migrations (version, applied_at)
       values (1, datetime('now'));

@@ -86,6 +86,8 @@ The E2E test starts the API against a temporary runtime folder and verifies:
 - Verifone config/status.
 - Password workflow.
 - Connector activation and catalog.
+- Connector marketplace manifest.
+- Local sales snapshot and sales query response.
 - Inbound message routing.
 - Chat audit.
 - Commander lease contention.
