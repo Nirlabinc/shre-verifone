@@ -202,6 +202,18 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(config.body.connection.password, "***");
     assert.equal(config.body.connection.applicationKey, "***");
 
+    const cstoreskuKey = await json("/api/cstoresku/key", {
+      method: "POST",
+      body: JSON.stringify({ applicationKey: "updated-cstoresku-key" }),
+    });
+    assert.equal(cstoreskuKey.response.status, 200);
+    assert.equal(cstoreskuKey.body.cstoreskuKeyConfigured, true);
+    assert.equal(cstoreskuKey.body.connection.applicationKey, "***");
+
+    const verifoneStatus = await json("/api/verifone/status");
+    assert.equal(verifoneStatus.response.status, 200);
+    assert.equal(verifoneStatus.body.cstoreskuKeyConfigured, true);
+
     const validation = await json("/api/verifone/validate", {
       method: "POST",
       body: JSON.stringify({ daysRemaining: 8 }),

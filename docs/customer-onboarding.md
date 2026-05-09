@@ -36,14 +36,17 @@ See [Credential Acquisition](credential-acquisition.md) for where to obtain the 
 
 1. Install the application.
 2. Open the local dashboard.
-3. Enter company and store profile.
-4. Enter Commander connection details.
-5. Test Commander connection.
-6. Use Shre Auth signup/activation if cloud/message gateway routing is required.
-7. Confirm queue, password status, and health checks are green.
-8. Send a test message through the chosen gateway.
-9. Ask a test sales question and confirm the response uses local data.
-10. Review activity log and diagnostics.
+3. Create the local login secret. This only unlocks the dashboard on this store PC.
+4. Enter company and store profile.
+5. Open `Verifone` and enter Commander URL, username, and password.
+6. If the store has a CStoreSKU/RapidRMS application key, enter it in `Verifone > CStoreSKU Key`.
+7. Test Commander connection.
+8. Use `Settings > Password Workflow` for Commander password updates or expiration maintenance.
+9. Use Shre Auth signup/activation if cloud/message gateway routing is required.
+10. Confirm queue, password status, and health checks are green.
+11. Send a test message through the chosen gateway.
+12. Ask a test sales question and confirm the response uses local data.
+13. Review activity log and diagnostics.
 
 Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally uses Shre Auth to create or find the tenant/workspace/store and activate the connector. Manual tenant/workspace/store/signing-secret entry should only be used by support.
 

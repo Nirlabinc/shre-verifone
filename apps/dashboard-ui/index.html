@@ -119,6 +119,7 @@
     <nav id="tabs">
       <button class="active" data-tab="overview">Overview</button>
       <button data-tab="setup">Setup</button>
+      <button data-tab="settings">Settings</button>
       <button data-tab="verifone">Verifone</button>
       <button data-tab="connector">Marketplace</button>
       <button data-tab="addons">Add-ons</button>
@@ -203,10 +204,21 @@
             <label>Commander URL<input name="commanderUrl" placeholder="http://192.168.1.50"></label>
             <label>Username<input name="username" autocomplete="username"></label>
             <label>Password<input name="password" type="password" autocomplete="current-password"></label>
-            <label>Application Key<input name="applicationKey" autocomplete="off"></label>
           </div>
+          <div class="hint">This connects to the local Verifone Commander/BOS endpoint. The CStoreSKU application key is stored separately below.</div>
           <div class="toolbar"><button class="primary" type="submit">Save Connection</button><button id="validateVerifone" class="secondary" type="button">Validate</button></div>
         </form>
+        <form id="cstoreskuKeyForm">
+          <h2>CStoreSKU Key</h2>
+          <div class="fields">
+            <label>Application Key<input name="applicationKey" type="password" autocomplete="off"></label>
+          </div>
+          <div id="cstoreskuKeyStatus" class="hint">Key status unknown.</div>
+          <div class="toolbar"><button class="primary" type="submit">Save CStoreSKU Key</button></div>
+        </form>
+      </section>
+
+      <section id="settings">
         <form id="passwordForm">
           <h2>Password Workflow</h2>
           <div class="fields">
@@ -483,6 +495,8 @@
         $("mHost").textContent = `${health.host.hostname} | ${health.host.platform} ${health.host.arch}`;
         $("mVerifone").textContent = verifone.configured ? "Configured" : "Not configured";
         $("mValidation").textContent = verifone.lastValidation ? `${verifone.lastValidation.status} at ${verifone.lastValidation.checkedAt}` : "Not validated";
+        $("cstoreskuKeyStatus").textContent = verifone.cstoreskuKeyConfigured ? "CStoreSKU application key is stored locally." : "No CStoreSKU application key stored.";
+        $("cstoreskuKeyStatus").className = `hint ${verifone.cstoreskuKeyConfigured ? "ok" : "warn"}`;
         $("mConnector").textContent = connector.status || "local_only";
         $("mTenant").textContent = connector.tenantId ? `${connector.tenantId} / ${connector.workspaceId || "no_workspace"} / ${connector.storeId}` : "No cloud tenant mapped";
         document.querySelector('#accessModeForm select[name="mode"]').value = accessMode.mode || "read_only";
@@ -662,6 +676,7 @@
       await refresh();
     };
     $("verifoneForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/verifone/config", { method: "POST", body: JSON.stringify(formObject(event.target)) }); await refresh(); };
+    $("cstoreskuKeyForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/cstoresku/key", { method: "POST", body: JSON.stringify(formObject(event.target)) }); event.target.reset(); await refresh(); };
     $("validateVerifone").onclick = async () => { await api("/api/verifone/validate", { method: "POST", body: JSON.stringify({ daysRemaining: 30 }) }); await refresh(); };
     $("passwordForm").onsubmit = async (event) => {
       event.preventDefault();

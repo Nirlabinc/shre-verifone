@@ -1149,6 +1149,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     const connection = store.getJson<JsonObject>("connections", "verifone", {});
     sendJson(res, 200, {
       configured: Boolean(connection.commanderUrl && connection.username && connection.password),
+      cstoreskuKeyConfigured: Boolean(connection.applicationKey),
       connection: redactConnection(connection),
       lastValidation: store.getJson("connections", "verifone-status", null),
     });
@@ -1168,6 +1169,23 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       store.setJson("connections", "verifone", connection);
       store.appendActivity("verifone_config_saved", { commanderUrl: connection.commanderUrl });
       sendJson(res, 200, { ok: true, connection: redactConnection(connection) });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/cstoresku/key" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const applicationKey = requireString(body, "applicationKey");
+      const connection = store.getJson<JsonObject>("connections", "verifone", {});
+      connection.applicationKey = encryptSecret(applicationKey);
+      connection.applicationKeyUpdatedAt = new Date().toISOString();
+      connection.updatedAt = new Date().toISOString();
+      store.setJson("connections", "verifone", connection);
+      store.appendActivity("cstoresku_key_saved", { configured: true });
+      sendJson(res, 200, { ok: true, cstoreskuKeyConfigured: true, connection: redactConnection(connection) });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
     }

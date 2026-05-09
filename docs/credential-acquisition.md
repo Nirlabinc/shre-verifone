@@ -2,7 +2,20 @@
 
 This document explains where store users get each credential during installation and how Shre/MIB activation should work.
 
-## Verifone / CStoreSKU Application Key
+## Verifone Connection vs. CStoreSKU Application Key
+
+These are separate setup items in the local dashboard.
+
+| Item | Dashboard Location | Purpose |
+| --- | --- | --- |
+| Local login secret | Setup / first launch | Unlocks this local dashboard on the store PC. It does not connect to Commander or CStoreSKU. |
+| Verifone connection | Verifone > Verifone Connection | Stores Commander URL, username, and password so the edge app can reach the local Commander/BOS system. |
+| CStoreSKU application key | Verifone > CStoreSKU Key | Stores the CStoreSKU/RapidRMS/Commander integration key when the store has one. |
+| Commander password update | Settings > Password Workflow | Updates the stored Commander password and password-expiration status. |
+
+Entering only the CStoreSKU key does not complete the POS connection by itself. The Verifone connection must also have Commander URL, username, and password, then validation must pass.
+
+## CStoreSKU Application Key
 
 The application key is not created by this local dashboard. It comes from the POS/backoffice integration owner.
 
@@ -22,7 +35,7 @@ Current behavior:
 User-facing guidance:
 
 ```text
-If your Commander or CStoreSKU integration already uses an application key, enter it here.
+If your Commander or CStoreSKU integration already uses an application key, enter it in Verifone > CStoreSKU Key.
 If you do not have one, leave it blank and continue. Support will tell you if your Commander connection requires it.
 ```
 
