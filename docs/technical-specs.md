@@ -94,9 +94,12 @@ Inbound messages are normalized from canonical local payloads and common gateway
 
 ```http
 GET /api/notifications
+GET /api/readiness
 ```
 
 Notifications are computed from current local state. They flag disconnected Verifone status, password action, failed/pending queue work, missing marketplace activation, and missing local sales data.
+
+Readiness is a machine-readable go-live checklist. It reports critical blockers, warnings, and per-check status for local login, Shre Auth configuration, tenant/workspace/store activation, connector signing secret, entitlement, Verifone validation, sales data, queue health, and usage billing configuration.
 
 ## Local Login And Usage
 

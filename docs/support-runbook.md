@@ -20,6 +20,7 @@ GET /api/password/status
 GET /api/queue
 GET /api/connector/manifest
 GET /api/notifications
+GET /api/readiness
 GET /api/auth/status
 GET /api/usage/summary
 POST /api/usage/replay
@@ -32,6 +33,8 @@ POST /api/diagnostics/bundle
 Every API response includes an `x-request-id` header. The activity log records `api_request_completed` with request ID, method, path, status code, duration, and remote address.
 
 The dashboard header and Overview screen show notifications from `/api/notifications` when Verifone is disconnected, password action is required, queue work fails or waits, marketplace activation is missing, or local sales data has not been ingested.
+
+`GET /api/readiness` is the go-live checklist endpoint. `ready: true` means no critical local blockers remain. `productionReady: true` also requires production Shre Auth signup and usage billing endpoints to be configured.
 
 If login validation shows `offline_pending`, the user can continue local work. Confirm internet access and `SHRE_AUTH_VALIDATE_URL`, then use `POST /api/auth/validate` or wait for background retry.
 

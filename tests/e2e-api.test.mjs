@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdtemp, rm, access, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -65,6 +66,29 @@ function signedBody(body, tenantId = "tenant_rapid_001") {
 
 test("local-first onboarding, password, queue, and diagnostics flow", async () => {
   const runtimeRoot = await mkdtemp(join(tmpdir(), "verifone-shre-e2e-"));
+  const signupRequests = [];
+  const shreAuthServer = createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    signupRequests.push(body);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({
+      status: "activated",
+      tenantId: "tenant_shre_auth_001",
+      workspaceId: "workspace_ops_001",
+      storeId: "store_shre_auth_001",
+      connectorId: "verifone-commander",
+      connectorName: "Verifone Commander",
+      registryUrl: "https://connector.aros.live",
+      sharedSecret: "mock-shre-auth-secret",
+      allowedSources: ["shre-chat", "whatsapp", "claude", "codex"],
+      entitlementState: "active",
+      billingEndpoint: "https://connector.aros.live/api/usage",
+    }));
+  });
+  await new Promise((resolve) => shreAuthServer.listen(0, "127.0.0.1", resolve));
+  const shreAuthUrl = `http://127.0.0.1:${shreAuthServer.address().port}/signup-activate`;
   const child = spawn(process.execPath, ["dist/apps/dashboard-api/src/server.js"], {
     cwd: process.cwd(),
     env: {
@@ -75,6 +99,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       CONNECTOR_REGISTRY_URL: "https://connector.aros.live",
       CONNECTOR_SHARED_SECRET: connectorSecret,
       LOCAL_ADMIN_TOKEN: localAdminToken,
+      SHRE_AUTH_SIGNUP_URL: shreAuthUrl,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -130,11 +155,13 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     });
     assert.equal(shreSignup.response.status, 200);
     assert.equal(shreSignup.body.ok, true);
-    assert.equal(shreSignup.body.simulated, true);
-    assert.match(shreSignup.body.tenantId, /^tenant_/);
-    assert.match(shreSignup.body.workspaceId, /^workspace_/);
-    assert.match(shreSignup.body.storeId, /^store_/);
+    assert.equal(shreSignup.body.simulated, false);
+    assert.equal(shreSignup.body.tenantId, "tenant_shre_auth_001");
+    assert.equal(shreSignup.body.workspaceId, "workspace_ops_001");
+    assert.equal(shreSignup.body.storeId, "store_shre_auth_001");
     assert.equal(shreSignup.body.cloudRelayEnabled, true);
+    assert.equal(signupRequests.length, 1);
+    assert.equal(signupRequests[0].workspaceName, "Operations");
 
     const onboarding = await json("/api/onboarding", {
       method: "POST",
@@ -230,6 +257,10 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(connector.body.workspaceId, "workspace_ops_001");
     assert.equal(connector.body.registryUrl, "https://connector.aros.live");
     assert.deepEqual(connector.body.relatedConnectors, ["rapidrms-api"]);
+
+    const readiness = await json("/api/readiness");
+    assert.equal(readiness.response.status, 200);
+    assert.equal(readiness.body.checks.some((check) => check.id === "workspace_id" && check.ok === true), true);
 
     const catalog = await json("/api/connectors/catalog");
     assert.equal(catalog.response.status, 200);
@@ -432,6 +463,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
   } finally {
     child.kill("SIGTERM");
     await new Promise((resolve) => child.once("exit", resolve));
+    await new Promise((resolve) => shreAuthServer.close(resolve));
     await rm(runtimeRoot, { recursive: true, force: true });
   }
 });

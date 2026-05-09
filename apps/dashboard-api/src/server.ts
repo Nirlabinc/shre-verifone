@@ -692,6 +692,47 @@ function currentNotifications(): JsonObject {
   };
 }
 
+function currentReadiness(): JsonObject {
+  const checks: JsonObject[] = [];
+  const add = (id: string, ok: boolean, severity: string, message: string): void => {
+    checks.push({ id, ok, severity, message });
+  };
+  const connection = store.getJson<JsonObject>("connections", "verifone", {});
+  const verifoneStatus = store.getJson<JsonObject | null>("connections", "verifone-status", null);
+  const connector = store.connectorStatus();
+  const credentials = store.getJson<JsonObject>("connector", "credentials", {});
+  const auth = authState();
+  const remote = asObject(auth.remoteValidation || {});
+  const sales = store.latestSalesSnapshot();
+  const queue = store.queueSummary();
+
+  add("local_login_configured", auth.configured === true, "critical", "Local login secret is configured.");
+  add("shre_auth_signup_configured", Boolean(shreAuthSignupUrl), "warning", "Production Shre Auth signup URL is configured.");
+  add("connector_activated", connector.status === "activated", "critical", "Connector is activated.");
+  add("tenant_id", Boolean(connector.tenantId), "critical", "Tenant ID is present.");
+  add("workspace_id", Boolean(connector.workspaceId), "critical", "Workspace ID is present.");
+  add("store_id", Boolean(connector.storeId), "critical", "Store ID is present.");
+  add("connector_secret", Boolean(activeConnectorSharedSecret()), "critical", "Connector signing secret is available.");
+  add("cloud_relay", connector.cloudRelayEnabled === true, "warning", "Cloud relay is enabled.");
+  add("entitlement_active", !["suspended", "deactivated", "rejected"].includes(String(remote.entitlementState || remote.state || "")), "critical", "Entitlement is active or not blocking local work.");
+  add("verifone_configured", Boolean(connection.commanderUrl && connection.username && connection.password), "critical", "Verifone connection is configured.");
+  add("verifone_connected", Boolean(verifoneStatus && verifoneStatus.status === "connected"), "critical", "Verifone connection has validated.");
+  add("sales_data_available", Boolean(sales), "warning", "Local sales data is available.");
+  add("queue_not_failed", Number(queue.failed || 0) === 0, "critical", "Queue has no failed work.");
+  add("cost_endpoint_configured", Boolean(shreCostEndpoint || credentials.billingEndpoint), "warning", "Usage billing endpoint is configured.");
+
+  const blockers = checks.filter((check) => check.ok !== true && check.severity === "critical");
+  const warnings = checks.filter((check) => check.ok !== true && check.severity !== "critical");
+  return {
+    ready: blockers.length === 0,
+    productionReady: blockers.length === 0 && warnings.length === 0,
+    blockers,
+    warnings,
+    checks,
+    nextSteps: [...blockers, ...warnings].map((check) => check.message),
+  };
+}
+
 function localBaseUrl(req: IncomingMessage): string {
   if (localBaseUrlOverride) return localBaseUrlOverride.replace(/\/$/, "");
   const requestHost = String(req.headers.host || `localhost:${port}`);
@@ -1077,6 +1118,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       activity: "/api/activity",
       messageAudit: "/api/messages/audit",
       notifications: "/api/notifications",
+      readiness: "/api/readiness",
       usage: "/api/usage/summary",
       shreSignupActivate: "/api/shre/signup-activate",
       activitySummary: store.activitySummary(),
@@ -1086,6 +1128,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/notifications") {
     sendJson(res, 200, currentNotifications());
+    return;
+  }
+
+  if (path === "/api/readiness") {
+    sendJson(res, 200, currentReadiness());
     return;
   }
 
