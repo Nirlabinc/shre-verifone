@@ -5,6 +5,7 @@ dist/
 !.env.example
 !.env.dev.example
 !.env.qa.example
+!.env.beta.example
 !.env.prod.example
 *.log
 runtime/

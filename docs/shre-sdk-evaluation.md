@@ -21,7 +21,7 @@ The user mentioned `nirlab`; the authenticated GitHub account currently sees Shr
 
 The language SDKs use a consistent event SDK contract:
 
-- Control plane: `https://apiauth.shre.ai`
+- Control plane: `https://shre-auth.shre.ai` for dev/QA and `https://shre-auth.aros.live` for beta/prod
 - Events plane: `https://events.shre.ai`
 - Start/session: `POST /v1/sdk/session`
 - Config: `GET /v1/sdk/config`

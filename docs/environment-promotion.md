@@ -6,12 +6,13 @@ This repo is ready to promote when CI passes and `/api/readiness` has no critica
 
 ```text
 local developer machine
--> dev Shre Auth hosted on a reachable remote/dev computer
--> QA Shre Auth and connector registry
--> beta/prod Shre Auth and connector registry
+-> dev/QA Shre Auth at shre-auth.shre.ai
+-> beta/prod Shre Auth at shre-auth.aros.live
 ```
 
 The local connector does not need Shre Auth running on the same store PC. It only needs HTTPS or reachable HTTP access to the configured Shre Auth signup/validation endpoints.
+
+Dev and QA use `https://shre-auth.shre.ai`. Their activation/setup data should sync forward into `https://shre-auth.aros.live` when the beta/prod Shre Auth service is available.
 
 ## Environment Files
 
@@ -20,6 +21,7 @@ Use these examples as installer/service templates:
 ```text
 .env.dev.example
 .env.qa.example
+.env.beta.example
 .env.prod.example
 ```
 
@@ -32,29 +34,31 @@ Important values:
 - `CONNECTOR_REGISTRY_URL`: connector routing registry.
 - `LOCAL_BASE_URL`: local dashboard/connector URL shown in the manifest.
 
-For dev, `SHRE_AUTH_SIGNUP_URL` can point to a Shre Auth service hosted on a remote dev computer, VM, or lab server. Example:
+Environment Shre Auth hosts:
 
 ```text
-SHRE_AUTH_SIGNUP_URL=http://10.10.10.25:8080/api/connectors/verifone-commander/signup-activate
-SHRE_AUTH_VALIDATE_URL=http://10.10.10.25:8080/api/connectors/verifone-commander/validate
+dev:  https://shre-auth.shre.ai
+qa:   https://shre-auth.shre.ai
+beta: https://shre-auth.aros.live
+prod: https://shre-auth.aros.live
 ```
 
 ## Dev/QA Setup Steps
 
-1. Start or identify the remote Shre Auth service.
+1. Confirm the remote Shre Auth service is reachable.
 2. Confirm the local store PC can reach it:
 
 ```powershell
-Invoke-RestMethod http://10.10.10.25:8080/health
+Invoke-RestMethod https://shre-auth.shre.ai/health
 ```
 
 3. Configure the local service environment:
 
 ```powershell
 $env:SHRE_ENV="dev"
-$env:SHRE_AUTH_SIGNUP_URL="http://10.10.10.25:8080/api/connectors/verifone-commander/signup-activate"
-$env:SHRE_AUTH_VALIDATE_URL="http://10.10.10.25:8080/api/connectors/verifone-commander/validate"
-$env:SHRE_COST_ENDPOINT="http://10.10.10.25:8082/api/usage"
+$env:SHRE_AUTH_SIGNUP_URL="https://shre-auth.shre.ai/api/connectors/verifone-commander/signup-activate"
+$env:SHRE_AUTH_VALIDATE_URL="https://shre-auth.shre.ai/api/connectors/verifone-commander/validate"
+$env:SHRE_COST_ENDPOINT="https://connector-qa.aros.live/api/usage"
 ```
 
 4. Restart the local API.
@@ -76,8 +80,8 @@ Before calling an install production-ready:
 
 1. GitHub CI passes on `master`.
 2. Local installer starts the service after reboot.
-3. `SHRE_AUTH_SIGNUP_URL` points to beta/prod Shre Auth.
-4. `SHRE_AUTH_VALIDATE_URL` points to beta/prod Shre Auth validation.
+3. `SHRE_AUTH_SIGNUP_URL` points to `https://shre-auth.aros.live`.
+4. `SHRE_AUTH_VALIDATE_URL` points to `https://shre-auth.aros.live`.
 5. `SHRE_COST_ENDPOINT` points to beta/prod cost reporting.
 6. User completes Shre Auth signup/activation.
 7. `/api/readiness` returns `ready: true`.

@@ -104,13 +104,13 @@ CONNECTOR_REGISTRY_URL=https://connector.aros.live
 CONNECTOR_SHARED_SECRET=
 HOST=127.0.0.1
 LOCAL_BASE_URL=http://cstoresku:5480
-SHRE_ENDPOINT=https://apiauth.shre.ai
+SHRE_ENDPOINT=https://shre-auth.aros.live
 SHRE_EVENTS_ENDPOINT=https://events.shre.ai
 SHRE_TENANT_ID=
 SHRE_APP=verifone_cstoresku
 SHRE_MODE=read_only
 SHRE_BOOTSTRAP_KEY=
-SHRE_AUTH_SIGNUP_URL=
+SHRE_AUTH_SIGNUP_URL=https://shre-auth.aros.live/api/connectors/verifone-commander/signup-activate
 ```
 
 Installer/onboarding field ownership is tracked in [Installation Data Map](installation-data-map.md). Use that document when adding installer prompts, first-run setup fields, activation-token exchange, or support scripts.

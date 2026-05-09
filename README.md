@@ -81,7 +81,7 @@ Setup, onboarding, support, and specs:
 
 The existing Shre SDK family uses the same wire contract across Swift, .NET, Python, and the private platform SDK:
 
-- Control plane: `https://apiauth.shre.ai`
+- Control plane: `https://shre-auth.shre.ai` for dev/QA and `https://shre-auth.aros.live` for beta/prod
 - Events plane: `https://events.shre.ai`
 - Session endpoint: `/v1/sdk/session`
 - Config endpoint: `/v1/sdk/config`

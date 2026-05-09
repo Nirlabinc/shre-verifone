@@ -173,7 +173,8 @@ The local app should store returned secrets in the secure local vault/runtime co
 Environment:
 
 ```text
-SHRE_AUTH_SIGNUP_URL=
+dev/qa:   SHRE_AUTH_SIGNUP_URL=https://shre-auth.shre.ai/api/connectors/verifone-commander/signup-activate
+beta/prod: SHRE_AUTH_SIGNUP_URL=https://shre-auth.aros.live/api/connectors/verifone-commander/signup-activate
 ```
 
 ## Security Rules
