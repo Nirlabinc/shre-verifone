@@ -19,8 +19,8 @@ jobs:
       - name: Install
         run: npm install
 
-      - name: Build
-        run: npm run build
+      - name: Build and E2E
+        run: npm run check
 
       - name: Check required docs
         run: |

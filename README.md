@@ -98,6 +98,24 @@ Build:
 npm run build
 ```
 
+Run the current local-first E2E flow:
+
+```powershell
+npm run test:e2e
+```
+
+The E2E test starts the dashboard API against a temporary runtime folder and verifies:
+
+- Health endpoint.
+- Onboarding state.
+- User/store profile save.
+- Verifone connection config save with password redaction.
+- Local Verifone validation status.
+- Password expiration/failure/manual-update workflow.
+- Offline queue enqueue/replay.
+- Diagnostics bundle generation.
+- Activity log events.
+
 ## Docker
 
 ```powershell
@@ -145,4 +163,17 @@ GitHub Actions validates TypeScript build and documentation presence.
 
 ## Phase 2 Status
 
-This repo is ready for initial API/dashboard implementation. The next implementation step is replacing JSON file stores with SQLite and wiring the Shre connector to the production tenant.
+Implemented now:
+
+- Local dashboard API.
+- Browser dashboard shell.
+- Local runtime folders.
+- Onboarding/profile endpoints.
+- Verifone config/status endpoints.
+- Password expiration status, failed auto-reset state, and manual update endpoint.
+- Offline queue enqueue/replay endpoints.
+- Diagnostics bundle endpoint.
+- Activity log endpoint.
+- E2E API test for the local-first flow.
+
+Next implementation step: replace JSON file stores with SQLite migrations and wire live Commander/Shre tenant integrations behind the existing API contracts.

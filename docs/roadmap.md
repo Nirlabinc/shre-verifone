@@ -11,7 +11,20 @@
 - CI.
 - Documentation.
 
-Status: scaffolded.
+Status: complete.
+
+## Milestone 1.5: Local-First API Flow
+
+- Onboarding endpoint.
+- Profile endpoint.
+- Verifone config/status endpoint.
+- Password status, auto-reset failure, and manual update endpoints.
+- Offline queue enqueue/replay endpoints.
+- Diagnostics bundle endpoint.
+- Activity log endpoint.
+- E2E API test.
+
+Status: complete.
 
 ## Milestone 2: SQLite Runtime Store
 

@@ -11,7 +11,8 @@
     "dev:api": "node --watch dist/apps/dashboard-api/src/server.js",
     "start:api": "node dist/apps/dashboard-api/src/server.js",
     "start:shre": "node dist/services/shre-connector/src/worker.js",
-    "check": "npm run build"
+    "test:e2e": "npm run build && node --test tests/e2e-api.test.mjs",
+    "check": "npm run build && npm run test:e2e"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",

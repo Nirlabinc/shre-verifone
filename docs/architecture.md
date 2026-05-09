@@ -109,7 +109,21 @@ Owns Shre integration:
 
 ## Runtime Storage
 
-Initial scaffold uses JSON files so the shape is easy to inspect. Production should use SQLite.
+The current implementation uses local JSON/JSONL files so the local-first API can be tested end to end immediately. Production should move the same contracts onto SQLite.
+
+Current runtime files:
+
+```text
+profile.json
+onboarding.json
+connections/verifone.json
+connections/verifone-status.json
+connections/password-status.json
+queue/items.json
+queue/status.json
+logs/activity.jsonl
+diagnostics/bundle-*.json
+```
 
 Recommended SQLite database:
 

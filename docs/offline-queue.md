@@ -66,3 +66,13 @@ create table conflicts (
 - Manual replay requires operator action.
 - Queue size and age limits must be enforced.
 - Diagnostics must include queue health without exposing secrets.
+
+## Current Implementation
+
+The dashboard API currently implements:
+
+- `POST /api/queue/enqueue`
+- `GET /api/queue`
+- `POST /api/queue/replay`
+
+The current store is `queue/items.json` plus `queue/status.json`. This is intentionally simple for the first E2E milestone. Milestone 2 moves the same behavior into SQLite tables.

@@ -48,3 +48,13 @@ Send approved Shre events:
 - `password_manual_update_required`
 
 Never include the password in logs, events, diagnostics, or training records.
+
+## Current Implementation
+
+The dashboard API currently implements:
+
+- `GET /api/password/status`
+- `POST /api/password/auto-reset`
+- `POST /api/password/manual-update`
+
+`POST /api/verifone/validate` can update password status when the caller supplies `daysRemaining`. The live Commander password-change call is not wired yet; the API contract and local state transitions are implemented and covered by E2E tests.
