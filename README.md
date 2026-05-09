@@ -63,6 +63,7 @@ Local database choice is documented in [docs/local-database-decision.md](docs/lo
 Setup, onboarding, support, and specs:
 
 - [Setup Tree](docs/setup-tree.md)
+- [Installation Data Map](docs/installation-data-map.md)
 - [Local Alias](docs/local-alias.md)
 - [Customer Onboarding](docs/customer-onboarding.md)
 - [Developer Onboarding](docs/developer-onboarding.md)

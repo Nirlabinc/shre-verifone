@@ -23,8 +23,11 @@ Have these ready:
 - Verifone Commander IP/URL.
 - Commander username and password.
 - CStoreSKU/RapidRMS application key if required.
+- Shre/MIB tenant ID and activation token if cloud or message gateway routing is enabled.
 - Internet access for installation and optional cloud relay.
 - Local network access to Commander.
+
+See [Installation Data Map](installation-data-map.md) for the full field list and where each value comes from.
 
 ## Setup Steps
 
@@ -38,6 +41,8 @@ Have these ready:
 8. Send a test message through the chosen gateway.
 9. Ask a test sales question and confirm the response uses local data.
 10. Review activity log and diagnostics.
+
+Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally requires Shre/MIB tenant/store activation and connector signing credentials.
 
 ## Normal Daily Operation
 
