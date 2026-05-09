@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verifone Commander Shre CStoreSKU</title>
+  <style>
+    body { margin: 0; font-family: Segoe UI, Arial, sans-serif; color: #17202a; background: #f6f7f9; }
+    header { background: #ffffff; border-bottom: 1px solid #d8dee4; padding: 16px 24px; }
+    main { padding: 20px 24px; display: grid; gap: 16px; }
+    h1 { font-size: 22px; margin: 0; }
+    h2 { font-size: 16px; margin: 0 0 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .card { background: #ffffff; border: 1px solid #d8dee4; border-radius: 6px; padding: 14px; min-height: 96px; }
+    .label { color: #57606a; font-size: 12px; text-transform: uppercase; }
+    .value { font-size: 15px; margin-top: 4px; word-break: break-word; }
+    pre { margin: 0; white-space: pre-wrap; font-size: 12px; color: #dbeafe; background: #111827; border-radius: 6px; padding: 12px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Verifone Commander Shre CStoreSKU</h1>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card"><div class="label">Health</div><div id="health" class="value">Loading</div></div>
+      <div class="card"><div class="label">Verifone</div><div id="verifone" class="value">Loading</div></div>
+      <div class="card"><div class="label">Password</div><div id="password" class="value">Loading</div></div>
+      <div class="card"><div class="label">Queue</div><div id="queue" class="value">Loading</div></div>
+    </section>
+    <section>
+      <h2>Diagnostics</h2>
+      <pre id="diagnostics">Loading</pre>
+    </section>
+  </main>
+  <script>
+    async function getJson(path) {
+      const response = await fetch(path, { cache: "no-store" });
+      return response.json();
+    }
+    async function refresh() {
+      const [health, verifone, password, queue, diagnostics] = await Promise.all([
+        getJson("/api/health"),
+        getJson("/api/verifone/status"),
+        getJson("/api/password/status"),
+        getJson("/api/queue"),
+        getJson("/api/diagnostics")
+      ]);
+      document.getElementById("health").textContent = health.ok ? "Running" : "Failed";
+      document.getElementById("verifone").textContent = verifone.configured ? "Configured" : "Not configured";
+      document.getElementById("password").textContent = `${password.state || "unknown"}${password.daysRemaining == null ? "" : `, ${password.daysRemaining} days`}`;
+      document.getElementById("queue").textContent = `${queue.pending || 0} pending, ${queue.failed || 0} failed`;
+      document.getElementById("diagnostics").textContent = JSON.stringify({ health, diagnostics }, null, 2);
+    }
+    refresh();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>

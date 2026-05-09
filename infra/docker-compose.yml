@@ -1,0 +1,61 @@
+services:
+  dashboard-api:
+    build:
+      context: ..
+      dockerfile: infra/node.Dockerfile
+    command: ["node", "dist/apps/dashboard-api/src/server.js"]
+    environment:
+      PORT: "5480"
+      VERIFONE_SHRE_HOME: /runtime
+      SHRE_ENDPOINT: ${SHRE_ENDPOINT:-https://apiauth.shre.ai}
+      SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://events.shre.ai}
+      SHRE_TENANT_ID: ${SHRE_TENANT_ID:-}
+      SHRE_APP: ${SHRE_APP:-verifone_cstoresku}
+      SHRE_MODE: ${SHRE_MODE:-read_only}
+    volumes:
+      - verifone-shre-runtime:/runtime
+    ports:
+      - "5480:5480"
+    restart: unless-stopped
+
+  shre-connector:
+    build:
+      context: ..
+      dockerfile: infra/node.Dockerfile
+    command: ["node", "dist/services/shre-connector/src/worker.js"]
+    environment:
+      VERIFONE_SHRE_HOME: /runtime
+      SHRE_ENDPOINT: ${SHRE_ENDPOINT:-https://apiauth.shre.ai}
+      SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://events.shre.ai}
+      SHRE_TENANT_ID: ${SHRE_TENANT_ID:-}
+      SHRE_APP: ${SHRE_APP:-verifone_cstoresku}
+      SHRE_MODE: ${SHRE_MODE:-read_only}
+      SHRE_BOOTSTRAP_KEY: ${SHRE_BOOTSTRAP_KEY:-}
+    volumes:
+      - verifone-shre-runtime:/runtime
+    restart: unless-stopped
+
+  queue-worker:
+    build:
+      context: ..
+      dockerfile: infra/node.Dockerfile
+    command: ["node", "dist/services/queue-worker/src/worker.js"]
+    environment:
+      VERIFONE_SHRE_HOME: /runtime
+    volumes:
+      - verifone-shre-runtime:/runtime
+    restart: unless-stopped
+
+  diagnostics:
+    build:
+      context: ..
+      dockerfile: infra/node.Dockerfile
+    command: ["node", "dist/services/diagnostics/src/worker.js"]
+    environment:
+      VERIFONE_SHRE_HOME: /runtime
+    volumes:
+      - verifone-shre-runtime:/runtime
+    restart: unless-stopped
+
+volumes:
+  verifone-shre-runtime:
