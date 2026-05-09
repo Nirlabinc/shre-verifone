@@ -22,6 +22,8 @@ GET /api/connector/manifest
 GET /api/notifications
 GET /api/auth/status
 GET /api/usage/summary
+POST /api/usage/replay
+GET /api/messages/contract
 POST /api/sales/query
 GET /api/activity
 POST /api/diagnostics/bundle
@@ -80,10 +82,21 @@ Check:
 Check:
 
 - Connector is activated for the correct tenant/store.
+- The incoming gateway payload matches `GET /api/messages/contract`.
 - `/api/messages/audit` shows the inbound message.
 - `/api/sales/query` returns an answer for the requested business date.
 - Local Commander sales ingest has written a recent `sales_snapshots` record.
 - If the query returns `requiresDataSource: true`, configure or repair the Commander sales ingest before troubleshooting Shre.
+
+### Usage Billing Backfill
+
+Check:
+
+- `/api/usage/summary` for `pendingReport`, `reported`, and `failedReport`.
+- `/api/queue` for target `shre-cost`.
+- Account entitlement is active before replaying metered cloud work.
+
+Run `POST /api/usage/replay` after billing/network recovery. This replays usage reporting without touching unrelated Commander or cloud queue items.
 
 ### Multiple Clients Hitting Commander
 

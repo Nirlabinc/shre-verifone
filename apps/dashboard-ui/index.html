@@ -285,8 +285,9 @@
           <div class="mini"><span class="label">Input Tokens</span><strong id="uInput">0</strong></div>
           <div class="mini"><span class="label">Output Tokens</span><strong id="uOutput">0</strong></div>
           <div class="mini"><span class="label">Estimated Cost</span><strong id="uCost">$0.000000</strong></div>
-          <div class="mini"><span class="label">Events</span><strong id="uEvents">0</strong></div>
+          <div class="mini"><span class="label">Pending Reports</span><strong id="uPending">0</strong></div>
         </div>
+        <div class="toolbar" style="margin-bottom:12px"><button id="replayUsage" class="primary" type="button">Report Usage / Backfill</button><button id="refreshUsage" class="secondary" type="button">Refresh Usage</button></div>
         <div class="table-wrap scroll-table"><table><thead><tr><th>Time</th><th>Source</th><th>Model</th><th>Tokens</th><th>Cost</th><th>Status</th></tr></thead><tbody id="usageRows"></tbody></table></div>
       </section>
 
@@ -452,7 +453,7 @@
       $("uInput").textContent = usage.inputTokens || 0;
       $("uOutput").textContent = usage.outputTokens || 0;
       $("uCost").textContent = `$${Number(usage.estimatedCostUsd || 0).toFixed(6)}`;
-      $("uEvents").textContent = events.length;
+      $("uPending").textContent = usage.pendingReport || 0;
       $("usageRows").innerHTML = events.slice().reverse().map((event) => `<tr><td>${event.createdAt}</td><td>${event.source}</td><td>${event.model}</td><td>${event.inputTokens + event.outputTokens}</td><td>$${Number(event.estimatedCostUsd || 0).toFixed(6)}</td><td><span class="badge pending">${event.status}</span></td></tr>`).join("") || '<tr><td colspan="6">No usage events</td></tr>';
     }
     function addChatMessage(role, text, meta = null) {
@@ -523,6 +524,7 @@
     };
     $("refreshAll").onclick = refresh;
     $("refreshQueue").onclick = refresh;
+    $("refreshUsage").onclick = refresh;
     $("refreshHealth").onclick = refresh;
     $("loginForm").onsubmit = async (event) => {
       event.preventDefault();
@@ -599,6 +601,7 @@
       await refresh();
     };
     $("replayQueue").onclick = async () => { await api("/api/queue/replay", { method: "POST", body: "{}" }); await refresh(); };
+    $("replayUsage").onclick = async () => { await api("/api/usage/replay", { method: "POST", body: "{}" }); await refresh(); };
     $("createBundle").onclick = async () => { const result = await api("/api/diagnostics/bundle", { method: "POST", body: "{}" }); showJson("diagnosticsJson", result); await refresh(); };
     refresh();
     setInterval(refresh, 30000);

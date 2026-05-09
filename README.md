@@ -153,6 +153,8 @@ The E2E test starts the dashboard API against a temporary runtime folder and ver
 - Shre connector manifest.
 - Local sales snapshot ingest and sales query response.
 - Chat/message gateway answer from local SQLite when sales data exists.
+- Gateway-shaped inbound messages from future Claude/Codex/WhatsApp/ShreChat routes.
+- Usage tracking and billing backfill through the dedicated usage replay path.
 - Diagnostics bundle generation.
 - Activity log events.
 

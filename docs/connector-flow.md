@@ -128,6 +128,20 @@ Inbound message:
 POST /api/messages/inbound
 ```
 
+Message contract:
+
+```http
+GET /api/messages/contract
+```
+
+The inbound endpoint accepts the canonical local payload plus gateway-shaped payloads from ShreChat, WhatsApp, Claude, Codex, and connector.aros.live. It normalizes common fields before classification:
+
+- `source`, `channel`, or `provider`
+- `messageText`, `text`, `prompt`, `content`, or `query`
+- `message.text`, `message.content`, or the latest `messages[].content`
+- `tenantId`/`storeId` directly or through `context`
+- optional `businessDate` directly or through `context`
+
 Example:
 
 ```json
@@ -140,6 +154,23 @@ Example:
   "messageText": "What were sales today?"
 }
 ```
+
+Gateway-shaped example:
+
+```json
+{
+  "provider": "anthropic",
+  "tenantId": "tenant_rapid_001",
+  "storeId": "store_001",
+  "message": { "id": "msg_claude_001" },
+  "messages": [
+    { "role": "user", "content": "Show sales today" }
+  ],
+  "context": { "businessDate": "2026-05-09" }
+}
+```
+
+Response payloads include a stable `gatewayResponse` object that connector.aros.live and future channel adapters can pass back to the original sender without knowing local implementation details.
 
 Message audit:
 
@@ -154,6 +185,8 @@ POST /api/chat/local
 ```
 
 The current chat uses local tools, not a general model. It routes sales questions to the local sales query tool and records usage for billing.
+
+Local dashboard chat and gateway inbound traffic now share the same local classification, local sales query tool, chat audit log, and usage metering path. This is the intended bridge for future Claude, Codex, WhatsApp, and ShreChat messages.
 
 Sales snapshot ingest:
 

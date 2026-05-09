@@ -193,6 +193,21 @@ export class RuntimeStore {
       set status = ?, attempt_count = attempt_count + 1, last_error = ?, updated_at = ?
       where status = 'pending'
     `).run(status, error, now);
+    if (!forceFailure) {
+      this.db.prepare(`
+        update usage_events
+        set status = 'reported'
+        where id in (
+          select entity_id
+          from outbound_queue
+          where target = 'shre-cost'
+            and entity_type = 'usage_event'
+            and operation = 'report_usage'
+            and status = 'completed'
+            and entity_id is not null
+        )
+      `).run();
+    }
     const failed = this.db.prepare("select count(*) as count from outbound_queue where status = 'failed'").get() as { count: number };
     const queueStatus: JsonObject = {
       lastReplayAt: now,
@@ -202,6 +217,60 @@ export class RuntimeStore {
     return {
       ...queueStatus,
       items: this.queueItems(),
+    };
+  }
+
+  replayUsageReports(forceFailure: boolean): JsonObject {
+    const now = new Date().toISOString();
+    const status = forceFailure ? "failed" : "completed";
+    const error = forceFailure ? "Usage report replay forced to fail by test/operator request" : null;
+    this.db.prepare(`
+      update outbound_queue
+      set status = ?, attempt_count = attempt_count + 1, last_error = ?, updated_at = ?
+      where status = 'pending'
+        and target = 'shre-cost'
+        and entity_type = 'usage_event'
+        and operation = 'report_usage'
+    `).run(status, error, now);
+    if (!forceFailure) {
+      this.db.prepare(`
+        update usage_events
+        set status = 'reported'
+        where id in (
+          select entity_id
+          from outbound_queue
+          where target = 'shre-cost'
+            and entity_type = 'usage_event'
+            and operation = 'report_usage'
+            and status = 'completed'
+            and entity_id is not null
+        )
+      `).run();
+    } else {
+      this.db.prepare(`
+        update usage_events
+        set status = 'report_failed'
+        where id in (
+          select entity_id
+          from outbound_queue
+          where target = 'shre-cost'
+            and entity_type = 'usage_event'
+            and operation = 'report_usage'
+            and status = 'failed'
+            and entity_id is not null
+        )
+      `).run();
+    }
+    const usage = this.usageSummary(100);
+    this.setJson("usage", "replay-status", {
+      lastReplayAt: now,
+      lastError: forceFailure ? error : null,
+    });
+    return {
+      lastReplayAt: now,
+      lastError: forceFailure ? error : null,
+      usage,
+      items: this.queueItems().filter((item) => item.target === "shre-cost" && item.entityType === "usage_event"),
     };
   }
 
@@ -546,6 +615,10 @@ export class RuntimeStore {
       inputTokens: events.reduce((sum, event) => sum + Number(asJsonObject(event).inputTokens || 0), 0),
       outputTokens: events.reduce((sum, event) => sum + Number(asJsonObject(event).outputTokens || 0), 0),
       estimatedCostUsd: events.reduce((sum, event) => sum + Number(asJsonObject(event).estimatedCostUsd || 0), 0),
+      pendingReport: events.filter((event) => event.status === "pending_report").length,
+      reported: events.filter((event) => event.status === "reported").length,
+      failedReport: events.filter((event) => event.status === "report_failed").length,
+      lastReplay: this.getJson<JsonObject>("usage", "replay-status", {}),
       events,
     };
   }

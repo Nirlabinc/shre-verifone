@@ -348,6 +348,60 @@ function classifyMessage(messageText: string): { intent: string; target: string;
   return { intent: "general_question", target: "shre", operation: "answer" };
 }
 
+function normalizeSource(value: string): string {
+  const source = value.trim().toLowerCase().replace(/_/g, "-");
+  const aliases: Record<string, string> = {
+    shrechat: "shre-chat",
+    shre: "shre-chat",
+    gateway: "message-gateway",
+    "messagegateway": "message-gateway",
+    "whats-app": "whatsapp",
+    "meta-whatsapp": "whatsapp",
+    anthropic: "claude",
+    "claude-desktop": "claude",
+    openai: "codex",
+  };
+  return aliases[source] || source || "unknown";
+}
+
+function textFromJson(value: JsonValue): string {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const object = value as JsonObject;
+  for (const key of ["messageText", "text", "prompt", "content", "query"]) {
+    if (typeof object[key] === "string" && String(object[key]).trim()) return String(object[key]);
+  }
+  const message = asObject(object.message || {});
+  for (const key of ["text", "content", "body"]) {
+    if (typeof message[key] === "string" && String(message[key]).trim()) return String(message[key]);
+  }
+  if (Array.isArray(object.messages)) {
+    const latest = object.messages.map(asObject).reverse().find((item) => typeof item.content === "string" || typeof item.text === "string");
+    if (latest) return String(latest.content || latest.text || "");
+  }
+  return "";
+}
+
+function normalizeInboundMessage(body: JsonObject, registration: JsonObject): JsonObject {
+  const context = asObject(body.context || {});
+  const message = asObject(body.message || {});
+  const source = normalizeSource(String(body.source || body.channel || body.provider || context.source || "unknown"));
+  return {
+    source,
+    tenantId: typeof body.tenantId === "string" ? body.tenantId : String(context.tenantId || registration.tenantId || ""),
+    storeId: typeof body.storeId === "string" ? body.storeId : String(context.storeId || registration.storeId || ""),
+    userId: String(body.userId || body.senderId || body.from || message.from || context.userId || ""),
+    messageId: String(body.messageId || body.id || message.id || randomUUID()),
+    messageText: textFromJson(body).trim(),
+    businessDate: typeof body.businessDate === "string" ? body.businessDate : String(context.businessDate || ""),
+    rawShape: {
+      hasMessageObject: Boolean(body.message && typeof body.message === "object"),
+      hasMessagesArray: Array.isArray(body.messages),
+      keys: Object.keys(body).slice(0, 20),
+    },
+  };
+}
+
 function notification(id: string, severity: string, title: string, message: string, action: string): JsonObject {
   return { id, severity, title, message, action, createdAt: new Date().toISOString() };
 }
@@ -881,9 +935,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       manifest: "/api/connector/manifest",
       salesQuery: "/api/sales/query",
       messages: "/api/messages/inbound",
+      messageContract: "/api/messages/contract",
       activity: "/api/activity",
       messageAudit: "/api/messages/audit",
       notifications: "/api/notifications",
+      usage: "/api/usage/summary",
       activitySummary: store.activitySummary(),
     });
     return;
@@ -964,6 +1020,31 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/messages/contract") {
+    sendJson(res, 200, {
+      schemaVersion: "2026-05-09",
+      endpoint: "/api/messages/inbound",
+      signing: {
+        algorithm: "hmac-sha256",
+        baseString: "timestamp.nonce.tenantId.agentId.rawBody",
+        requiredHeaders: ["x-shre-timestamp", "x-shre-nonce", "x-shre-tenant-id", "x-shre-agent-id", "x-shre-signature"],
+      },
+      supportedSources: ["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "shre-cli"],
+      acceptedPayloads: [
+        { shape: "canonical", required: ["source", "tenantId", "storeId", "messageText"], optional: ["messageId", "userId", "businessDate"] },
+        { shape: "gateway", required: ["channel", "tenantId", "storeId", "message.text"], optional: ["message.id", "senderId", "context.businessDate"] },
+        { shape: "assistant", required: ["provider", "messages[].content"], optional: ["context.tenantId", "context.storeId"] },
+      ],
+      response: {
+        accepted: "boolean",
+        intent: "sales_query | sync_command | health_check | general_question",
+        message: "human-readable response",
+        gatewayResponse: "stable response object for connector.aros.live and future gateways",
+      },
+    });
+    return;
+  }
+
   if (path === "/api/sales/snapshot" && req.method === "POST") {
     const snapshot = store.saveSalesSnapshot(asObject(await requestBody(req)));
     store.appendActivity("sales_snapshot_saved", {
@@ -1001,10 +1082,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         return;
       }
       const body = asObject(bodyText ? JSON.parse(bodyText) as JsonValue : {});
-      const messageText = requireString(body, "messageText");
-      const source = typeof body.source === "string" ? body.source : "unknown";
-      const tenantId = typeof body.tenantId === "string" ? body.tenantId : String(registration.tenantId || "");
-      const storeId = typeof body.storeId === "string" ? body.storeId : String(registration.storeId || "");
+      const inbound = normalizeInboundMessage(body, registration);
+      const messageText = requireString(inbound, "messageText");
+      const source = String(inbound.source || "unknown");
+      const tenantId = String(inbound.tenantId || "");
+      const storeId = String(inbound.storeId || "");
       if (registration.status === "activated" && (tenantId !== registration.tenantId || storeId !== registration.storeId)) {
         sendJson(res, 403, { error: "Inbound tenant/store does not match local connector activation" });
         return;
@@ -1014,10 +1096,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         sendJson(res, 403, { error: "Inbound source is not allowed" });
         return;
       }
-      const userId = typeof body.userId === "string" ? body.userId : "";
+      const userId = String(inbound.userId || "");
       const classification = classifyMessage(messageText);
       const connectorResponse = classification.intent === "sales_query"
-        ? store.answerSalesQuery(messageText)
+        ? store.answerSalesQuery(messageText, typeof inbound.businessDate === "string" && inbound.businessDate ? inbound.businessDate : undefined)
         : {
             status: "queued",
             answer: "Message accepted locally and queued for processing.",
@@ -1025,7 +1107,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const queueItem = store.enqueue({
         target: classification.target,
         entityType: "message",
-        entityId: typeof body.messageId === "string" ? body.messageId : randomUUID(),
+        entityId: String(inbound.messageId || randomUUID()),
         operation: classification.operation,
         payload: {
           source,
@@ -1034,16 +1116,38 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
           userId,
           messageText,
           intent: classification.intent,
+          businessDate: String(inbound.businessDate || ""),
+          rawShape: asObject(inbound.rawShape || {}),
           receivedAt: new Date().toISOString(),
         },
+      });
+      const usage = recordUsage(source, tenantId, storeId, "local-sales-query", messageText, String(connectorResponse.answer || ""), {
+        intent: classification.intent,
+        queueId: queueItem.id,
       });
       const response = {
         accepted: true,
         mode: registration.cloudRelayEnabled ? "cloud_relay" : "local_first",
+        source,
+        tenantId,
+        storeId,
         intent: classification.intent,
         queuedOperation: queueItem.id,
         message: String(connectorResponse.answer || "Message accepted locally and queued for processing."),
         connectorResponse,
+        usage,
+        gatewayResponse: {
+          schemaVersion: "2026-05-09",
+          connectorId: registration.connectorId || "verifone-commander",
+          tenantId,
+          storeId,
+          source,
+          messageId: String(inbound.messageId || ""),
+          status: connectorResponse.status || "queued",
+          text: String(connectorResponse.answer || "Message accepted locally and queued for processing."),
+          tool: classification.target,
+          usageId: usage.id || "",
+        },
       };
       const audit = store.saveChatAudit({
         source,
@@ -1059,10 +1163,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         source,
         intent: classification.intent,
         queueId: queueItem.id,
-      });
-      recordUsage(source, tenantId, storeId, "local-sales-query", messageText, response.message, {
-        intent: classification.intent,
-        auditId: audit.id,
+        messageId: inbound.messageId,
       });
       sendJson(res, 202, { ...response, auditId: audit.id });
     } catch (error) {
@@ -1132,6 +1233,18 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/usage/summary") {
     sendJson(res, 200, store.usageSummary(100));
+    return;
+  }
+
+  if (path === "/api/usage/replay" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const result = store.replayUsageReports(body.forceFailure === true);
+    store.appendActivity("usage_reports_replayed", {
+      pendingReport: asObject(result.usage || {}).pendingReport || 0,
+      reported: asObject(result.usage || {}).reported || 0,
+      failedReport: asObject(result.usage || {}).failedReport || 0,
+    });
+    sendJson(res, 200, result);
     return;
   }
 

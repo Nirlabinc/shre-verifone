@@ -83,9 +83,12 @@ API:
 POST /api/sales/snapshot
 POST /api/sales/query
 POST /api/messages/inbound
+GET  /api/messages/contract
 ```
 
 `/api/messages/inbound` classifies sales questions and returns an immediate local SQLite answer when a matching snapshot exists. If no local sales data exists, it queues the request and returns `requiresDataSource: true`.
+
+Inbound messages are normalized from canonical local payloads and common gateway payloads. Supported source aliases include ShreChat, message gateway, WhatsApp, Claude/Anthropic, Codex/OpenAI, and Shre CLI. Every accepted message returns `gatewayResponse` for connector.aros.live or a future relay to send back to the user.
 
 ## Notifications
 
@@ -105,10 +108,11 @@ POST /api/auth/logout
 POST /api/auth/validate
 GET  /api/usage/summary
 POST /api/usage/record
+POST /api/usage/replay
 POST /api/chat/local
 ```
 
-Local login works offline from an encrypted local hash. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. Usage events are stored locally and queued to `shre-cost` for billing.
+Local login works offline from an encrypted local hash. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. Usage events are stored locally and queued to `shre-cost` for billing. `POST /api/usage/replay` backfills pending usage reports and marks local usage rows as `reported` when replay succeeds.
 
 The first chat implementation uses local tools only. Sales questions use the local SQLite sales snapshot/query tool. Future model calls should be routed through the same usage metering path.
 

@@ -53,6 +53,7 @@ Endpoints:
 ```http
 GET /api/usage/summary
 POST /api/usage/record
+POST /api/usage/replay
 ```
 
 Reporting target:
@@ -64,6 +65,8 @@ SHRE_COST_ENDPOINT=
 If the cost endpoint is unavailable or not configured, events remain stored locally and are queued as `shre-cost` work. This prevents silent free use while still allowing offline store operation.
 
 Current token estimates use a deterministic local estimate of approximately 4 characters per token. When a cloud model is added, provider-reported token counts should replace this estimate.
+
+`POST /api/usage/replay` is the dedicated backfill path. It replays only pending `shre-cost` usage queue items and changes usage rows from `pending_report` to `reported` when successful. The generic queue replay still exists for all queued work, but support should use the usage replay endpoint when resolving billing backfill.
 
 ## Suspended Or Deactivated Accounts
 
@@ -87,7 +90,7 @@ Backfill:
 - Local snapshots and queue entries remain stored.
 - `usage_events` remain stored.
 - `shre-cost` queue items remain pending.
-- When the account is active again, queue replay/backfill can report the missed usage and sync pending cloud events.
+- When the account is active again, `POST /api/usage/replay` reports missed usage and the generic queue replay can sync pending cloud events.
 
 This protects store operations while still preventing suspended accounts from continuing billable AI/chat services without reactivation.
 

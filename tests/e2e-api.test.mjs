@@ -223,6 +223,11 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(manifest.body.tools.some((tool) => tool.id === "verifone:sales-query"));
     assert.ok(manifest.body.relatedConnectors.includes("rapidrms-api"));
 
+    const messageContract = await json("/api/messages/contract");
+    assert.equal(messageContract.response.status, 200);
+    assert.ok(messageContract.body.supportedSources.includes("claude"));
+    assert.ok(messageContract.body.acceptedPayloads.some((payload) => payload.shape === "assistant"));
+
     const snapshot = await json("/api/sales/snapshot", {
       method: "POST",
       body: JSON.stringify({
@@ -276,12 +281,32 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(inbound.body.connectorResponse.status, "answered");
     assert.match(inbound.body.message, /\$1842\.55/);
     assert.ok(inbound.body.queuedOperation);
+    assert.equal(inbound.body.gatewayResponse.status, "answered");
+    assert.equal(inbound.body.gatewayResponse.source, "whatsapp");
+
+    const claudeInbound = signedBody({
+      provider: "anthropic",
+      tenantId: "tenant_rapid_001",
+      storeId: "store_001",
+      message: { id: "msg_claude_001" },
+      messages: [{ role: "user", content: "Show sales today" }],
+      context: { businessDate: "2026-05-09" },
+    });
+    const claude = await json("/api/messages/inbound", {
+      method: "POST",
+      ...claudeInbound,
+    });
+    assert.equal(claude.response.status, 202);
+    assert.equal(claude.body.source, "claude");
+    assert.equal(claude.body.intent, "sales_query");
+    assert.match(claude.body.gatewayResponse.text, /\$1842\.55/);
 
     const usage = await json("/api/usage/summary");
     assert.equal(usage.response.status, 200);
     assert.ok(usage.body.inputTokens > 0);
     assert.ok(usage.body.outputTokens > 0);
     assert.ok(usage.body.events.length >= 1);
+    assert.ok(usage.body.pendingReport >= 2);
 
     const localChat = await json("/api/chat/local", {
       method: "POST",
@@ -290,6 +315,11 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(localChat.response.status, 200);
     assert.equal(localChat.body.intent, "sales_query");
     assert.match(localChat.body.message, /\$1842\.55/);
+
+    const usageReplay = await json("/api/usage/replay", { method: "POST", body: JSON.stringify({}) });
+    assert.equal(usageReplay.response.status, 200);
+    assert.equal(usageReplay.body.usage.pendingReport, 0);
+    assert.ok(usageReplay.body.usage.reported >= 3);
 
     const replayedInbound = await json("/api/messages/inbound", {
       method: "POST",
@@ -372,6 +402,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(names.includes("sales_snapshot_saved"));
     assert.ok(names.includes("sales_query_answered"));
     assert.ok(names.includes("inbound_message_queued"));
+    assert.ok(names.includes("usage_reports_replayed"));
     assert.ok(names.includes("offline_queue_replayed"));
   } finally {
     child.kill("SIGTERM");
