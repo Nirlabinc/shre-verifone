@@ -19,6 +19,7 @@ GET /api/health
 GET /api/connector/status
 GET /api/verifone/status
 POST /api/verifone/ping
+GET /api/heartbeat/worker
 GET /api/password/status
 GET /api/queue
 GET /api/access-mode
@@ -108,6 +109,9 @@ Check:
 - Firewall/VPN is not blocking access.
 - Commander credentials are valid.
 - Another POS/device is not overwhelming Commander.
+- `/api/heartbeat/worker` shows auto reconnect is enabled.
+
+Auto reconnect runs inside the dashboard API process. It respects the existing heartbeat `nextCheckAt` backoff and does not hammer Commander while it is down.
 
 ### Password Expiring Or Expired
 

@@ -26,6 +26,8 @@ const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
 
 const retentionOptions = [7, 14, 30, 60, 90, 180, 365];
+const heartbeatWorkerIntervalMs = Math.max(5_000, Number(process.env.HEARTBEAT_WORKER_INTERVAL_MS || 30_000));
+const heartbeatWorkerEnabled = process.env.DISABLE_HEARTBEAT_WORKER !== "true";
 
 async function ensureRuntime(): Promise<void> {
   await mkdir(join(runtimeRoot, "connections"), { recursive: true });
@@ -524,6 +526,61 @@ function pingVerifoneConnection(body: JsonObject = {}): JsonObject {
   };
   store.appendActivity("verifone_connection_pinged", { ok, status: result.status });
   return result;
+}
+
+function heartbeatWorkerStatus(): JsonObject {
+  const sync = syncState();
+  const heartbeat = asObject(sync.heartbeat || {});
+  return {
+    enabled: heartbeatWorkerEnabled,
+    intervalMs: heartbeatWorkerIntervalMs,
+    lastRunAt: heartbeat.workerLastRunAt || null,
+    lastResult: heartbeat.workerLastResult || null,
+    nextCheckAt: heartbeat.nextCheckAt || null,
+  };
+}
+
+function runHeartbeatWorkerOnce(): JsonObject {
+  const connection = store.getJson<JsonObject>("connections", "verifone", {});
+  const configuredPassword = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
+  if (!connection.commanderUrl || !connection.username || !configuredPassword) {
+    return { checked: false, reason: "verifone_not_configured" };
+  }
+  const current = syncState();
+  const heartbeat = asObject(current.heartbeat || {});
+  const nextCheckAt = typeof heartbeat.nextCheckAt === "string" ? Date.parse(heartbeat.nextCheckAt) : 0;
+  if (nextCheckAt > Date.now()) {
+    return { checked: false, reason: "backoff_active", nextCheckAt: heartbeat.nextCheckAt || null };
+  }
+  const result = validateVerifoneConnection({ source: "heartbeat_worker" });
+  const latest = syncState();
+  const latestHeartbeat = asObject(latest.heartbeat || {});
+  saveSyncState({
+    heartbeat: {
+      ...latestHeartbeat,
+      workerLastRunAt: new Date().toISOString(),
+      workerLastResult: result.status,
+    },
+  });
+  store.appendActivity("heartbeat_worker_checked", { status: result.status, ok: result.ok === true });
+  return { checked: true, result };
+}
+
+function startHeartbeatWorker(): void {
+  if (!heartbeatWorkerEnabled) {
+    store.appendActivity("heartbeat_worker_disabled", { intervalMs: heartbeatWorkerIntervalMs });
+    return;
+  }
+  const tick = () => {
+    try {
+      runHeartbeatWorkerOnce();
+    } catch (error) {
+      store.appendActivity("heartbeat_worker_failed", { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  setTimeout(tick, Math.min(5_000, heartbeatWorkerIntervalMs)).unref();
+  setInterval(tick, heartbeatWorkerIntervalMs).unref();
+  store.appendActivity("heartbeat_worker_started", { intervalMs: heartbeatWorkerIntervalMs });
 }
 
 const addonDefinitions: JsonObject[] = [
@@ -1808,6 +1865,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       shreActivationToken: "/api/shre/activation-token",
       syncStatus: "/api/sync/status",
       heartbeat: "/api/verifone/heartbeat",
+      heartbeatWorker: "/api/heartbeat/worker",
       verifonePing: "/api/verifone/ping",
       storagePolicy: "/api/storage/policy",
       storageAnalysis: "/api/storage/analysis",
@@ -1822,6 +1880,18 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   if (path === "/api/notifications") {
     sendJson(res, 200, currentNotifications());
     return;
+  }
+
+  if (path === "/api/heartbeat/worker") {
+    if (req.method === "GET") {
+      sendJson(res, 200, heartbeatWorkerStatus());
+      return;
+    }
+    if (req.method === "POST") {
+      const result = runHeartbeatWorkerOnce();
+      sendJson(res, 200, { ...heartbeatWorkerStatus(), ...result });
+      return;
+    }
   }
 
   if (path === "/api/readiness") {
@@ -2396,6 +2466,7 @@ async function main(): Promise<void> {
     console.log(`dashboard-api listening on http://${host}:${port}`);
   });
   validateLoginRemote("startup").catch(() => undefined);
+  startHeartbeatWorker();
   setInterval(() => validateLoginRemote("background").catch(() => undefined), 5 * 60 * 1000).unref();
 }
 

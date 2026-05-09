@@ -293,6 +293,7 @@
           <div class="mini"><span class="label">Next Retry</span><strong id="hbNext">None</strong></div>
           <div class="mini"><span class="label">Local Pull</span><strong id="hbPull">Idle</strong></div>
           <div class="mini"><span class="label">Write Back</span><strong id="hbWrite">Blocked</strong></div>
+          <div class="mini"><span class="label">Auto Reconnect</span><strong id="hbWorker">Unknown</strong></div>
         </div>
         <div class="toolbar" style="margin-bottom:12px"><button id="pingCommander" class="secondary" type="button">Ping Commander</button><button id="runHeartbeat" class="primary" type="button">Run Heartbeat</button><button id="refreshHeartbeat" class="secondary" type="button">Refresh</button></div>
         <div id="pingResult" class="hint">Ping checks current reachability without changing heartbeat schedule.</div>
@@ -570,7 +571,7 @@
           return;
         }
         $("loginPanel").classList.remove("open");
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage, heartbeatWorker] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -589,7 +590,8 @@
           api("/api/remote-access"),
           api("/api/mcp/tools"),
           api("/api/sync/status"),
-          api("/api/storage/analysis")
+          api("/api/storage/analysis"),
+          api("/api/heartbeat/worker")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
@@ -601,7 +603,7 @@
         $("verifoneFormStatus").className = `hint ${verifone.lastValidation?.status === "connected" ? "ok" : verifone.lastValidation?.status === "failed" ? "bad" : ""}`;
         $("cstoreskuKeyStatus").textContent = verifone.cstoreskuKeyConfigured ? "CStoreSKU application key is stored locally." : "No CStoreSKU application key stored.";
         $("cstoreskuKeyStatus").className = `hint ${verifone.cstoreskuKeyConfigured ? "ok" : "warn"}`;
-        renderSync(sync);
+        renderSync(sync, heartbeatWorker);
         $("mConnector").textContent = connector.status || "local_only";
         $("mTenant").textContent = connector.tenantId ? `${connector.tenantId} / ${connector.workspaceId || "no_workspace"} / ${connector.storeId}` : "No cloud tenant mapped";
         document.querySelector('#accessModeForm select[name="mode"]').value = accessMode.mode || "read_only";
@@ -665,7 +667,7 @@
       const text = label || normalized.replaceAll("_", " ");
       return `<span class="status-indicator"><span class="status-dot ${normalized}"></span><span class="status-text ${normalized}">${text}</span></span>`;
     }
-    function renderSync(sync) {
+    function renderSync(sync, heartbeatWorker = {}) {
       const heartbeat = sync.heartbeat || {};
       const localPull = sync.localPull || {};
       const cstoresku = sync.cstoresku || {};
@@ -674,8 +676,9 @@
       $("hbNext").textContent = fmtTime(heartbeat.nextCheckAt);
       $("hbPull").innerHTML = statusIndicator(localPull.status === "scheduled" ? "connected" : localPull.status === "blocked" ? "failed" : "pending", localPull.status || "idle");
       $("hbWrite").innerHTML = statusIndicator(writeBack.enabled ? "connected" : "failed", writeBack.status || "blocked");
+      $("hbWorker").innerHTML = statusIndicator(heartbeatWorker.enabled ? "connected" : "failed", heartbeatWorker.enabled ? `on ${Math.round((heartbeatWorker.intervalMs || 0) / 1000)}s` : "disabled");
       $("syncFlowText").textContent = `Verifone pull: ${localPull.enabled ? "enabled" : "disabled"} (${localPull.status || "idle"}). CStoreSKU link: ${cstoresku.linked ? "linked" : "not linked"} (${cstoresku.status || "not_linked"}). Commander write-back: ${writeBack.enabled ? "enabled" : "blocked"} (${writeBack.mode || "read_only"}).`;
-      showJson("heartbeatJson", sync);
+      showJson("heartbeatJson", { sync, heartbeatWorker });
     }
     function addChatMessage(role, text, meta = null) {
       const entry = document.createElement("div");

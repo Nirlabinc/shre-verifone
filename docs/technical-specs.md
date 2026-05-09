@@ -93,6 +93,22 @@ GET  /api/messages/contract
 
 Inbound messages are normalized from canonical local payloads and common gateway payloads. Supported source aliases include ShreChat, message gateway, WhatsApp, Claude/Anthropic, Codex/OpenAI, and Shre CLI. Every accepted message returns `gatewayResponse` for connector.aros.live or a future relay to send back to the user.
 
+## Verifone Heartbeat
+
+```http
+POST /api/verifone/ping
+POST /api/verifone/validate
+GET  /api/verifone/heartbeat
+POST /api/verifone/heartbeat
+GET  /api/heartbeat/worker
+POST /api/heartbeat/worker
+GET  /api/sync/status
+```
+
+`POST /api/verifone/ping` is an immediate reachability check and does not change the heartbeat schedule. Validation and heartbeat update the stored connection state. The heartbeat worker runs in the local dashboard API process by default and checks Commander only when the stored heartbeat `nextCheckAt` is due, so repeated failures back off instead of overloading Commander.
+
+Set `DISABLE_HEARTBEAT_WORKER=true` to disable automatic reconnect for controlled test runs. Set `HEARTBEAT_WORKER_INTERVAL_MS` to change how often the worker wakes up to check whether a heartbeat is due.
+
 ## Notifications
 
 ```http

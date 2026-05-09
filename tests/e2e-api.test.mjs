@@ -275,6 +275,14 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(ping.response.status, 200);
     assert.equal(ping.body.status, "reachable");
 
+    const heartbeatWorker = await json("/api/heartbeat/worker", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    assert.equal(heartbeatWorker.response.status, 200);
+    assert.equal(heartbeatWorker.body.enabled, true);
+    assert.equal(heartbeatWorker.body.checked, true);
+
     const shreActivationToken = await json("/api/shre/activation-token", {
       method: "POST",
       body: JSON.stringify({ activationToken: "marketplace-token-001" }),
@@ -653,6 +661,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(names.includes("shre_auth_signup_activated"));
     assert.ok(names.includes("profile_saved"));
     assert.ok(names.includes("verifone_connection_pinged"));
+    assert.ok(names.includes("heartbeat_worker_checked"));
     assert.ok(names.includes("verifone_connection_validated"));
     assert.ok(names.includes("sales_snapshot_saved"));
     assert.ok(names.includes("sales_query_answered"));
