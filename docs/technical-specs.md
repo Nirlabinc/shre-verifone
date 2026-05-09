@@ -86,6 +86,14 @@ POST /api/messages/inbound
 
 `/api/messages/inbound` classifies sales questions and returns an immediate local SQLite answer when a matching snapshot exists. If no local sales data exists, it queues the request and returns `requiresDataSource: true`.
 
+## Notifications
+
+```http
+GET /api/notifications
+```
+
+Notifications are computed from current local state. They flag disconnected Verifone status, password action, failed/pending queue work, missing marketplace activation, and missing local sales data.
+
 ## Commander Concurrency
 
 All local Commander-facing work should be:

@@ -141,6 +141,11 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(passwordStatus.body.state, "expiring");
     assert.equal(passwordStatus.body.daysRemaining, 8);
 
+    const notifications = await json("/api/notifications");
+    assert.equal(notifications.response.status, 200);
+    assert.equal(notifications.body.highestSeverity, "warning");
+    assert.ok(notifications.body.items.some((item) => item.id === "password_expiring"));
+
     const failedReset = await json("/api/password/auto-reset", {
       method: "POST",
       body: JSON.stringify({ forceFailure: true, daysRemaining: 8 }),

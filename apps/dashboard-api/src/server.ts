@@ -203,6 +203,106 @@ function classifyMessage(messageText: string): { intent: string; target: string;
   return { intent: "general_question", target: "shre", operation: "answer" };
 }
 
+function notification(id: string, severity: string, title: string, message: string, action: string): JsonObject {
+  return { id, severity, title, message, action, createdAt: new Date().toISOString() };
+}
+
+function currentNotifications(): JsonObject {
+  const items: JsonObject[] = [];
+  const connection = store.getJson<JsonObject>("connections", "verifone", {});
+  const verifoneStatus = store.getJson<JsonObject | null>("connections", "verifone-status", null);
+  const passwordStatus = store.getJson<JsonObject>("connections", "password-status", {
+    state: "unknown",
+    daysRemaining: null,
+    userActionRequired: false,
+  });
+  const queue = store.queueSummary();
+  const connector = store.connectorStatus();
+  const sales = store.latestSalesSnapshot();
+
+  if (!connection.commanderUrl || !connection.username || !connection.password) {
+    items.push(notification(
+      "verifone_not_configured",
+      "critical",
+      "Verifone is not configured",
+      "Commander URL, username, and password are required before this connector can go live.",
+      "Open Verifone setup",
+    ));
+  } else if (!verifoneStatus || verifoneStatus.status !== "connected") {
+    items.push(notification(
+      "verifone_not_connected",
+      "critical",
+      "Verifone is not connected",
+      "The last Commander validation did not complete successfully.",
+      "Validate Verifone connection",
+    ));
+  }
+
+  if (passwordStatus.userActionRequired === true || passwordStatus.state === "expired" || passwordStatus.state === "auto_reset_failed") {
+    items.push(notification(
+      "password_action_required",
+      "critical",
+      "Commander password needs attention",
+      String(passwordStatus.message || "Manual password update is required."),
+      "Open password workflow",
+    ));
+  } else if (passwordStatus.state === "expiring") {
+    items.push(notification(
+      "password_expiring",
+      "warning",
+      "Commander password is expiring",
+      `${passwordStatus.daysRemaining ?? "Unknown"} days remaining.`,
+      "Review password workflow",
+    ));
+  }
+
+  if (Number(queue.failed || 0) > 0) {
+    items.push(notification(
+      "queue_failed",
+      "critical",
+      "Queue has failed work",
+      `${queue.failed} queue item(s) failed replay or processing.`,
+      "Open queue",
+    ));
+  } else if (Number(queue.pending || 0) > 0) {
+    items.push(notification(
+      "queue_pending",
+      "warning",
+      "Queue has pending work",
+      `${queue.pending} queue item(s) are waiting to process.`,
+      "Open queue",
+    ));
+  }
+
+  if (connector.status !== "activated") {
+    items.push(notification(
+      "connector_not_activated",
+      "warning",
+      "Marketplace connector is not activated",
+      "Cloud/message gateway routing needs tenant and store registration.",
+      "Open marketplace registration",
+    ));
+  }
+
+  if (!sales) {
+    items.push(notification(
+      "sales_snapshot_missing",
+      "info",
+      "No local sales snapshot",
+      "Sales chat answers need a local Commander sales snapshot or live ingest.",
+      "Open sales query",
+    ));
+  }
+
+  const rank: Record<string, number> = { critical: 3, warning: 2, info: 1 };
+  const topSeverity = items.reduce((top, item) => Math.max(top, rank[String(item.severity)] || 0), 0);
+  return {
+    count: items.length,
+    highestSeverity: topSeverity === 3 ? "critical" : topSeverity === 2 ? "warning" : topSeverity === 1 ? "info" : "ok",
+    items,
+  };
+}
+
 function localBaseUrl(req: IncomingMessage): string {
   if (localBaseUrlOverride) return localBaseUrlOverride.replace(/\/$/, "");
   const requestHost = String(req.headers.host || `localhost:${port}`);
@@ -490,8 +590,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       messages: "/api/messages/inbound",
       activity: "/api/activity",
       messageAudit: "/api/messages/audit",
+      notifications: "/api/notifications",
       activitySummary: store.activitySummary(),
     });
+    return;
+  }
+
+  if (path === "/api/notifications") {
+    sendJson(res, 200, currentNotifications());
     return;
   }
 

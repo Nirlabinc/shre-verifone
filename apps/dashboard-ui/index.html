@@ -60,6 +60,21 @@
     .badge.pending { color: var(--amber); background: #fff4e5; }
     .badge.failed, .badge.error { color: var(--red); background: #fee4e2; }
     .badge.completed, .badge.answered { color: var(--green); background: #dcfae6; }
+    .badge.critical { color: var(--red); background: #fee4e2; }
+    .badge.warning { color: var(--amber); background: #fff4e5; }
+    .badge.info { color: var(--blue); background: #eaf1ff; }
+    .badge.ok { color: var(--green); background: #dcfae6; }
+    .alert-strip { display: none; margin: 16px 24px 0; border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 12px 14px; background: #fff; }
+    .alert-strip.show { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .alert-strip.critical { border-left-color: var(--red); }
+    .alert-strip.warning { border-left-color: var(--amber); }
+    .alert-strip.info { border-left-color: var(--blue); }
+    .alert-title { font-weight: 650; }
+    .notice-list { display: grid; gap: 10px; margin-bottom: 16px; }
+    .notice { background: var(--panel); border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 12px; display: grid; gap: 5px; }
+    .notice.critical { border-left-color: var(--red); }
+    .notice.warning { border-left-color: var(--amber); }
+    .notice.info { border-left-color: var(--blue); }
     .scroll-table { max-height: 460px; overflow: auto; padding: 0; }
     .mono { font-family: Consolas, "Courier New", monospace; font-size: 12px; overflow-wrap: anywhere; }
     .folder-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 10px 0 14px; }
@@ -89,6 +104,7 @@
     <div class="toolbar">
       <span id="apiStatus" class="status-pill">Checking API</span>
       <input id="adminToken" type="password" placeholder="Admin token" style="width:150px;padding:6px 8px">
+      <span id="notificationBadge" class="badge ok">No alerts</span>
       <button class="secondary" id="refreshAll" type="button">Refresh</button>
     </div>
   </header>
@@ -104,7 +120,16 @@
     </nav>
 
     <div>
+      <div id="alertStrip" class="alert-strip">
+        <div>
+          <div id="alertTitle" class="alert-title">Attention needed</div>
+          <div id="alertMessage" class="hint"></div>
+        </div>
+        <button id="openNotifications" class="secondary" type="button">View</button>
+      </div>
+
       <section id="overview" class="active">
+        <div id="notificationList" class="notice-list"></div>
         <div class="grid">
           <div class="card metric"><div class="label">API</div><div id="mHealth" class="value">Loading</div><div id="mHost" class="hint"></div></div>
           <div class="card metric"><div class="label">Verifone</div><div id="mVerifone" class="value">Loading</div><div id="mValidation" class="hint"></div></div>
@@ -311,7 +336,7 @@
     }
     async function refresh() {
       try {
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -321,7 +346,8 @@
           api("/api/connector/manifest"),
           api("/api/diagnostics"),
           api("/api/activity"),
-          api("/api/messages/audit")
+          api("/api/messages/audit"),
+          api("/api/notifications")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
@@ -350,9 +376,33 @@
         $("hEvents").textContent = diagnostics.activitySummary?.total || 0;
         $("hMessages").textContent = (messageAudit.messages || []).length;
         $("hStorage").textContent = `${Math.round((health.storage?.bytes || 0) / 1024)} KB`;
+        renderNotifications(notifications);
       } catch (error) {
         setStatus(error.message, "bad");
       }
+    }
+    function renderNotifications(summary) {
+      const items = summary.items || [];
+      const severity = summary.highestSeverity || "ok";
+      $("notificationBadge").className = `badge ${severity}`;
+      $("notificationBadge").textContent = items.length ? `${items.length} alert${items.length === 1 ? "" : "s"}` : "No alerts";
+      if (!items.length) {
+        $("alertStrip").className = "alert-strip";
+        $("notificationList").innerHTML = "";
+        return;
+      }
+      const top = items[0];
+      $("alertStrip").className = `alert-strip show ${top.severity}`;
+      $("alertTitle").textContent = top.title;
+      $("alertMessage").textContent = top.message;
+      $("notificationList").innerHTML = items.map((item) => `
+        <div class="notice ${item.severity}">
+          <div><span class="badge ${item.severity}">${item.severity}</span></div>
+          <div class="alert-title">${item.title}</div>
+          <div class="hint">${item.message}</div>
+          <div class="hint">${item.action}</div>
+        </div>
+      `).join("");
     }
     function renderQueue(items) {
       $("queueRows").innerHTML = items.map((item) => `<tr><td><span class="badge ${item.status}">${item.status}</span></td><td>${item.target}</td><td>${item.operation}</td><td>${item.entityType}:${item.entityId || ""}</td><td>${item.attemptCount || 0}</td><td class="mono">${JSON.stringify(item.payload || {})}</td><td>${item.updatedAt}</td></tr>`).join("") || '<tr><td colspan="7">No queue items</td></tr>';
@@ -386,6 +436,10 @@
     });
     $("closeDrawer").onclick = closeDrawer;
     $("drawerBackdrop").onclick = closeDrawer;
+    $("openNotifications").onclick = () => {
+      document.querySelectorAll("nav button").forEach((item) => item.classList.toggle("active", item.dataset.tab === "overview"));
+      document.querySelectorAll("section").forEach((section) => section.classList.toggle("active", section.id === "overview"));
+    };
     $("refreshAll").onclick = refresh;
     $("refreshQueue").onclick = refresh;
     $("refreshHealth").onclick = refresh;
