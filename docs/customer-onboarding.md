@@ -48,12 +48,13 @@ See [Credential Acquisition](credential-acquisition.md) for where to obtain the 
 6. If the store has a CStoreSKU/RapidRMS application key, enter it in `Verifone > CStoreSKU Key`.
 7. If Shre Marketplace gives an activation token, enter it in `Verifone > Shre Activation`.
 8. Test Commander connection.
-9. Use `Settings > Password Workflow` for Commander password updates or expiration maintenance.
-10. Use Shre Auth signup/activation if cloud/message gateway routing is required.
-11. Confirm queue, password status, and health checks are green.
-12. Send a test message through the chosen gateway.
-13. Ask a test sales question and confirm the response uses local data.
-14. Review activity log and diagnostics.
+9. Open `Heartbeat` and confirm connection, local pull, CStoreSKU link, and write-back state.
+10. Use `Settings > Password Workflow` for Commander password updates or expiration maintenance.
+11. Use Shre Auth signup/activation if cloud/message gateway routing is required.
+12. Confirm queue, password status, and health checks are green.
+13. Send a test message through the chosen gateway.
+14. Ask a test sales question and confirm the response uses local data.
+15. Review activity log and diagnostics.
 
 Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally uses Shre Auth to create or find the tenant/workspace/store and activate the connector. Manual tenant/workspace/store/signing-secret entry should only be used by support.
 
@@ -65,6 +66,10 @@ The application runs locally in the background.
 
 - Sync activity is queued locally.
 - Commander actions are serialized with a local lease.
+- Heartbeat retries use backoff so the service does not overload Commander when disconnected.
+- Saving Verifone connection details schedules local read pulls.
+- Linking CStoreSKU enables cloud/local push-pull state tracking.
+- Commander write-back remains blocked unless access mode is `read_write` or `write_only`.
 - Password expiration status is tracked.
 - Activity and chat audit are stored locally.
 - Sales snapshots used by chat answers are stored locally.

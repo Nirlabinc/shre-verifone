@@ -352,6 +352,89 @@ function commanderReadsAllowed(): boolean {
   return accessMode() === "read_write" || accessMode() === "read_only";
 }
 
+function syncState(): JsonObject {
+  return store.getJson<JsonObject>("sync", "state", {
+    heartbeat: {
+      status: "not_configured",
+      lastCheckedAt: null,
+      nextCheckAt: null,
+      failureCount: 0,
+      backoffSeconds: 30,
+      message: "Verifone connection is not configured.",
+    },
+    localPull: {
+      enabled: false,
+      status: "idle",
+      lastPullAt: null,
+      nextPullAt: null,
+      intervalSeconds: 300,
+      source: "verifone-commander",
+    },
+    cstoresku: {
+      linked: false,
+      lastPushAt: null,
+      lastPullAt: null,
+      status: "not_linked",
+    },
+    commanderWriteBack: {
+      enabled: commanderWritesAllowed(),
+      mode: accessMode(),
+      lastWriteAt: null,
+      status: commanderWritesAllowed() ? "ready" : "blocked_by_access_mode",
+    },
+    updatedAt: null,
+  });
+}
+
+function saveSyncState(patch: JsonObject): JsonObject {
+  const current = syncState();
+  const next = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  store.setJson("sync", "state", next);
+  return next;
+}
+
+function markLocalPullScheduled(reason: string): JsonObject {
+  const now = new Date();
+  return saveSyncState({
+    localPull: {
+      ...asObject(syncState().localPull || {}),
+      enabled: true,
+      status: "scheduled",
+      nextPullAt: new Date(now.getTime() + 30_000).toISOString(),
+      intervalSeconds: 300,
+      reason,
+      source: "verifone-commander",
+    },
+  });
+}
+
+function markCstoreskuLinked(reason: string): JsonObject {
+  return saveSyncState({
+    cstoresku: {
+      ...asObject(syncState().cstoresku || {}),
+      linked: true,
+      status: "linked",
+      reason,
+      lastLinkedAt: new Date().toISOString(),
+    },
+  });
+}
+
+function updateCommanderWriteBackState(): JsonObject {
+  return saveSyncState({
+    commanderWriteBack: {
+      ...asObject(syncState().commanderWriteBack || {}),
+      enabled: commanderWritesAllowed(),
+      mode: accessMode(),
+      status: commanderWritesAllowed() ? "ready" : "blocked_by_access_mode",
+    },
+  });
+}
+
 function isCommanderWriteOperation(item: JsonObject): boolean {
   const target = String(item.target || "").toLowerCase();
   const entityType = String(item.entityType || "").toLowerCase();
@@ -371,6 +454,57 @@ function blockCommanderWriteIfNeeded(res: ServerResponse, item: JsonObject): boo
     message: "Inventory/Commander writes require access mode read_write or write_only.",
   });
   return true;
+}
+
+function validateVerifoneConnection(body: JsonObject = {}): JsonObject {
+  const connection = store.getJson<JsonObject>("connections", "verifone", {});
+  const configuredPassword = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
+  const ok = Boolean(connection.commanderUrl && connection.username && configuredPassword) && body.forceFailure !== true;
+  const daysRemaining = typeof body.daysRemaining === "number" ? body.daysRemaining : null;
+  const now = new Date();
+  const currentSync = syncState();
+  const previousHeartbeat = asObject(currentSync.heartbeat || {});
+  const previousFailures = Number(previousHeartbeat.failureCount || 0);
+  const failureCount = ok ? 0 : previousFailures + 1;
+  const backoffSeconds = ok ? 30 : Math.min(300, 30 * (2 ** Math.min(failureCount - 1, 4)));
+  const validation = {
+    ok,
+    status: ok ? "connected" : "failed",
+    checkedAt: now.toISOString(),
+    message: ok ? "Connection validated. Local pull is scheduled." : "Validation failed. Retry is backed off to avoid overloading Commander.",
+    daysRemaining,
+  };
+  store.setJson("connections", "verifone-status", validation);
+  saveSyncState({
+    heartbeat: {
+      status: ok ? "connected" : "disconnected",
+      lastCheckedAt: now.toISOString(),
+      nextCheckAt: new Date(now.getTime() + backoffSeconds * 1000).toISOString(),
+      failureCount,
+      backoffSeconds,
+      message: validation.message,
+    },
+    localPull: {
+      ...asObject(currentSync.localPull || {}),
+      enabled: ok && commanderReadsAllowed(),
+      status: ok && commanderReadsAllowed() ? "scheduled" : "blocked",
+      lastPullAt: ok && commanderReadsAllowed() ? now.toISOString() : asObject(currentSync.localPull || {}).lastPullAt || null,
+      nextPullAt: ok && commanderReadsAllowed() ? new Date(now.getTime() + 300_000).toISOString() : null,
+      intervalSeconds: 300,
+      source: "verifone-commander",
+    },
+  });
+  if (daysRemaining !== null) {
+    store.setJson("connections", "password-status", {
+      state: daysRemaining <= 0 ? "expired" : daysRemaining <= 15 ? "expiring" : "valid",
+      daysRemaining,
+      autoResetLastAttempt: null,
+      userActionRequired: daysRemaining <= 0,
+      updatedAt: now.toISOString(),
+    });
+  }
+  store.appendActivity("verifone_connection_validated", { ok, daysRemaining, backoffSeconds });
+  return validation;
 }
 
 const addonDefinitions: JsonObject[] = [
@@ -1284,8 +1418,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         updatedAt: new Date().toISOString(),
       };
       store.setJson("connections", "verifone", connection);
+      markLocalPullScheduled("verifone_config_saved");
       store.appendActivity("verifone_config_saved", { commanderUrl: connection.commanderUrl });
-      sendJson(res, 200, { ok: true, connection: redactConnection(connection) });
+      sendJson(res, 200, { ok: true, connection: redactConnection(connection), sync: syncState() });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
     }
@@ -1301,8 +1436,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       connection.applicationKeyUpdatedAt = new Date().toISOString();
       connection.updatedAt = new Date().toISOString();
       store.setJson("connections", "verifone", connection);
+      markCstoreskuLinked("cstoresku_key_saved");
       store.appendActivity("cstoresku_key_saved", { configured: true });
-      sendJson(res, 200, { ok: true, cstoreskuKeyConfigured: true, connection: redactConnection(connection) });
+      sendJson(res, 200, { ok: true, cstoreskuKeyConfigured: true, connection: redactConnection(connection), sync: syncState() });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
     }
@@ -1333,6 +1469,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         storedAt: new Date().toISOString(),
       });
       store.appendActivity("shre_activation_token_saved", { workspaceId: registration.workspaceId, storeId: registration.storeId });
+      markCstoreskuLinked("shre_activation_token_saved");
       sendJson(res, 200, { ok: true, status: registration.status, tenantId: registration.tenantId, workspaceId: registration.workspaceId, storeId: registration.storeId });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
@@ -1342,29 +1479,40 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/verifone/validate" && req.method === "POST") {
     const body = asObject(await requestBody(req));
-    const connection = store.getJson<JsonObject>("connections", "verifone", {});
-    const configuredPassword = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
-    const ok = Boolean(connection.commanderUrl && connection.username && configuredPassword) && body.forceFailure !== true;
-    const daysRemaining = typeof body.daysRemaining === "number" ? body.daysRemaining : null;
-    const validation = {
-      ok,
-      status: ok ? "connected" : "failed",
-      checkedAt: new Date().toISOString(),
-      message: ok ? "Local validation passed. Live Commander validation is the next integration step." : "Validation failed.",
-      daysRemaining,
-    };
-    store.setJson("connections", "verifone-status", validation);
-    if (daysRemaining !== null) {
-      store.setJson("connections", "password-status", {
-        state: daysRemaining <= 0 ? "expired" : daysRemaining <= 15 ? "expiring" : "valid",
-        daysRemaining,
-        autoResetLastAttempt: null,
-        userActionRequired: daysRemaining <= 0,
-        updatedAt: new Date().toISOString(),
-      });
-    }
-    store.appendActivity("verifone_connection_validated", { ok, daysRemaining });
+    const validation = validateVerifoneConnection(body);
+    const ok = validation.ok === true;
     sendJson(res, ok ? 200 : 503, validation);
+    return;
+  }
+
+  if (path === "/api/verifone/heartbeat") {
+    if (req.method === "GET") {
+      sendJson(res, 200, syncState());
+      return;
+    }
+    if (req.method === "POST") {
+      const body = asObject(await requestBody(req));
+      const current = syncState();
+      const heartbeat = asObject(current.heartbeat || {});
+      const nextCheckAt = typeof heartbeat.nextCheckAt === "string" ? Date.parse(heartbeat.nextCheckAt) : 0;
+      if (body.force !== true && nextCheckAt > Date.now()) {
+        sendJson(res, 202, {
+          skipped: true,
+          reason: "backoff_active",
+          nextCheckAt: heartbeat.nextCheckAt,
+          sync: current,
+        });
+        return;
+      }
+      const validation = validateVerifoneConnection(body);
+      sendJson(res, validation.ok ? 200 : 503, { validation, sync: syncState() });
+      return;
+    }
+  }
+
+  if (path === "/api/sync/status") {
+    updateCommanderWriteBackState();
+    sendJson(res, 200, syncState());
     return;
   }
 
@@ -1522,6 +1670,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       firstRunSetup: "/api/setup/first-run",
       emailVerification: "/api/setup/email-verification",
       shreActivationToken: "/api/shre/activation-token",
+      syncStatus: "/api/sync/status",
+      heartbeat: "/api/verifone/heartbeat",
       shreSignupActivate: "/api/shre/signup-activate",
       activitySummary: store.activitySummary(),
     });
@@ -1553,6 +1703,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
           source: "dashboard-api",
         };
         store.setJson("config", "access-mode", state);
+        updateCommanderWriteBackState();
         store.appendActivity("access_mode_updated", { mode });
         sendJson(res, 200, state);
       } catch (error) {

@@ -219,6 +219,8 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(config.response.status, 200);
     assert.equal(config.body.connection.password, "***");
     assert.equal(config.body.connection.applicationKey, "***");
+    assert.equal(config.body.sync.localPull.enabled, true);
+    assert.equal(config.body.sync.localPull.status, "scheduled");
 
     const cstoreskuKey = await json("/api/cstoresku/key", {
       method: "POST",
@@ -227,6 +229,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(cstoreskuKey.response.status, 200);
     assert.equal(cstoreskuKey.body.cstoreskuKeyConfigured, true);
     assert.equal(cstoreskuKey.body.connection.applicationKey, "***");
+    assert.equal(cstoreskuKey.body.sync.cstoresku.linked, true);
 
     const verifoneStatus = await json("/api/verifone/status");
     assert.equal(verifoneStatus.response.status, 200);
@@ -246,6 +249,19 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     });
     assert.equal(validation.response.status, 200);
     assert.equal(validation.body.status, "connected");
+
+    const heartbeat = await json("/api/verifone/heartbeat", {
+      method: "POST",
+      body: JSON.stringify({ force: true, daysRemaining: 8 }),
+    });
+    assert.equal(heartbeat.response.status, 200);
+    assert.equal(heartbeat.body.sync.heartbeat.status, "connected");
+    assert.equal(heartbeat.body.sync.localPull.status, "scheduled");
+
+    const syncStatus = await json("/api/sync/status");
+    assert.equal(syncStatus.response.status, 200);
+    assert.equal(syncStatus.body.cstoresku.linked, true);
+    assert.equal(syncStatus.body.commanderWriteBack.status, "blocked_by_access_mode");
 
     const passwordStatus = await json("/api/password/status");
     assert.equal(passwordStatus.body.state, "expiring");

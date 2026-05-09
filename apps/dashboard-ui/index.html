@@ -121,6 +121,7 @@
       <button data-tab="setup">Setup</button>
       <button data-tab="settings">Settings</button>
       <button data-tab="verifone">Verifone</button>
+      <button data-tab="heartbeat">Heartbeat</button>
       <button data-tab="connector">Marketplace</button>
       <button data-tab="addons">Add-ons</button>
       <button data-tab="chat">Chat</button>
@@ -212,6 +213,7 @@
             <label>Password<input name="password" type="password" autocomplete="current-password"></label>
           </div>
           <div class="hint">This connects to the local Verifone Commander/BOS endpoint. The CStoreSKU application key is stored separately below.</div>
+          <div id="verifoneFormStatus" class="hint">Connection status will appear here after save or validate.</div>
           <div class="toolbar"><button class="primary" type="submit">Save Connection</button><button id="validateVerifone" class="secondary" type="button">Validate</button></div>
         </form>
         <form id="cstoreskuKeyForm">
@@ -244,6 +246,24 @@
           </div>
           <div class="toolbar"><button class="primary" type="submit">Manual Update</button><button id="failAutoReset" class="secondary" type="button">Simulate Auto Reset Failure</button></div>
         </form>
+      </section>
+
+      <section id="heartbeat">
+        <div class="mini-grid">
+          <div class="mini"><span class="label">Connection</span><strong id="hbStatus">Unknown</strong></div>
+          <div class="mini"><span class="label">Next Retry</span><strong id="hbNext">None</strong></div>
+          <div class="mini"><span class="label">Local Pull</span><strong id="hbPull">Idle</strong></div>
+          <div class="mini"><span class="label">Write Back</span><strong id="hbWrite">Blocked</strong></div>
+        </div>
+        <div class="toolbar" style="margin-bottom:12px"><button id="runHeartbeat" class="primary" type="button">Run Heartbeat</button><button id="refreshHeartbeat" class="secondary" type="button">Refresh</button></div>
+        <div class="card">
+          <h2>Sync Flow</h2>
+          <div id="syncFlowText" class="hint">Loading</div>
+        </div>
+        <div class="card">
+          <h2>Heartbeat State</h2>
+          <pre id="heartbeatJson">Loading</pre>
+        </div>
       </section>
 
       <section id="connector">
@@ -508,7 +528,7 @@
           return;
         }
         $("loginPanel").classList.remove("open");
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -525,15 +545,19 @@
           api("/api/addons"),
           api("/api/adapters"),
           api("/api/remote-access"),
-          api("/api/mcp/tools")
+          api("/api/mcp/tools"),
+          api("/api/sync/status")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
         $("mHost").textContent = `${health.host.hostname} | ${health.host.platform} ${health.host.arch}`;
         $("mVerifone").textContent = verifone.configured ? "Configured" : "Not configured";
         $("mValidation").textContent = verifone.lastValidation ? `${verifone.lastValidation.status} at ${verifone.lastValidation.checkedAt}` : "Not validated";
+        $("verifoneFormStatus").textContent = verifone.lastValidation ? `${verifone.lastValidation.status}: ${verifone.lastValidation.message || ""}` : "Connection saved status will appear here after validate.";
+        $("verifoneFormStatus").className = `hint ${verifone.lastValidation?.status === "connected" ? "ok" : verifone.lastValidation?.status === "failed" ? "bad" : ""}`;
         $("cstoreskuKeyStatus").textContent = verifone.cstoreskuKeyConfigured ? "CStoreSKU application key is stored locally." : "No CStoreSKU application key stored.";
         $("cstoreskuKeyStatus").className = `hint ${verifone.cstoreskuKeyConfigured ? "ok" : "warn"}`;
+        renderSync(sync);
         $("mConnector").textContent = connector.status || "local_only";
         $("mTenant").textContent = connector.tenantId ? `${connector.tenantId} / ${connector.workspaceId || "no_workspace"} / ${connector.storeId}` : "No cloud tenant mapped";
         document.querySelector('#accessModeForm select[name="mode"]').value = accessMode.mode || "read_only";
@@ -577,6 +601,22 @@
       $("uCost").textContent = `$${Number(usage.estimatedCostUsd || 0).toFixed(6)}`;
       $("uPending").textContent = usage.pendingReport || 0;
       $("usageRows").innerHTML = events.slice().reverse().map((event) => `<tr><td>${event.createdAt}</td><td>${event.source}</td><td>${event.model}</td><td>${event.inputTokens + event.outputTokens}</td><td>$${Number(event.estimatedCostUsd || 0).toFixed(6)}</td><td><span class="badge pending">${event.status}</span></td></tr>`).join("") || '<tr><td colspan="6">No usage events</td></tr>';
+    }
+    function fmtTime(value) {
+      return value ? new Date(value).toLocaleTimeString() : "None";
+    }
+    function renderSync(sync) {
+      const heartbeat = sync.heartbeat || {};
+      const localPull = sync.localPull || {};
+      const cstoresku = sync.cstoresku || {};
+      const writeBack = sync.commanderWriteBack || {};
+      $("hbStatus").textContent = heartbeat.status || "unknown";
+      $("hbStatus").className = heartbeat.status === "connected" ? "ok" : heartbeat.status === "disconnected" ? "bad" : "warn";
+      $("hbNext").textContent = fmtTime(heartbeat.nextCheckAt);
+      $("hbPull").textContent = localPull.status || "idle";
+      $("hbWrite").textContent = writeBack.status || "blocked";
+      $("syncFlowText").textContent = `Verifone pull: ${localPull.enabled ? "enabled" : "disabled"} (${localPull.status || "idle"}). CStoreSKU link: ${cstoresku.linked ? "linked" : "not linked"} (${cstoresku.status || "not_linked"}). Commander write-back: ${writeBack.enabled ? "enabled" : "blocked"} (${writeBack.mode || "read_only"}).`;
+      showJson("heartbeatJson", sync);
     }
     function addChatMessage(role, text, meta = null) {
       const entry = document.createElement("div");
@@ -665,6 +705,7 @@
     $("refreshQueue").onclick = refresh;
     $("refreshUsage").onclick = refresh;
     $("refreshHealth").onclick = refresh;
+    $("refreshHeartbeat").onclick = refresh;
     $("loginForm").onsubmit = async (event) => {
       event.preventDefault();
       const body = formObject(event.target);
@@ -717,10 +758,43 @@
       await api("/api/onboarding", { method: "POST", body: JSON.stringify(body) });
       await refresh();
     };
-    $("verifoneForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/verifone/config", { method: "POST", body: JSON.stringify(formObject(event.target)) }); await refresh(); };
+    $("verifoneForm").onsubmit = async (event) => {
+      event.preventDefault();
+      $("verifoneFormStatus").textContent = "Saving connection and scheduling local pull...";
+      $("verifoneFormStatus").className = "hint";
+      try {
+        await api("/api/verifone/config", { method: "POST", body: JSON.stringify(formObject(event.target)) });
+        $("verifoneFormStatus").textContent = "Connection saved. Local pull scheduled; validate to confirm heartbeat.";
+        $("verifoneFormStatus").className = "hint ok";
+      } catch (error) {
+        $("verifoneFormStatus").textContent = error.message || "Connection save failed.";
+        $("verifoneFormStatus").className = "hint bad";
+      }
+      await refresh();
+    };
     $("cstoreskuKeyForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/cstoresku/key", { method: "POST", body: JSON.stringify(formObject(event.target)) }); event.target.reset(); await refresh(); };
     $("shreActivationTokenForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/shre/activation-token", { method: "POST", body: JSON.stringify(formObject(event.target)) }); event.target.reset(); await refresh(); };
-    $("validateVerifone").onclick = async () => { await api("/api/verifone/validate", { method: "POST", body: JSON.stringify({ daysRemaining: 30 }) }); await refresh(); };
+    $("validateVerifone").onclick = async () => {
+      $("verifoneFormStatus").textContent = "Validating Commander connection...";
+      $("verifoneFormStatus").className = "hint";
+      try {
+        const result = await api("/api/verifone/validate", { method: "POST", body: JSON.stringify({ daysRemaining: 30 }) });
+        $("verifoneFormStatus").textContent = `${result.status}: ${result.message || "Connection checked."}`;
+        $("verifoneFormStatus").className = `hint ${result.status === "connected" ? "ok" : "bad"}`;
+      } catch (error) {
+        $("verifoneFormStatus").textContent = error.message || "Validation failed.";
+        $("verifoneFormStatus").className = "hint bad";
+      }
+      await refresh();
+    };
+    $("runHeartbeat").onclick = async () => {
+      try {
+        await api("/api/verifone/heartbeat", { method: "POST", body: JSON.stringify({ force: true, daysRemaining: 30 }) });
+      } catch (error) {
+        setStatus(error.message || "Heartbeat failed", "bad");
+      }
+      await refresh();
+    };
     $("passwordForm").onsubmit = async (event) => {
       event.preventDefault();
       const body = formObject(event.target);
