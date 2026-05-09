@@ -46,6 +46,10 @@ try {
 
   $json = "application/json"
   $adminHeaders = @{ "x-local-admin-token" = $env:LOCAL_ADMIN_TOKEN }
+  Invoke-RestMethod -Uri "$baseUrl/api/auth/setup" -Method Post -Headers $adminHeaders -ContentType $json -Body (@{
+    loginSecret = "download-e2e-login-secret"
+  } | ConvertTo-Json) | Out-Null
+
   Invoke-RestMethod -Uri "$baseUrl/api/profile" -Method Post -Headers $adminHeaders -ContentType $json -Body (@{
     company = "Rapid Infosoft LLC"
     storeId = "store_001"

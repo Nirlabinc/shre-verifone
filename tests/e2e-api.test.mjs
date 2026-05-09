@@ -98,6 +98,25 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.match(health.body.database, /runtime\.sqlite$/);
     await access(health.body.database);
 
+    const authInitial = await json("/api/auth/status");
+    assert.equal(authInitial.response.status, 200);
+    assert.equal(authInitial.body.configured, false);
+
+    const authSetup = await json("/api/auth/setup", {
+      method: "POST",
+      body: JSON.stringify({ loginSecret: "store-local-login-secret" }),
+    });
+    assert.equal(authSetup.response.status, 200);
+    assert.equal(authSetup.body.ok, true);
+    assert.ok(authSetup.body.session.token);
+
+    const authLogin = await json("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ loginSecret: "store-local-login-secret" }),
+    });
+    assert.equal(authLogin.response.status, 200);
+    assert.equal(authLogin.body.ok, true);
+
     const onboarding = await json("/api/onboarding", {
       method: "POST",
       body: JSON.stringify({ completedSteps: ["profile"], currentStep: "verifone" }),
@@ -258,6 +277,12 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.match(inbound.body.message, /\$1842\.55/);
     assert.ok(inbound.body.queuedOperation);
 
+    const usage = await json("/api/usage/summary");
+    assert.equal(usage.response.status, 200);
+    assert.ok(usage.body.inputTokens > 0);
+    assert.ok(usage.body.outputTokens > 0);
+    assert.ok(usage.body.events.length >= 1);
+
     const replayedInbound = await json("/api/messages/inbound", {
       method: "POST",
       ...signedInbound,
@@ -290,6 +315,10 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       const chatRow = db.prepare("select message_text, response_json from chat_audit_log limit 1").get();
       assert.match(chatRow.message_text, /^encjson:v1:/);
       assert.match(chatRow.response_json, /^encjson:v1:/);
+      const authRow = db.prepare("select value_json from app_state where scope = 'auth' and key = 'local-login'").get();
+      assert.match(authRow.value_json, /^encjson:v1:/);
+      const usageRow = db.prepare("select metadata_json from usage_events limit 1").get();
+      assert.match(usageRow.metadata_json, /^encjson:v1:/);
     } finally {
       db.close();
     }

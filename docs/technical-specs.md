@@ -31,6 +31,7 @@ Tables:
 - `commander_locks`
 - `sales_snapshots`
 - `connector_nonces`
+- `usage_events`
 
 Activity logging records `api_request_completed` for API request/response visibility. Business events such as queue replay, connector activation, inbound messages, diagnostics bundle creation, and sales queries are recorded separately.
 
@@ -93,6 +94,20 @@ GET /api/notifications
 ```
 
 Notifications are computed from current local state. They flag disconnected Verifone status, password action, failed/pending queue work, missing marketplace activation, and missing local sales data.
+
+## Local Login And Usage
+
+```http
+GET  /api/auth/status
+POST /api/auth/setup
+POST /api/auth/login
+POST /api/auth/logout
+POST /api/auth/validate
+GET  /api/usage/summary
+POST /api/usage/record
+```
+
+Local login works offline from an encrypted local hash. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. Usage events are stored locally and queued to `shre-cost` for billing.
 
 ## Commander Concurrency
 

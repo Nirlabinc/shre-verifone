@@ -1,0 +1,52 @@
+# Local Login And Billing
+
+## Local Login
+
+After initial setup, the dashboard creates a local login secret. The secret itself is not stored. A salted `scrypt` hash is stored inside encrypted runtime state.
+
+Flow:
+
+1. First launch opens the local login setup panel.
+2. User creates a store-local login secret.
+3. The app creates a 12-hour local session.
+4. Future starts require login unless `LOCAL_ADMIN_TOKEN` is supplied by an installer/service profile.
+
+Offline behavior:
+
+- Local login works offline.
+- Remote validation is best-effort.
+- If Shre validation is unavailable, login continues and the status becomes `offline_pending`.
+- Background validation retries every 5 minutes while the API is running.
+
+Remote validation endpoint:
+
+```text
+SHRE_AUTH_VALIDATE_URL=
+```
+
+When configured, the app POSTs tenant/store/app identity to this endpoint at startup, login, manual validation, and background retry.
+
+## Usage And Billing
+
+The local connector records token/cost usage events for message responses and queues them for `shre-cost` reporting.
+
+Endpoints:
+
+```http
+GET /api/usage/summary
+POST /api/usage/record
+```
+
+Reporting target:
+
+```text
+SHRE_COST_ENDPOINT=
+```
+
+If the cost endpoint is unavailable or not configured, events remain stored locally and are queued as `shre-cost` work. This prevents silent free use while still allowing offline store operation.
+
+Current token estimates use a deterministic local estimate of approximately 4 characters per token. When a cloud model is added, provider-reported token counts should replace this estimate.
+
+## Limits
+
+This layer discourages unreported usage and supports billing reconciliation, but it cannot fully prevent offline tampering by an administrator with filesystem and process access. Production installers should pair this with code signing, secure service configuration, and periodic server-side entitlement checks.

@@ -88,6 +88,9 @@
     .drawer.open { transform: translateX(0); }
     .drawer header { position: static; height: auto; padding: 16px; border-bottom: 1px solid var(--line); }
     .drawer main { display: block; min-height: 0; padding: 16px; overflow: auto; }
+    .login-panel { display: none; position: fixed; inset: 0; background: rgba(244, 246, 248, 0.96); z-index: 30; align-items: center; justify-content: center; padding: 18px; }
+    .login-panel.open { display: flex; }
+    .login-box { width: min(460px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; }
     tr.clickable { cursor: pointer; }
     tr.clickable:hover { background: #f8fafc; }
     @media (max-width: 860px) {
@@ -115,6 +118,7 @@
       <button data-tab="verifone">Verifone</button>
       <button data-tab="connector">Marketplace</button>
       <button data-tab="sales">Sales Query</button>
+      <button data-tab="usage">Usage & Billing</button>
       <button data-tab="queue">Queue</button>
       <button data-tab="health">Health & Logs</button>
     </nav>
@@ -150,6 +154,14 @@
       </section>
 
       <section id="setup">
+        <form id="loginSetupForm">
+          <h2>Local Login Secret</h2>
+          <div class="fields">
+            <label>Login Secret<input name="loginSecret" type="password" autocomplete="new-password"></label>
+          </div>
+          <div class="hint">This secret is stored locally as a hash. Offline login remains available, and remote validation runs in the background when configured.</div>
+          <div class="toolbar"><button class="primary" type="submit">Save Login Secret</button><button id="validateLogin" class="secondary" type="button">Validate Now</button></div>
+        </form>
         <form id="profileForm">
           <h2>Store Profile</h2>
           <div class="fields">
@@ -251,6 +263,16 @@
         <div class="table-wrap scroll-table"><table><thead><tr><th>Status</th><th>Target</th><th>Operation</th><th>Entity</th><th>Attempts</th><th>Payload</th><th>Updated</th></tr></thead><tbody id="queueRows"></tbody></table></div>
       </section>
 
+      <section id="usage">
+        <div class="mini-grid">
+          <div class="mini"><span class="label">Input Tokens</span><strong id="uInput">0</strong></div>
+          <div class="mini"><span class="label">Output Tokens</span><strong id="uOutput">0</strong></div>
+          <div class="mini"><span class="label">Estimated Cost</span><strong id="uCost">$0.000000</strong></div>
+          <div class="mini"><span class="label">Events</span><strong id="uEvents">0</strong></div>
+        </div>
+        <div class="table-wrap scroll-table"><table><thead><tr><th>Time</th><th>Source</th><th>Model</th><th>Tokens</th><th>Cost</th><th>Status</th></tr></thead><tbody id="usageRows"></tbody></table></div>
+      </section>
+
       <section id="health">
         <div class="mini-grid">
           <div class="mini"><span class="label">API Requests</span><strong id="hRequests">0</strong></div>
@@ -290,12 +312,22 @@
     <main><pre id="drawerBody">{}</pre></main>
   </aside>
 
+  <div id="loginPanel" class="login-panel">
+    <form id="loginForm" class="login-box">
+      <h2 id="loginTitle">Local Login</h2>
+      <div id="loginHint" class="hint">Enter the local login secret for this store PC.</div>
+      <label>Login Secret<input name="loginSecret" type="password" autocomplete="current-password"></label>
+      <div class="toolbar"><button class="primary" type="submit">Continue</button></div>
+    </form>
+  </div>
+
   <script>
     const $ = (id) => document.getElementById(id);
     const savedAdminToken = sessionStorage.getItem("localAdminToken") || "";
     $("adminToken").value = savedAdminToken;
     $("adminToken").addEventListener("change", () => sessionStorage.setItem("localAdminToken", $("adminToken").value));
     const today = new Date().toISOString().slice(0, 10);
+    let authConfigured = false;
     document.querySelectorAll('input[type="date"]').forEach((input) => input.value = today);
 
     async function api(path, options = {}) {
@@ -305,6 +337,7 @@
         headers: {
           "content-type": "application/json",
           ...(sessionStorage.getItem("localAdminToken") ? { "x-local-admin-token": sessionStorage.getItem("localAdminToken") } : {}),
+          ...(sessionStorage.getItem("localSession") ? { "x-local-session": sessionStorage.getItem("localSession") } : {}),
           ...(options.headers || {})
         }
       });
@@ -336,7 +369,21 @@
     }
     async function refresh() {
       try {
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications] = await Promise.all([
+        const auth = await api("/api/auth/status");
+        authConfigured = auth.configured === true;
+        if (auth.configured && !auth.authenticated && !sessionStorage.getItem("localAdminToken")) {
+          $("loginPanel").classList.add("open");
+          $("loginTitle").textContent = "Local Login";
+          return;
+        }
+        if (!auth.configured) {
+          $("loginPanel").classList.add("open");
+          $("loginTitle").textContent = "Create Local Login";
+          $("loginHint").textContent = "Create the local login secret for this store PC.";
+          return;
+        }
+        $("loginPanel").classList.remove("open");
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -347,7 +394,8 @@
           api("/api/diagnostics"),
           api("/api/activity"),
           api("/api/messages/audit"),
-          api("/api/notifications")
+          api("/api/notifications"),
+          api("/api/usage/summary")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
@@ -367,6 +415,7 @@
         renderQueue(queue.items || []);
         renderActivity(activity.events || []);
         renderMessages(messageAudit.messages || []);
+        renderUsage(usage);
         $("qPending").textContent = queue.pending || 0;
         $("qCompleted").textContent = queue.completed || 0;
         $("qFailed").textContent = queue.failed || 0;
@@ -380,6 +429,14 @@
       } catch (error) {
         setStatus(error.message, "bad");
       }
+    }
+    function renderUsage(usage) {
+      const events = usage.events || [];
+      $("uInput").textContent = usage.inputTokens || 0;
+      $("uOutput").textContent = usage.outputTokens || 0;
+      $("uCost").textContent = `$${Number(usage.estimatedCostUsd || 0).toFixed(6)}`;
+      $("uEvents").textContent = events.length;
+      $("usageRows").innerHTML = events.slice().reverse().map((event) => `<tr><td>${event.createdAt}</td><td>${event.source}</td><td>${event.model}</td><td>${event.inputTokens + event.outputTokens}</td><td>$${Number(event.estimatedCostUsd || 0).toFixed(6)}</td><td><span class="badge pending">${event.status}</span></td></tr>`).join("") || '<tr><td colspan="6">No usage events</td></tr>';
     }
     function renderNotifications(summary) {
       const items = summary.items || [];
@@ -443,6 +500,20 @@
     $("refreshAll").onclick = refresh;
     $("refreshQueue").onclick = refresh;
     $("refreshHealth").onclick = refresh;
+    $("loginForm").onsubmit = async (event) => {
+      event.preventDefault();
+      const body = formObject(event.target);
+      const result = await api(authConfigured ? "/api/auth/login" : "/api/auth/setup", { method: "POST", body: JSON.stringify(body) });
+      if (result.session?.token) sessionStorage.setItem("localSession", result.session.token);
+      await refresh();
+    };
+    $("loginSetupForm").onsubmit = async (event) => {
+      event.preventDefault();
+      const result = await api("/api/auth/setup", { method: "POST", body: JSON.stringify(formObject(event.target)) });
+      if (result.session?.token) sessionStorage.setItem("localSession", result.session.token);
+      await refresh();
+    };
+    $("validateLogin").onclick = async () => { await api("/api/auth/validate", { method: "POST", body: "{}" }); await refresh(); };
     $("profileForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/profile", { method: "POST", body: JSON.stringify(formObject(event.target)) }); await refresh(); };
     $("onboardingForm").onsubmit = async (event) => {
       event.preventDefault();

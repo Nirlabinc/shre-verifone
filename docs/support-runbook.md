@@ -20,6 +20,8 @@ GET /api/password/status
 GET /api/queue
 GET /api/connector/manifest
 GET /api/notifications
+GET /api/auth/status
+GET /api/usage/summary
 POST /api/sales/query
 GET /api/activity
 POST /api/diagnostics/bundle
@@ -28,6 +30,8 @@ POST /api/diagnostics/bundle
 Every API response includes an `x-request-id` header. The activity log records `api_request_completed` with request ID, method, path, status code, duration, and remote address.
 
 The dashboard header and Overview screen show notifications from `/api/notifications` when Verifone is disconnected, password action is required, queue work fails or waits, marketplace activation is missing, or local sales data has not been ingested.
+
+If login validation shows `offline_pending`, the user can continue local work. Confirm internet access and `SHRE_AUTH_VALIDATE_URL`, then use `POST /api/auth/validate` or wait for background retry.
 
 If `LOCAL_ADMIN_TOKEN` is configured, enter it in the dashboard header before using setup, queue, diagnostics, audit, or connector screens.
 

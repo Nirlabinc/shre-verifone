@@ -66,6 +66,20 @@ interface NonceRow {
   expires_at: string;
 }
 
+interface UsageRow {
+  id: string;
+  source: string;
+  tenant_id: string | null;
+  store_id: string | null;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: number;
+  metadata_json: string;
+  status: string;
+  created_at: string;
+}
+
 export interface RuntimeStoreOptions {
   connectorRegistryUrl: string;
 }
@@ -466,6 +480,76 @@ export class RuntimeStore {
     return true;
   }
 
+  recordUsageEvent(event: JsonObject): JsonObject {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const inputTokens = typeof event.inputTokens === "number" ? event.inputTokens : 0;
+    const outputTokens = typeof event.outputTokens === "number" ? event.outputTokens : 0;
+    const estimatedCostUsd = typeof event.estimatedCostUsd === "number" ? event.estimatedCostUsd : 0;
+    const record: JsonObject = {
+      id,
+      source: typeof event.source === "string" ? event.source : "local",
+      tenantId: typeof event.tenantId === "string" ? event.tenantId : "",
+      storeId: typeof event.storeId === "string" ? event.storeId : "",
+      model: typeof event.model === "string" ? event.model : "local-routing",
+      inputTokens,
+      outputTokens,
+      estimatedCostUsd,
+      metadata: asJsonObject(event.metadata),
+      status: typeof event.status === "string" ? event.status : "pending_report",
+      createdAt: now,
+    };
+    this.db.prepare(`
+      insert into usage_events (
+        id, source, tenant_id, store_id, model, input_tokens, output_tokens,
+        estimated_cost_usd, metadata_json, status, created_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      record.source,
+      record.tenantId || null,
+      record.storeId || null,
+      record.model,
+      inputTokens,
+      outputTokens,
+      estimatedCostUsd,
+      this.stringifyJson(record.metadata as JsonObject),
+      record.status,
+      now,
+    );
+    return record;
+  }
+
+  usageSummary(limit = 100): JsonObject {
+    const rows = this.db.prepare(`
+      select id, source, tenant_id, store_id, model, input_tokens, output_tokens,
+             estimated_cost_usd, metadata_json, status, created_at
+      from usage_events
+      order by created_at desc, rowid desc
+      limit ?
+    `).all(limit) as UsageRow[];
+    const events = rows.reverse().map((row) => ({
+      id: row.id,
+      source: row.source,
+      tenantId: row.tenant_id || "",
+      storeId: row.store_id || "",
+      model: row.model,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      estimatedCostUsd: row.estimated_cost_usd,
+      metadata: this.parseJson(row.metadata_json) as JsonObject,
+      status: row.status,
+      createdAt: row.created_at,
+    }));
+    return {
+      inputTokens: events.reduce((sum, event) => sum + Number(asJsonObject(event).inputTokens || 0), 0),
+      outputTokens: events.reduce((sum, event) => sum + Number(asJsonObject(event).outputTokens || 0), 0),
+      estimatedCostUsd: events.reduce((sum, event) => sum + Number(asJsonObject(event).estimatedCostUsd || 0), 0),
+      events,
+    };
+  }
+
   saveChatAudit(entry: {
     source: string;
     tenantId?: string;
@@ -731,6 +815,20 @@ export class RuntimeStore {
         created_at text not null
       );
 
+      create table if not exists usage_events (
+        id text primary key,
+        source text not null,
+        tenant_id text,
+        store_id text,
+        model text not null,
+        input_tokens integer not null default 0,
+        output_tokens integer not null default 0,
+        estimated_cost_usd real not null default 0,
+        metadata_json text not null,
+        status text not null,
+        created_at text not null
+      );
+
       insert or ignore into schema_migrations (version, applied_at)
       values (1, datetime('now'));
     `);
@@ -743,6 +841,11 @@ export class RuntimeStore {
   private parseJson(value: string): JsonValue {
     return JSON.parse(decryptText(value, this.key)) as JsonValue;
   }
+}
+
+function asJsonObject(value: JsonValue | undefined): JsonObject {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as JsonObject;
 }
 
 function securePath(path: string, mode: number): void {

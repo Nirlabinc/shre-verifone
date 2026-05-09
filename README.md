@@ -71,6 +71,7 @@ Setup, onboarding, support, and specs:
 - [App Boundary Decision](docs/app-boundary-decision.md)
 - [Local AI / Ollama Option](docs/local-ai-ollama.md)
 - [Security Hardening](docs/security-hardening.md)
+- [Local Login And Billing](docs/login-billing.md)
 
 ## Shre SDK Findings
 

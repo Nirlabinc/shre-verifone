@@ -3,7 +3,7 @@ import { chmod, readFile, mkdir, readdir, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir, hostname, platform, arch, totalmem, freemem, cpus } from "node:os";
-import { createHash, createHmac, randomBytes, randomUUID, createCipheriv, createDecipheriv, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, createCipheriv, createDecipheriv, scryptSync, timingSafeEqual } from "node:crypto";
 import { RuntimeStore, type JsonObject, type JsonValue } from "./store.js";
 
 const port = Number(process.env.PORT || 5480);
@@ -13,6 +13,8 @@ const connectorRegistryUrl = process.env.CONNECTOR_REGISTRY_URL || "https://conn
 const connectorSharedSecret = process.env.CONNECTOR_SHARED_SECRET || "";
 const localBaseUrlOverride = process.env.LOCAL_BASE_URL || "";
 const localAdminToken = process.env.LOCAL_ADMIN_TOKEN || "";
+const shreAuthValidateUrl = process.env.SHRE_AUTH_VALIDATE_URL || "";
+const shreCostEndpoint = process.env.SHRE_COST_ENDPOINT || "";
 const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
 
@@ -102,14 +104,125 @@ function enforceLocalOrigin(req: IncomingMessage, res: ServerResponse): boolean 
 }
 
 function enforceLocalAdmin(req: IncomingMessage, res: ServerResponse, path: string): boolean {
+  if (path.startsWith("/api/auth/")) return true;
   if (!localAdminToken) return true;
   if (path === "/api/health" || path === "/api/connector/manifest" || path === "/api/messages/inbound") return true;
+  if (validSession(req)) return true;
   const provided = String(req.headers["x-local-admin-token"] || "");
   const expected = Buffer.from(localAdminToken);
   const actual = Buffer.from(provided);
   if (expected.length === actual.length && timingSafeEqual(expected, actual)) return true;
   sendJson(res, 401, { error: "Local admin token required" });
   return false;
+}
+
+function hashSecret(secret: string, salt = randomBytes(16).toString("hex")): JsonObject {
+  const hash = scryptSync(secret, salt, 32).toString("hex");
+  return { salt, hash, algorithm: "scrypt" };
+}
+
+function verifySecret(secret: string, record: JsonObject): boolean {
+  if (typeof record.salt !== "string" || typeof record.hash !== "string") return false;
+  const actual = Buffer.from(String(hashSecret(secret, record.salt).hash), "hex");
+  const expected = Buffer.from(record.hash, "hex");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+function authState(): JsonObject {
+  return store.getJson<JsonObject>("auth", "local-login", {
+    configured: false,
+    secretHash: null,
+    remoteValidation: {
+      state: "not_configured",
+      lastCheckedAt: null,
+      message: "Remote validation endpoint is not configured.",
+    },
+  });
+}
+
+function sessionState(): JsonObject {
+  return store.getJson<JsonObject>("auth", "sessions", {});
+}
+
+function validSession(req: IncomingMessage): boolean {
+  const token = String(req.headers["x-local-session"] || "");
+  if (!token) return false;
+  const sessions = sessionState();
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const session = asObject(sessions[tokenHash] || null);
+  return typeof session.expiresAt === "string" && session.expiresAt > new Date().toISOString();
+}
+
+function createSession(): JsonObject {
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+  const sessions = sessionState();
+  sessions[tokenHash] = { expiresAt, createdAt: new Date().toISOString() };
+  store.setJson("auth", "sessions", sessions);
+  return { token, expiresAt };
+}
+
+async function validateLoginRemote(reason: string): Promise<void> {
+  const state = authState();
+  if (!shreAuthValidateUrl || state.configured !== true) return;
+  const connector = store.connectorStatus();
+  try {
+    const response = await fetch(shreAuthValidateUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        app: "verifone_cstoresku",
+        connectorId: connector.connectorId || "verifone-commander",
+        tenantId: connector.tenantId || "",
+        storeId: connector.storeId || "",
+        reason,
+      }),
+    });
+    state.remoteValidation = {
+      state: response.ok ? "valid" : "rejected",
+      lastCheckedAt: new Date().toISOString(),
+      message: response.ok ? "Remote validation succeeded." : `Remote validation failed with HTTP ${response.status}.`,
+    };
+  } catch (error) {
+    state.remoteValidation = {
+      state: "offline_pending",
+      lastCheckedAt: new Date().toISOString(),
+      message: `Remote validation unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  store.setJson("auth", "local-login", state);
+}
+
+function estimateTokens(text: string): number {
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function recordUsage(source: string, tenantId: string, storeId: string, model: string, inputText: string, outputText: string, metadata: JsonObject = {}): JsonObject {
+  const inputTokens = estimateTokens(inputText);
+  const outputTokens = estimateTokens(outputText);
+  const estimatedCostUsd = Number(((inputTokens + outputTokens) * 0.000001).toFixed(6));
+  const event = store.recordUsageEvent({
+    source,
+    tenantId,
+    storeId,
+    model,
+    inputTokens,
+    outputTokens,
+    estimatedCostUsd,
+    metadata,
+  });
+  store.enqueue({
+    target: "shre-cost",
+    entityType: "usage_event",
+    entityId: String(event.id || ""),
+    operation: "report_usage",
+    payload: {
+      endpoint: shreCostEndpoint || "not_configured",
+      event,
+    },
+  });
+  return event;
 }
 
 function asObject(value: JsonValue): JsonObject {
@@ -219,6 +332,8 @@ function currentNotifications(): JsonObject {
   const queue = store.queueSummary();
   const connector = store.connectorStatus();
   const sales = store.latestSalesSnapshot();
+  const auth = authState();
+  const usage = store.usageSummary(25);
 
   if (!connection.commanderUrl || !connection.username || !connection.password) {
     items.push(notification(
@@ -294,6 +409,45 @@ function currentNotifications(): JsonObject {
     ));
   }
 
+  if (auth.configured !== true) {
+    items.push(notification(
+      "login_not_configured",
+      "critical",
+      "Local login is not configured",
+      "Create a local login secret before going live.",
+      "Open login setup",
+    ));
+  } else {
+    const remote = asObject(auth.remoteValidation || {});
+    if (remote.state === "offline_pending") {
+      items.push(notification(
+        "login_validation_pending",
+        "warning",
+        "Login validation is pending",
+        "Offline login is allowed, and remote validation will retry when the service is reachable.",
+        "Review login status",
+      ));
+    } else if (remote.state === "rejected") {
+      items.push(notification(
+        "login_validation_rejected",
+        "critical",
+        "Login validation was rejected",
+        String(remote.message || "Remote login validation rejected this install."),
+        "Contact support",
+      ));
+    }
+  }
+
+  if (Number(usage.estimatedCostUsd || 0) > 0 && Number(queue.pending || 0) > 0) {
+    items.push(notification(
+      "usage_report_pending",
+      "info",
+      "Usage report is pending",
+      "Token/cost usage has been tracked locally and is waiting to report to Shre billing.",
+      "Open usage summary",
+    ));
+  }
+
   const rank: Record<string, number> = { critical: 3, warning: 2, info: 1 };
   const topSeverity = items.reduce((top, item) => Math.max(top, rank[String(item.severity)] || 0), 0);
   return {
@@ -352,6 +506,86 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       storage,
       timestamp: new Date().toISOString(),
     });
+    return;
+  }
+
+  if (path === "/api/auth/status") {
+    const state = authState();
+    sendJson(res, 200, {
+      configured: state.configured === true,
+      authenticated: validSession(req),
+      remoteValidation: state.remoteValidation || null,
+      offlineAllowed: true,
+    });
+    return;
+  }
+
+  if (path === "/api/auth/setup" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const loginSecret = requireString(body, "loginSecret");
+      const state = authState();
+      if (state.configured === true && !validSession(req) && localAdminToken) {
+        sendJson(res, 401, { error: "Existing login must be authenticated before changing secret" });
+        return;
+      }
+      const next = {
+        configured: true,
+        secretHash: hashSecret(loginSecret),
+        updatedAt: new Date().toISOString(),
+        remoteValidation: {
+          state: shreAuthValidateUrl ? "pending" : "not_configured",
+          lastCheckedAt: null,
+          message: shreAuthValidateUrl ? "Remote validation pending." : "Remote validation endpoint is not configured.",
+        },
+      };
+      store.setJson("auth", "local-login", next);
+      store.appendActivity("local_login_configured", { remoteValidationConfigured: Boolean(shreAuthValidateUrl) });
+      validateLoginRemote("setup").catch(() => undefined);
+      sendJson(res, 200, { ok: true, session: createSession(), remoteValidation: next.remoteValidation });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/auth/login" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const loginSecret = requireString(body, "loginSecret");
+      const state = authState();
+      if (state.configured !== true || !state.secretHash || typeof state.secretHash !== "object") {
+        badRequest(res, "Local login is not configured");
+        return;
+      }
+      if (!verifySecret(loginSecret, state.secretHash as JsonObject)) {
+        sendJson(res, 401, { error: "Invalid login secret" });
+        return;
+      }
+      const session = createSession();
+      store.appendActivity("local_login_succeeded", { offlineAllowed: true });
+      validateLoginRemote("login").catch(() => undefined);
+      sendJson(res, 200, { ok: true, session, remoteValidation: state.remoteValidation || null });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/auth/validate" && req.method === "POST") {
+    await validateLoginRemote("manual");
+    sendJson(res, 200, authState());
+    return;
+  }
+
+  if (path === "/api/auth/logout" && req.method === "POST") {
+    const token = String(req.headers["x-local-session"] || "");
+    if (token) {
+      const sessions = sessionState();
+      delete sessions[createHash("sha256").update(token).digest("hex")];
+      store.setJson("auth", "sessions", sessions);
+    }
+    sendJson(res, 200, { ok: true });
     return;
   }
 
@@ -766,6 +1000,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         intent: classification.intent,
         queueId: queueItem.id,
       });
+      recordUsage(source, tenantId, storeId, "local-sales-query", messageText, response.message, {
+        intent: classification.intent,
+        auditId: audit.id,
+      });
       sendJson(res, 202, { ...response, auditId: audit.id });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
@@ -775,6 +1013,25 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/messages/audit") {
     sendJson(res, 200, { messages: store.chatAudit(100) });
+    return;
+  }
+
+  if (path === "/api/usage/summary") {
+    sendJson(res, 200, store.usageSummary(100));
+    return;
+  }
+
+  if (path === "/api/usage/record" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const event = store.recordUsageEvent(body);
+    store.enqueue({
+      target: "shre-cost",
+      entityType: "usage_event",
+      entityId: String(event.id || ""),
+      operation: "report_usage",
+      payload: { endpoint: shreCostEndpoint || "not_configured", event },
+    });
+    sendJson(res, 201, event);
     return;
   }
 
@@ -819,6 +1076,8 @@ async function main(): Promise<void> {
   server.listen(port, host, () => {
     console.log(`dashboard-api listening on http://${host}:${port}`);
   });
+  validateLoginRemote("startup").catch(() => undefined);
+  setInterval(() => validateLoginRemote("background").catch(() => undefined), 5 * 60 * 1000).unref();
 }
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
