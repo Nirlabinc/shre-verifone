@@ -17,6 +17,9 @@ const shreAuthValidateUrl = process.env.SHRE_AUTH_VALIDATE_URL || "";
 const shreAuthSignupUrl = process.env.SHRE_AUTH_SIGNUP_URL || "";
 const shreCostEndpoint = process.env.SHRE_COST_ENDPOINT || "";
 const commanderAccessMode = process.env.COMMANDER_ACCESS_MODE || process.env.SHRE_MODE || "read_only";
+const appVersion = process.env.APP_VERSION || process.env.npm_package_version || "0.1.0";
+const buildChannel = process.env.BUILD_CHANNEL || process.env.SHRE_ENV || "local";
+const buildSha = process.env.BUILD_SHA || "dev";
 const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
 
@@ -935,6 +938,22 @@ function currentReadiness(): JsonObject {
   };
 }
 
+function versionInfo(): JsonObject {
+  return {
+    app: "verifone-commander-shre-cstoresku",
+    version: appVersion,
+    buildChannel,
+    buildSha,
+    environment: process.env.SHRE_ENV || "local",
+    cacheKey: `${appVersion}-${buildChannel}-${buildSha}`,
+    services: {
+      dashboardApi: appVersion,
+      fccConnector: process.env.FCC_CONNECTOR_VERSION || appVersion,
+    },
+    timestamp: new Date().toISOString(),
+  };
+}
+
 function localBaseUrl(req: IncomingMessage): string {
   if (localBaseUrlOverride) return localBaseUrlOverride.replace(/\/$/, "");
   const requestHost = String(req.headers.host || `localhost:${port}`);
@@ -988,7 +1007,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       },
       storage,
       timestamp: new Date().toISOString(),
+      version: versionInfo(),
     });
+    return;
+  }
+
+  if (path === "/api/version") {
+    sendJson(res, 200, versionInfo());
     return;
   }
 

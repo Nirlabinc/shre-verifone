@@ -16,6 +16,9 @@ services:
       CONNECTOR_REGISTRY_URL: ${CONNECTOR_REGISTRY_URL:-https://connector.aros.live}
       CONNECTOR_SHARED_SECRET: ${CONNECTOR_SHARED_SECRET:-}
       LOCAL_BASE_URL: ${LOCAL_BASE_URL:-http://cstoresku:5480}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      BUILD_CHANNEL: ${BUILD_CHANNEL:-local}
+      BUILD_SHA: ${BUILD_SHA:-dev}
     volumes:
       - verifone-shre-runtime:/runtime
     ports:
@@ -60,6 +63,28 @@ services:
       VERIFONE_SHRE_HOME: /runtime
     volumes:
       - verifone-shre-runtime:/runtime
+    restart: unless-stopped
+
+  fcc-connector:
+    build:
+      context: ..
+      dockerfile: infra/node.Dockerfile
+    command: ["node", "dist/services/fcc-connector/src/worker.js"]
+    environment:
+      FCC_PORT: "5483"
+      FCC_HOST: "0.0.0.0"
+      VERIFONE_SHRE_HOME: /runtime
+      FCC_ENDPOINT: ${FCC_ENDPOINT:-}
+      FCC_MODE: ${FCC_MODE:-diagnostic_only}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      BUILD_CHANNEL: ${BUILD_CHANNEL:-local}
+      BUILD_SHA: ${BUILD_SHA:-dev}
+    volumes:
+      - verifone-shre-runtime:/runtime
+    ports:
+      - "127.0.0.1:5483:5483"
+    profiles:
+      - fcc
     restart: unless-stopped
 
 volumes:

@@ -11,6 +11,7 @@
     "dev:api": "node --watch dist/apps/dashboard-api/src/server.js",
     "start:api": "node dist/apps/dashboard-api/src/server.js",
     "start:shre": "node dist/services/shre-connector/src/worker.js",
+    "start:fcc": "node dist/services/fcc-connector/src/worker.js",
     "alias:check": "powershell -ExecutionPolicy Bypass -File scripts/configure-local-alias.ps1 -Check",
     "alias:install": "powershell -ExecutionPolicy Bypass -File scripts/configure-local-alias.ps1 -Install",
     "alias:remove": "powershell -ExecutionPolicy Bypass -File scripts/configure-local-alias.ps1 -Remove",

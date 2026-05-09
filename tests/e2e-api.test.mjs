@@ -119,9 +119,16 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const health = await json("/api/health");
     assert.equal(health.response.status, 200);
     assert.equal(health.body.ok, true);
+    assert.equal(health.body.version.version, "0.1.0");
+    assert.ok(health.body.version.cacheKey);
     assert.equal(health.body.runtimeRoot, runtimeRoot);
     assert.match(health.body.database, /runtime\.sqlite$/);
     await access(health.body.database);
+
+    const version = await json("/api/version");
+    assert.equal(version.response.status, 200);
+    assert.equal(version.body.app, "verifone-commander-shre-cstoresku");
+    assert.equal(version.body.buildChannel, "local");
 
     const authInitial = await json("/api/auth/status");
     assert.equal(authInitial.response.status, 200);

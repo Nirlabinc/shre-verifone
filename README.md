@@ -74,6 +74,7 @@ Setup, onboarding, support, and specs:
 - [Commander Concurrency](docs/commander-concurrency.md)
 - [App Boundary Decision](docs/app-boundary-decision.md)
 - [Add-on Architecture](docs/addon-architecture.md)
+- [FCC Connector Add-on](docs/fcc-connector.md)
 - [Local AI / Ollama Option](docs/local-ai-ollama.md)
 - [Security Hardening](docs/security-hardening.md)
 - [Local Login And Billing](docs/login-billing.md)
