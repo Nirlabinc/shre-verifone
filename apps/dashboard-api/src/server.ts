@@ -457,6 +457,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       manifest: "/api/connector/manifest",
       salesQuery: "/api/sales/query",
       messages: "/api/messages/inbound",
+      activity: "/api/activity",
+      messageAudit: "/api/messages/audit",
+      activitySummary: store.activitySummary(),
     });
     return;
   }
@@ -575,7 +578,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         sendJson(res, 403, { error: "Inbound tenant/store does not match local connector activation" });
         return;
       }
-      const allowedSources = new Set(["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "unknown"]);
+      const allowedSources = new Set(["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "shre-cli", "unknown"]);
       if (!allowedSources.has(source)) {
         sendJson(res, 403, { error: "Inbound source is not allowed" });
         return;
@@ -657,7 +660,21 @@ async function main(): Promise<void> {
   await ensureRuntime();
   store = new RuntimeStore(runtimeRoot, { connectorRegistryUrl });
   const server = createServer((req, res) => {
+    const startedAt = Date.now();
+    const requestId = randomUUID();
+    res.setHeader("x-request-id", requestId);
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    res.on("finish", () => {
+      if (!url.pathname.startsWith("/api/")) return;
+      store.appendActivity("api_request_completed", {
+        requestId,
+        method: req.method || "GET",
+        path: url.pathname,
+        statusCode: res.statusCode,
+        durationMs: Date.now() - startedAt,
+        remoteAddress: req.socket.remoteAddress || "",
+      });
+    });
     handleRequest(req, res, url.pathname).catch((error: unknown) => {
       sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
     });

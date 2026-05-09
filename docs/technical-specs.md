@@ -30,6 +30,9 @@ Tables:
 - `chat_audit_log`
 - `commander_locks`
 - `sales_snapshots`
+- `connector_nonces`
+
+Activity logging records `api_request_completed` for API request/response visibility. Business events such as queue replay, connector activation, inbound messages, diagnostics bundle creation, and sales queries are recorded separately.
 
 ## Connector Registry
 

@@ -26,6 +26,29 @@ npm run build
 npm run test:e2e
 ```
 
+## Download/Setup/Shre CLI E2E
+
+This clones or copies the app into a temporary folder, installs dependencies, starts the API, performs setup/registration, seeds local sales data, and sends a signed Shre CLI-style message.
+
+Remote clone:
+
+```powershell
+npm run test:e2e:download
+```
+
+Current working tree copy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\e2e-download-setup-shrecli.ps1 -SourcePath .
+```
+
+Manual Shre CLI-style message:
+
+```powershell
+$env:CONNECTOR_SHARED_SECRET="your-shared-secret"
+npm run shre:message -- --base-url http://127.0.0.1:5480 --tenant tenant_rapid_001 --store store_001 --message "What were sales today?"
+```
+
 ## Run Local API
 
 ```powershell
@@ -111,6 +134,8 @@ The E2E test starts the API against a temporary runtime folder and verifies:
 - Connector marketplace manifest.
 - Local sales snapshot and sales query response.
 - Inbound message routing.
+- Signed Shre CLI-style message flow.
+- API request/response activity events.
 - Chat audit.
 - Commander lease contention.
 - Queue replay.

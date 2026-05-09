@@ -25,7 +25,7 @@
   "relatedConnectors": ["rapidrms-api"],
   "inbound": {
     "localEndpoint": "http://localhost:5480/api/messages/inbound",
-    "supportedSources": ["shre-chat", "message-gateway", "whatsapp", "claude", "codex"],
+    "supportedSources": ["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "shre-cli"],
     "responseModes": ["immediate-local", "queued-local", "cloud-relay"]
   },
   "tools": [

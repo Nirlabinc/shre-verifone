@@ -121,6 +121,19 @@ export class RuntimeStore {
     }));
   }
 
+  activitySummary(): JsonObject {
+    const rows = this.db.prepare(`
+      select event_name, count(*) as count
+      from activity_log
+      group by event_name
+      order by count desc, event_name asc
+    `).all() as Array<{ event_name: string; count: number }>;
+    return {
+      total: rows.reduce((sum, row) => sum + row.count, 0),
+      byEvent: rows.map((row) => ({ eventName: row.event_name, count: row.count })),
+    };
+  }
+
   enqueue(item: {
     target: string;
     entityType: string;
@@ -341,7 +354,7 @@ export class RuntimeStore {
       ],
       inbound: {
         endpoint: `${localBaseUrl}/api/messages/inbound`,
-        supportedSources: ["shre-chat", "message-gateway", "whatsapp", "claude", "codex"],
+        supportedSources: ["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "shre-cli"],
         responseModes: ["immediate-local", "queued-local", "cloud-relay"],
       },
       relatedConnectors: ["rapidrms-api"],

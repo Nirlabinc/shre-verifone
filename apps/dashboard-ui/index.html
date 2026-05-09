@@ -53,6 +53,15 @@
     th { color: var(--muted); font-weight: 600; }
     .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 16px; }
     .status-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: 12px; background: #eef2f6; color: var(--muted); }
+    .mini-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .mini { background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+    .mini strong { display: block; font-size: 20px; margin-top: 3px; }
+    .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: 12px; background: #eef2f6; }
+    .badge.pending { color: var(--amber); background: #fff4e5; }
+    .badge.failed, .badge.error { color: var(--red); background: #fee4e2; }
+    .badge.completed, .badge.answered { color: var(--green); background: #dcfae6; }
+    .scroll-table { max-height: 460px; overflow: auto; padding: 0; }
+    .mono { font-family: Consolas, "Courier New", monospace; font-size: 12px; overflow-wrap: anywhere; }
     @media (max-width: 860px) {
       main, .split { grid-template-columns: 1fr; }
       nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
@@ -193,16 +202,35 @@
       </section>
 
       <section id="queue">
+        <div class="mini-grid">
+          <div class="mini"><span class="label">Pending</span><strong id="qPending">0</strong></div>
+          <div class="mini"><span class="label">Completed</span><strong id="qCompleted">0</strong></div>
+          <div class="mini"><span class="label">Failed</span><strong id="qFailed">0</strong></div>
+          <div class="mini"><span class="label">Last Replay</span><strong id="qReplay">Never</strong></div>
+        </div>
         <div class="toolbar" style="margin-bottom:12px"><button id="replayQueue" class="primary" type="button">Replay Queue</button><button id="refreshQueue" class="secondary" type="button">Refresh Queue</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Status</th><th>Target</th><th>Operation</th><th>Entity</th><th>Updated</th></tr></thead><tbody id="queueRows"></tbody></table></div>
+        <div class="table-wrap scroll-table"><table><thead><tr><th>Status</th><th>Target</th><th>Operation</th><th>Entity</th><th>Attempts</th><th>Payload</th><th>Updated</th></tr></thead><tbody id="queueRows"></tbody></table></div>
       </section>
 
       <section id="health">
-        <div class="toolbar" style="margin-bottom:12px"><button id="createBundle" class="primary" type="button">Create Diagnostics Bundle</button></div>
-        <div class="split">
-          <div class="card"><h2>Activity Log</h2><div class="table-wrap"><table><thead><tr><th>Time</th><th>Event</th><th>Metadata</th></tr></thead><tbody id="activityRows"></tbody></table></div></div>
-          <div class="card"><h2>Diagnostics</h2><pre id="diagnosticsJson">Loading</pre></div>
+        <div class="mini-grid">
+          <div class="mini"><span class="label">API Requests</span><strong id="hRequests">0</strong></div>
+          <div class="mini"><span class="label">Activity Events</span><strong id="hEvents">0</strong></div>
+          <div class="mini"><span class="label">Messages</span><strong id="hMessages">0</strong></div>
+          <div class="mini"><span class="label">Storage</span><strong id="hStorage">0 KB</strong></div>
         </div>
+        <div class="toolbar" style="margin-bottom:12px"><button id="createBundle" class="primary" type="button">Create Diagnostics Bundle</button><button id="refreshHealth" class="secondary" type="button">Refresh</button></div>
+        <div class="split">
+          <div class="card">
+            <h2>Activity Log</h2>
+            <div class="table-wrap scroll-table"><table><thead><tr><th>Time</th><th>Event</th><th>Metadata</th></tr></thead><tbody id="activityRows"></tbody></table></div>
+          </div>
+          <div class="card">
+            <h2>Connector Messages</h2>
+            <div class="table-wrap scroll-table"><table><thead><tr><th>Time</th><th>Source</th><th>Intent</th><th>Status</th><th>Response</th></tr></thead><tbody id="messageRows"></tbody></table></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px"><h2>Diagnostics</h2><pre id="diagnosticsJson">Loading</pre></div>
       </section>
     </div>
   </main>
@@ -234,7 +262,7 @@
     }
     async function refresh() {
       try {
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -243,7 +271,8 @@
           api("/api/onboarding"),
           api("/api/connector/manifest"),
           api("/api/diagnostics"),
-          api("/api/activity")
+          api("/api/activity"),
+          api("/api/messages/audit")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
@@ -262,15 +291,28 @@
         showJson("diagnosticsJson", { health, diagnostics });
         renderQueue(queue.items || []);
         renderActivity(activity.events || []);
+        renderMessages(messageAudit.messages || []);
+        $("qPending").textContent = queue.pending || 0;
+        $("qCompleted").textContent = queue.completed || 0;
+        $("qFailed").textContent = queue.failed || 0;
+        $("qReplay").textContent = queue.lastReplayAt ? new Date(queue.lastReplayAt).toLocaleTimeString() : "Never";
+        const apiRequests = (diagnostics.activitySummary?.byEvent || []).find((item) => item.eventName === "api_request_completed");
+        $("hRequests").textContent = apiRequests ? apiRequests.count : 0;
+        $("hEvents").textContent = diagnostics.activitySummary?.total || 0;
+        $("hMessages").textContent = (messageAudit.messages || []).length;
+        $("hStorage").textContent = `${Math.round((health.storage?.bytes || 0) / 1024)} KB`;
       } catch (error) {
         setStatus(error.message, "bad");
       }
     }
     function renderQueue(items) {
-      $("queueRows").innerHTML = items.map((item) => `<tr><td>${item.status}</td><td>${item.target}</td><td>${item.operation}</td><td>${item.entityType}:${item.entityId || ""}</td><td>${item.updatedAt}</td></tr>`).join("") || '<tr><td colspan="5">No queue items</td></tr>';
+      $("queueRows").innerHTML = items.map((item) => `<tr><td><span class="badge ${item.status}">${item.status}</span></td><td>${item.target}</td><td>${item.operation}</td><td>${item.entityType}:${item.entityId || ""}</td><td>${item.attemptCount || 0}</td><td class="mono">${JSON.stringify(item.payload || {})}</td><td>${item.updatedAt}</td></tr>`).join("") || '<tr><td colspan="7">No queue items</td></tr>';
     }
     function renderActivity(events) {
-      $("activityRows").innerHTML = events.slice().reverse().map((event) => `<tr><td>${event.timestamp}</td><td>${event.eventName}</td><td><code>${JSON.stringify(event.metadata)}</code></td></tr>`).join("") || '<tr><td colspan="3">No activity</td></tr>';
+      $("activityRows").innerHTML = events.slice().reverse().map((event) => `<tr><td>${event.timestamp}</td><td>${event.eventName}</td><td class="mono">${JSON.stringify(event.metadata)}</td></tr>`).join("") || '<tr><td colspan="3">No activity</td></tr>';
+    }
+    function renderMessages(messages) {
+      $("messageRows").innerHTML = messages.slice().reverse().map((message) => `<tr><td>${message.createdAt}</td><td>${message.source}</td><td>${message.intent}</td><td><span class="badge ${message.status}">${message.status}</span></td><td class="mono">${JSON.stringify(message.response || {})}</td></tr>`).join("") || '<tr><td colspan="5">No connector messages</td></tr>';
     }
 
     $("tabs").addEventListener("click", (event) => {
@@ -281,6 +323,7 @@
     });
     $("refreshAll").onclick = refresh;
     $("refreshQueue").onclick = refresh;
+    $("refreshHealth").onclick = refresh;
     $("profileForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/profile", { method: "POST", body: JSON.stringify(formObject(event.target)) }); await refresh(); };
     $("onboardingForm").onsubmit = async (event) => {
       event.preventDefault();

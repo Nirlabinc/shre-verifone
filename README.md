@@ -69,6 +69,7 @@ Setup, onboarding, support, and specs:
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)
 - [App Boundary Decision](docs/app-boundary-decision.md)
+- [Local AI / Ollama Option](docs/local-ai-ollama.md)
 
 ## Shre SDK Findings
 
@@ -122,6 +123,19 @@ Run the current local-first E2E flow:
 
 ```powershell
 npm run test:e2e
+```
+
+Run the download/setup/message simulation E2E:
+
+```powershell
+npm run test:e2e:download
+```
+
+Send a signed Shre CLI-style message to a running local connector:
+
+```powershell
+$env:CONNECTOR_SHARED_SECRET="your-shared-secret"
+npm run shre:message -- --base-url http://127.0.0.1:5480 --tenant tenant_rapid_001 --store store_001 --message "What were sales today?"
 ```
 
 The E2E test starts the dashboard API against a temporary runtime folder and verifies:
@@ -194,6 +208,7 @@ Implemented now:
 - Offline queue enqueue/replay endpoints.
 - Diagnostics bundle endpoint.
 - Activity log endpoint.
+- API request/response activity events.
 - E2E API test for the local-first flow.
 - SQLite-backed runtime store with migrations.
 - Connector activation/status endpoints.

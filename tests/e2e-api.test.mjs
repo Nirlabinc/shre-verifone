@@ -309,6 +309,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
 
     const activity = await json("/api/activity");
     const names = activity.body.events.map((event) => event.eventName);
+    assert.ok(names.includes("api_request_completed"));
     assert.ok(names.includes("profile_saved"));
     assert.ok(names.includes("verifone_connection_validated"));
     assert.ok(names.includes("sales_snapshot_saved"));
