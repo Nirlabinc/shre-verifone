@@ -106,13 +106,14 @@ POST /api/auth/setup
 POST /api/auth/login
 POST /api/auth/logout
 POST /api/auth/validate
+POST /api/shre/signup-activate
 GET  /api/usage/summary
 POST /api/usage/record
 POST /api/usage/replay
 POST /api/chat/local
 ```
 
-Local login works offline from an encrypted local hash. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. Usage events are stored locally and queued to `shre-cost` for billing. `POST /api/usage/replay` backfills pending usage reports and marks local usage rows as `reported` when replay succeeds.
+Local login works offline from an encrypted local hash. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. `POST /api/shre/signup-activate` is the preferred first-run cloud setup path: it uses Shre Auth signup/login details to create or find tenant/store records, activate the connector, store the returned signing secret locally, and avoid manual tenant/secret entry. Usage events are stored locally and queued to `shre-cost` for billing. `POST /api/usage/replay` backfills pending usage reports and marks local usage rows as `reported` when replay succeeds.
 
 The first chat implementation uses local tools only. Sales questions use the local SQLite sales snapshot/query tool. Future model calls should be routed through the same usage metering path.
 

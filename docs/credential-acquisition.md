@@ -30,19 +30,19 @@ Do not ask users to email or paste this key into support tickets.
 
 ## Shre/MIB Tenant, Store Registry, And Activation
 
-Users should not manually create signing secrets. The production flow should use an activation token or QR/link flow that hides technical secrets.
+Users should not manually create signing secrets. The production flow should use Shre Auth signup/login as the single setup authority. Shre Auth creates or finds the tenant/store, activates the connector, and returns local connector credentials to the app.
 
 Recommended production flow:
 
 ```text
-Shre/MIB admin creates tenant
--> admin creates or imports store
--> admin enables Verifone Commander connector
--> Shre/MIB generates one-time activation token
--> user installs local app
--> user enters activation token in local dashboard
--> local app exchanges token with connector.aros.live
--> connector.aros.live returns tenant/store mapping and connector config
+user installs local app
+-> user opens local dashboard
+-> user signs up or signs in with Shre Auth
+-> user enters company and store name/code
+-> Shre Auth creates or finds tenant
+-> Shre Auth creates or finds store registry record
+-> Shre/MIB enables Verifone Commander connector
+-> Shre/MIB returns tenant/store mapping and connector config
 -> local app stores activation locally
 -> cloud gateway can route signed messages to this install
 ```
@@ -51,17 +51,31 @@ Shre/MIB admin creates tenant
 
 | Value | Who Creates It | Who Enters It | How User Gets It | Notes |
 | --- | --- | --- | --- | --- |
-| Tenant ID | Shre/MIB admin or marketplace signup | app auto-fills after activation | activation token exchange | Should represent the company/customer account. |
-| Store ID | Shre/MIB admin, imported from CStoreSKU/RapidRMS, or support | app auto-fills after activation | activation token exchange or store picker | Must match the physical store being installed. |
+| Tenant ID | Shre Auth/MIB signup | app auto-fills after signup activation | Shre Auth signup/activation response | Should represent the company/customer account. |
+| Store ID | Shre Auth/MIB signup, imported from CStoreSKU/RapidRMS, or support | app auto-fills after signup activation | Shre Auth signup/activation response | Must match the physical store being installed. |
 | Connector ID | application default | nobody | built in | `verifone-commander`. |
 | Registry URL | application default or Shre environment config | nobody in normal production | built in | Default: `https://connector.aros.live`. |
-| Connector signing secret | connector.aros.live | app/installer stores it | activation token exchange | Should not be shown to regular users. |
-| Activation token | Shre/MIB marketplace or support | user enters once | email, admin portal, QR code, or support session | Short-lived, one-time use. |
+| Connector signing secret | Shre Auth/MIB connector activation | app/installer stores it | signup/activation response | Should not be shown to regular users. |
+| Activation token | Shre/MIB marketplace or support | user enters once only in fallback flow | email, admin portal, QR code, or support session | Short-lived, one-time use. Signup/login is preferred. |
 | Allowed sources | Shre/MIB admin | app receives it | activation token exchange | Examples: ShreChat, WhatsApp, Claude, Codex. |
 | Entitlement state | Shre billing/admin system | app checks automatically | validation API | active/suspended/deactivated/rejected/offline pending. |
 | Billing endpoint | Shre/MIB config | app receives or uses env default | activation/config API | Used for usage reporting/backfill. |
 
 ## User Steps To Obtain Shre/MIB Activation Info
+
+### Preferred Shre Auth Signup
+
+1. User installs and opens the local dashboard.
+2. User opens `Marketplace`.
+3. User enters Shre Auth email/password, company, store name, and optional store code.
+4. Dashboard calls `POST /api/shre/signup-activate`.
+5. Local API calls Shre Auth when `SHRE_AUTH_SIGNUP_URL` is configured.
+6. Shre Auth creates or finds tenant/store records and activates `verifone-commander`.
+7. Local API stores tenant ID, store ID, and connector signing secret locally.
+8. Dashboard shows connector as activated.
+9. User sends a signed test message.
+
+The local app should not store the Shre Auth password. It uses the password only for signup/login exchange and stores the returned connector credentials.
 
 ### Self-Service Marketplace
 
@@ -95,10 +109,14 @@ Shre/MIB admin creates tenant
 
 Normal user prompt:
 
-- Activation token.
+- Shre Auth email.
+- Shre Auth password.
+- Company name.
+- Store name or store code.
 
 Advanced/support prompt:
 
+- Activation token.
 - Tenant ID.
 - Store ID.
 - Registry URL.
@@ -106,30 +124,27 @@ Advanced/support prompt:
 
 The advanced prompt should be hidden behind support/admin mode because manual secret entry is error-prone and exposes sensitive values.
 
-## Activation Token Exchange Contract
+## Shre Auth Signup Activation Contract
 
-Future endpoint:
+Local endpoint:
 
 ```http
-POST https://connector.aros.live/api/connectors/verifone-commander/activate
+POST /api/shre/signup-activate
 ```
 
 Request:
 
 ```json
 {
-  "activationToken": "one-time-token",
-  "localManifest": {
-    "connectorId": "verifone-commander",
-    "schemaVersion": "2026-05-09"
-  },
-  "host": {
-    "hostname": "store-pc",
-    "platform": "win32",
-    "arch": "x64"
-  }
+  "email": "owner@example.com",
+  "password": "user-password",
+  "company": "Rapid Infosoft LLC",
+  "storeName": "Main Store",
+  "storeCode": "store_001"
 }
 ```
+
+When `SHRE_AUTH_SIGNUP_URL` is configured, the local API forwards the signup/activation request to that Shre Auth endpoint with local manifest and host details. When it is not configured, the local API creates a simulated local activation for development and E2E testing.
 
 Response:
 
@@ -148,6 +163,12 @@ Response:
 ```
 
 The local app should store returned secrets in the secure local vault/runtime configuration and never display them after activation.
+
+Environment:
+
+```text
+SHRE_AUTH_SIGNUP_URL=
+```
 
 ## Security Rules
 

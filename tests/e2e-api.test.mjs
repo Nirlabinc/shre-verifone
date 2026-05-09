@@ -117,6 +117,23 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(authLogin.response.status, 200);
     assert.equal(authLogin.body.ok, true);
 
+    const shreSignup = await json("/api/shre/signup-activate", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "owner@example.com",
+        password: "shre-login-password",
+        company: "Rapid Infosoft LLC",
+        storeName: "Store 001",
+        storeCode: "store_001",
+      }),
+    });
+    assert.equal(shreSignup.response.status, 200);
+    assert.equal(shreSignup.body.ok, true);
+    assert.equal(shreSignup.body.simulated, true);
+    assert.match(shreSignup.body.tenantId, /^tenant_/);
+    assert.match(shreSignup.body.storeId, /^store_/);
+    assert.equal(shreSignup.body.cloudRelayEnabled, true);
+
     const onboarding = await json("/api/onboarding", {
       method: "POST",
       body: JSON.stringify({ completedSteps: ["profile"], currentStep: "verifone" }),
@@ -397,6 +414,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const activity = await json("/api/activity");
     const names = activity.body.events.map((event) => event.eventName);
     assert.ok(names.includes("api_request_completed"));
+    assert.ok(names.includes("shre_auth_signup_activated"));
     assert.ok(names.includes("profile_saved"));
     assert.ok(names.includes("verifone_connection_validated"));
     assert.ok(names.includes("sales_snapshot_saved"));

@@ -33,8 +33,8 @@ Download installer
 | Security | local admin token | installer/support generated optional value | no | service env | Used for service/admin access when configured. |
 | Security | install encryption secret | generated locally or set by installer | yes | `.install-secret` or env | Protects SQLite JSON state at rest. |
 | Store profile | company/legal name | user or Shre tenant registry | yes | `profile/current` | Example: Rapid Infosoft LLC customer tenant. |
-| Store profile | tenant ID | Shre/MIB tenant registry | yes for cloud relay | connector registration | Required for gateway routing and billing. |
-| Store profile | store ID | user, CStoreSKU, RapidRMS, or Shre store registry | yes | profile and connector registration | Must match the value registered in Shre/MIB. |
+| Store profile | tenant ID | Shre Auth/MIB signup activation | yes for cloud relay | connector registration | Auto-generated or looked up by Shre Auth so the user does not manually copy it. |
+| Store profile | store ID | Shre Auth/MIB signup activation, CStoreSKU/RapidRMS import, or support | yes | profile and connector registration | Auto-generated or looked up during signup activation. |
 | Store profile | contact email/timezone | user | recommended | `profile/current` | Used for support and local timestamp display. |
 | Verifone | Commander URL/IP | user/support/local network discovery | yes | encrypted connection state | Example: `http://192.168.1.50`. |
 | Verifone | Commander username | user/support | yes | encrypted connection state | Needs the minimum POS access required for configured operations. |
@@ -43,7 +43,7 @@ Download installer
 | Verifone | password expiration days | Commander validation result or user during test | recommended | password status | Drives notifications and reset workflow. |
 | Connector | connector ID | app default | yes | connector registration | `verifone-commander`. |
 | Connector | registry URL | app default or Shre config | yes for cloud relay | connector registration | Default: `https://connector.aros.live`. |
-| Connector | shared signing secret | Shre/MIB activation or installer | yes for cloud relay | service env/secure vault | Used for `POST /api/messages/inbound` HMAC verification. |
+| Connector | shared signing secret | Shre Auth/MIB signup activation or installer | yes for cloud relay | encrypted local runtime state or service env | Used for `POST /api/messages/inbound` HMAC verification. Normal users should not see it. |
 | Connector | local endpoint/tunnel identity | installer, Cloudflare phase, or support | future | connector registry | Needed when cloud sends messages to this local install. |
 | Connector | allowed sources | Shre/MIB registry | yes for gateway | connector registry | Current supported sources: ShreChat, message gateway, WhatsApp, Claude, Codex, Shre CLI. |
 | Sales data | sales snapshot | Commander ingest, support seed, or dashboard test entry | yes for sales answers | `sales_snapshots` | Local chat needs a recent local snapshot to answer sales questions. |
@@ -64,10 +64,11 @@ Minimum local-only setup:
 
 Cloud/gateway setup adds:
 
-- Tenant ID.
-- Store ID that matches Shre/MIB registry.
+- Shre Auth email/password.
+- Company name.
+- Store name or store code.
 - Connector activation choice.
-- Activation token from Shre/MIB. Advanced support mode can accept tenant ID, store ID, and connector signing secret directly.
+- Advanced support mode can accept tenant ID, store ID, and connector signing secret directly.
 
 ## What The App Discovers
 
@@ -84,6 +85,7 @@ Cloud/gateway setup adds:
 
 ## What Comes From Shre/MIB
 
+- Shre Auth signup/activation endpoint.
 - Tenant ID and store registry record.
 - Connector registry URL.
 - Connector signing secret or activation token.

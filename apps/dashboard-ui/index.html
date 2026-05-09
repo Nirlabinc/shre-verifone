@@ -217,8 +217,20 @@
       </section>
 
       <section id="connector">
+        <form id="shreSignupForm">
+          <h2>Shre Auth Signup & Activation</h2>
+          <div class="fields">
+            <label>Email<input name="email" type="email" autocomplete="email" placeholder="owner@example.com"></label>
+            <label>Password<input name="password" type="password" autocomplete="new-password"></label>
+            <label>Company<input name="company" autocomplete="organization"></label>
+            <label>Store Name<input name="storeName" placeholder="Main Store"></label>
+            <label>Store Code<input name="storeCode" placeholder="store_001"></label>
+          </div>
+          <div class="hint">Use this for normal setup. Shre Auth creates or finds the tenant/store, activates the connector, and stores the connector key locally. Manual registration below is for support fallback.</div>
+          <div class="toolbar"><button class="primary" type="submit">Signup & Activate</button></div>
+        </form>
         <form id="connectorForm">
-          <h2>Marketplace Registration</h2>
+          <h2>Manual Marketplace Registration</h2>
           <div class="fields">
             <label>Tenant ID<input name="tenantId" placeholder="tenant_rapid_001"></label>
             <label>Store ID<input name="storeId" placeholder="store_001"></label>
@@ -579,6 +591,11 @@
       body.cloudRelayEnabled = body.cloudRelayEnabled === "true";
       body.relatedConnectors = ["rapidrms-api"];
       await api("/api/connector/activate", { method: "POST", body: JSON.stringify(body) });
+      await refresh();
+    };
+    $("shreSignupForm").onsubmit = async (event) => {
+      event.preventDefault();
+      await api("/api/shre/signup-activate", { method: "POST", body: JSON.stringify(formObject(event.target)) });
       await refresh();
     };
     $("snapshotForm").onsubmit = async (event) => {

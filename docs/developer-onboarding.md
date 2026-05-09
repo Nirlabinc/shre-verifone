@@ -110,6 +110,7 @@ SHRE_TENANT_ID=
 SHRE_APP=verifone_cstoresku
 SHRE_MODE=read_only
 SHRE_BOOTSTRAP_KEY=
+SHRE_AUTH_SIGNUP_URL=
 ```
 
 Installer/onboarding field ownership is tracked in [Installation Data Map](installation-data-map.md). Use that document when adding installer prompts, first-run setup fields, activation-token exchange, or support scripts.

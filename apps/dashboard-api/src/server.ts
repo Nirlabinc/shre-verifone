@@ -14,6 +14,7 @@ const connectorSharedSecret = process.env.CONNECTOR_SHARED_SECRET || "";
 const localBaseUrlOverride = process.env.LOCAL_BASE_URL || "";
 const localAdminToken = process.env.LOCAL_ADMIN_TOKEN || "";
 const shreAuthValidateUrl = process.env.SHRE_AUTH_VALIDATE_URL || "";
+const shreAuthSignupUrl = process.env.SHRE_AUTH_SIGNUP_URL || "";
 const shreCostEndpoint = process.env.SHRE_COST_ENDPOINT || "";
 const uiRoot = resolve("apps/dashboard-ui");
 let store: RuntimeStore;
@@ -302,8 +303,15 @@ function decryptSecret(value: string): string {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }
 
+function activeConnectorSharedSecret(): string {
+  if (connectorSharedSecret) return connectorSharedSecret;
+  const credentials = store.getJson<JsonObject>("connector", "credentials", {});
+  return typeof credentials.sharedSecret === "string" ? credentials.sharedSecret : "";
+}
+
 function verifyConnectorSignature(req: IncomingMessage, bodyText: string, registration: JsonObject): { ok: boolean; reason?: string } {
-  if (!connectorSharedSecret) {
+  const sharedSecret = activeConnectorSharedSecret();
+  if (!sharedSecret) {
     return registration.cloudRelayEnabled === true
       ? { ok: false, reason: "connector_shared_secret_required_when_cloud_relay_enabled" }
       : { ok: true };
@@ -319,7 +327,7 @@ function verifyConnectorSignature(req: IncomingMessage, bodyText: string, regist
     return { ok: false, reason: "signature_timestamp_outside_allowed_window" };
   }
   if (!store.consumeConnectorNonce(nonce)) return { ok: false, reason: "replayed_nonce" };
-  const expected = createHmac("sha256", connectorSharedSecret).update(`${timestamp}.${nonce}.${tenantId}.${agentId}.${bodyText}`).digest("hex");
+  const expected = createHmac("sha256", sharedSecret).update(`${timestamp}.${nonce}.${tenantId}.${agentId}.${bodyText}`).digest("hex");
   const provided = signature.startsWith("sha256=") ? signature.slice("sha256=".length) : signature;
   const expectedBuffer = Buffer.from(expected, "hex");
   const providedBuffer = Buffer.from(provided, "hex");
@@ -399,6 +407,121 @@ function normalizeInboundMessage(body: JsonObject, registration: JsonObject): Js
       hasMessagesArray: Array.isArray(body.messages),
       keys: Object.keys(body).slice(0, 20),
     },
+  };
+}
+
+function slug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "store";
+}
+
+async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
+  const email = requireString(body, "email").toLowerCase();
+  const password = requireString(body, "password");
+  const company = requireString(body, "company");
+  const storeName = typeof body.storeName === "string" && body.storeName.trim() ? body.storeName.trim() : "Main Store";
+  const storeCode = typeof body.storeCode === "string" && body.storeCode.trim() ? body.storeCode.trim() : slug(storeName);
+  const localManifest = store.connectorManifest(localBaseUrlFromString(typeof body.localBaseUrl === "string" ? body.localBaseUrl : ""));
+  const hostInfo = {
+    hostname: hostname(),
+    platform: platform(),
+    arch: arch(),
+    cpuCount: cpus().length,
+    totalMemoryBytes: totalmem(),
+  };
+
+  let activation: JsonObject;
+  if (shreAuthSignupUrl) {
+    const response = await fetch(shreAuthSignupUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password,
+        company,
+        storeName,
+        storeCode,
+        app: "verifone_cstoresku",
+        connectorId: "verifone-commander",
+        localManifest,
+        host: hostInfo,
+      }),
+    });
+    const payload = await response.json().catch(() => ({})) as JsonObject;
+    if (!response.ok) {
+      throw new Error(String(payload.message || payload.error || `Shre Auth signup failed with HTTP ${response.status}`));
+    }
+    activation = payload;
+  } else {
+    const base = `${email}|${company}|${storeCode}`;
+    activation = {
+      status: "activated",
+      tenantId: `tenant_${slug(company)}_${createHash("sha256").update(email).digest("hex").slice(0, 8)}`,
+      storeId: `store_${slug(storeCode)}_${createHash("sha256").update(base).digest("hex").slice(0, 8)}`,
+      connectorId: "verifone-commander",
+      connectorName: "Verifone Commander",
+      registryUrl: connectorRegistryUrl,
+      sharedSecret: randomBytes(32).toString("hex"),
+      allowedSources: ["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "shre-cli"],
+      entitlementState: "active",
+      billingEndpoint: shreCostEndpoint || "",
+      mode: "local_first",
+      cloudRelayEnabled: true,
+      simulated: true,
+    };
+  }
+
+  const tenantId = String(activation.tenantId || "");
+  const storeId = String(activation.storeId || "");
+  const sharedSecret = String(activation.sharedSecret || activation.connectorSharedSecret || "");
+  if (!tenantId || !storeId || !sharedSecret) {
+    throw new Error("Shre activation response must include tenantId, storeId, and sharedSecret");
+  }
+  const registration = store.saveConnectorRegistration({
+    connectorId: String(activation.connectorId || "verifone-commander"),
+    connectorName: String(activation.connectorName || "Verifone Commander"),
+    tenantId,
+    storeId,
+    app: "verifone_cstoresku",
+    mode: String(activation.mode || "local_first"),
+    cloudRelayEnabled: activation.cloudRelayEnabled !== false,
+    registryUrl: String(activation.registryUrl || connectorRegistryUrl),
+    relatedConnectors: ["rapidrms-api"],
+  });
+  store.setJson("connector", "credentials", {
+    sharedSecret,
+    allowedSources: Array.isArray(activation.allowedSources) ? activation.allowedSources : ["shre-chat", "message-gateway", "whatsapp", "claude", "codex", "shre-cli"],
+    billingEndpoint: typeof activation.billingEndpoint === "string" ? activation.billingEndpoint : "",
+    activatedVia: shreAuthSignupUrl ? "shre-auth" : "local-simulated-shre-auth",
+    activatedEmail: email,
+    activatedAt: new Date().toISOString(),
+  });
+  store.setJson("profile", "current", {
+    ...store.getJson<JsonObject>("profile", "current", {}),
+    company,
+    storeId,
+    contactEmail: email,
+  });
+  const auth = authState();
+  auth.remoteValidation = {
+    state: String(activation.entitlementState || activation.status || "active") === "active" ? "valid" : String(activation.entitlementState || activation.status),
+    entitlementState: String(activation.entitlementState || activation.status || "active"),
+    lastCheckedAt: new Date().toISOString(),
+    message: shreAuthSignupUrl ? "Shre Auth signup and connector activation succeeded." : "Local simulated Shre Auth activation succeeded.",
+    keyVersion: typeof activation.keyVersion === "string" ? activation.keyVersion : "",
+    refreshedAt: new Date().toISOString(),
+  };
+  store.setJson("auth", "local-login", auth);
+  return {
+    ok: true,
+    registration,
+    tenantId,
+    storeId,
+    connectorId: registration.connectorId,
+    registryUrl: registration.registryUrl,
+    cloudRelayEnabled: registration.cloudRelayEnabled,
+    allowedSources: Array.isArray(activation.allowedSources) ? activation.allowedSources : [],
+    entitlementState: asObject(auth.remoteValidation || {}).entitlementState || "active",
+    simulated: activation.simulated === true,
   };
 }
 
@@ -565,6 +688,11 @@ function localBaseUrl(req: IncomingMessage): string {
   const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `cstoresku:${port}`, `cstoresku.local:${port}`]);
   const safeHost = allowedHosts.has(requestHost.toLowerCase()) ? requestHost : `localhost:${port}`;
   return `http://${safeHost}`;
+}
+
+function localBaseUrlFromString(value: string): string {
+  if (value) return value.replace(/\/$/, "");
+  return localBaseUrlOverride || `http://localhost:${port}`;
 }
 
 async function directorySize(path: string): Promise<{ files: number; bytes: number }> {
@@ -940,6 +1068,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       messageAudit: "/api/messages/audit",
       notifications: "/api/notifications",
       usage: "/api/usage/summary",
+      shreSignupActivate: "/api/shre/signup-activate",
       activitySummary: store.activitySummary(),
     });
     return;
@@ -1012,6 +1141,21 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       cloudRelayEnabled: registration.cloudRelayEnabled === true,
     });
     sendJson(res, 200, registration);
+    return;
+  }
+
+  if (path === "/api/shre/signup-activate" && req.method === "POST") {
+    try {
+      const activation = await shreSignupActivate(asObject(await requestBody(req)));
+      store.appendActivity("shre_auth_signup_activated", {
+        tenantId: activation.tenantId,
+        storeId: activation.storeId,
+        simulated: activation.simulated,
+      });
+      sendJson(res, 200, activation);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
     return;
   }
 

@@ -23,7 +23,7 @@ Have these ready:
 - Verifone Commander IP/URL.
 - Commander username and password.
 - CStoreSKU/RapidRMS application key if required.
-- Shre/MIB tenant ID and activation token if cloud or message gateway routing is enabled.
+- Shre Auth email/password if cloud or message gateway routing is enabled.
 - Internet access for installation and optional cloud relay.
 - Local network access to Commander.
 
@@ -38,13 +38,13 @@ See [Credential Acquisition](credential-acquisition.md) for where to obtain the 
 3. Enter company and store profile.
 4. Enter Commander connection details.
 5. Test Commander connection.
-6. Activate connector if cloud/message gateway routing is required.
+6. Use Shre Auth signup/activation if cloud/message gateway routing is required.
 7. Confirm queue, password status, and health checks are green.
 8. Send a test message through the chosen gateway.
 9. Ask a test sales question and confirm the response uses local data.
 10. Review activity log and diagnostics.
 
-Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally requires Shre/MIB tenant/store activation. In production, users should enter a one-time activation token instead of manually handling connector signing secrets.
+Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally uses Shre Auth to create or find the tenant/store and activate the connector. Manual tenant/store/signing-secret entry should only be used by support.
 
 ## Normal Daily Operation
 
