@@ -31,6 +31,19 @@ interface QueueRow {
   updated_at: string;
 }
 
+interface ChatAuditRow {
+  id: string;
+  source: string;
+  tenant_id: string | null;
+  store_id: string | null;
+  user_id: string | null;
+  message_text: string;
+  intent: string;
+  status: string;
+  response_json: string;
+  created_at: string;
+}
+
 export class RuntimeStore {
   private readonly db: Database.Database;
 
@@ -153,6 +166,106 @@ export class RuntimeStore {
     }));
   }
 
+  saveConnectorRegistration(registration: JsonObject): JsonObject {
+    const current = {
+      connectorId: registration.connectorId || "verifone-commander",
+      tenantId: registration.tenantId || "",
+      storeId: registration.storeId || "",
+      app: registration.app || "verifone_cstoresku",
+      mode: registration.mode || "local_first",
+      cloudRelayEnabled: registration.cloudRelayEnabled === true,
+      activatedAt: new Date().toISOString(),
+      status: registration.tenantId ? "activated" : "local_only",
+    };
+    this.setJson("connector", "registration", current);
+    return current;
+  }
+
+  connectorStatus(): JsonObject {
+    const registration = this.getJson<JsonObject>("connector", "registration", {
+      connectorId: "verifone-commander",
+      tenantId: "",
+      storeId: "",
+      app: "verifone_cstoresku",
+      mode: "local_first",
+      cloudRelayEnabled: false,
+      activatedAt: null,
+      status: "local_only",
+    });
+    return {
+      ...registration,
+      localDatabase: this.path(),
+      inboundEndpoint: "/api/messages/inbound",
+      cloudActivationRequiredForGatewayRouting: true,
+    };
+  }
+
+  saveChatAudit(entry: {
+    source: string;
+    tenantId?: string;
+    storeId?: string;
+    userId?: string;
+    messageText: string;
+    intent: string;
+    status: string;
+    response: JsonObject;
+  }): JsonObject {
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    this.db.prepare(`
+      insert into chat_audit_log (
+        id, source, tenant_id, store_id, user_id, message_text,
+        intent, status, response_json, created_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      entry.source,
+      entry.tenantId || null,
+      entry.storeId || null,
+      entry.userId || null,
+      entry.messageText,
+      entry.intent,
+      entry.status,
+      JSON.stringify(entry.response),
+      createdAt,
+    );
+    return {
+      id,
+      source: entry.source,
+      tenantId: entry.tenantId || "",
+      storeId: entry.storeId || "",
+      userId: entry.userId || "",
+      messageText: entry.messageText,
+      intent: entry.intent,
+      status: entry.status,
+      response: entry.response,
+      createdAt,
+    };
+  }
+
+  chatAudit(limit = 100): JsonObject[] {
+    const rows = this.db.prepare(`
+      select id, source, tenant_id, store_id, user_id, message_text,
+             intent, status, response_json, created_at
+      from chat_audit_log
+      order by created_at desc, rowid desc
+      limit ?
+    `).all(limit) as ChatAuditRow[];
+    return rows.reverse().map((row) => ({
+      id: row.id,
+      source: row.source,
+      tenantId: row.tenant_id || "",
+      storeId: row.store_id || "",
+      userId: row.user_id || "",
+      messageText: row.message_text,
+      intent: row.intent,
+      status: row.status,
+      response: JSON.parse(row.response_json) as JsonObject,
+      createdAt: row.created_at,
+    }));
+  }
+
   private queueItems(): JsonObject[] {
     const rows = this.db.prepare(`
       select id, target, entity_type, entity_id, operation, payload_json,
@@ -259,6 +372,19 @@ export class RuntimeStore {
       create table if not exists diagnostic_bundles (
         id text primary key,
         bundle_json text not null,
+        created_at text not null
+      );
+
+      create table if not exists chat_audit_log (
+        id text primary key,
+        source text not null,
+        tenant_id text,
+        store_id text,
+        user_id text,
+        message_text text not null,
+        intent text not null,
+        status text not null,
+        response_json text not null,
         created_at text not null
       );
 

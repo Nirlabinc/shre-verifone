@@ -61,6 +61,11 @@ Status: complete for the dashboard API runtime. Remaining expansion: add dedicat
 - Heartbeat.
 - Remote config/kill switch.
 - Audit exports.
+- Connector activation/status endpoint.
+- Inbound message endpoint.
+- Chat audit log.
+
+Status: partial. Local connector activation, inbound message queueing, and chat audit are implemented. Remaining: Shre SDK transport, secure cloud relay auth, and remote config/kill switch.
 
 ## Milestone 6: Chat With Sales Data
 

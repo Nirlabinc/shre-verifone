@@ -85,6 +85,20 @@ function redactConnection(connection: JsonObject): JsonObject {
   return redacted;
 }
 
+function classifyMessage(messageText: string): { intent: string; target: string; operation: string } {
+  const text = messageText.toLowerCase();
+  if (/\b(sales|revenue|gross|net|top items?|best sellers?)\b/.test(text)) {
+    return { intent: "sales_query", target: "local-db", operation: "query_sales" };
+  }
+  if (/\b(sync|push|pull|update commander|send to commander)\b/.test(text)) {
+    return { intent: "sync_command", target: "commander", operation: "sync" };
+  }
+  if (/\b(health|status|diagnostic|logs?|is it running)\b/.test(text)) {
+    return { intent: "health_check", target: "diagnostics", operation: "inspect" };
+  }
+  return { intent: "general_question", target: "shre", operation: "answer" };
+}
+
 async function directorySize(path: string): Promise<{ files: number; bytes: number }> {
   if (!existsSync(path)) return { files: 0, bytes: 0 };
   let files = 0;
@@ -325,6 +339,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       verifone: "/api/verifone/status",
       password: "/api/password/status",
       queue: "/api/queue",
+      connector: "/api/connector/status",
+      messages: "/api/messages/inbound",
     });
     return;
   }
@@ -359,6 +375,89 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/activity") {
     sendJson(res, 200, { events: store.activity(100) });
+    return;
+  }
+
+  if (path === "/api/connector/status") {
+    sendJson(res, 200, store.connectorStatus());
+    return;
+  }
+
+  if (path === "/api/connector/activate" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const registration = store.saveConnectorRegistration({
+      connectorId: typeof body.connectorId === "string" ? body.connectorId : "verifone-commander",
+      tenantId: typeof body.tenantId === "string" ? body.tenantId : "",
+      storeId: typeof body.storeId === "string" ? body.storeId : "",
+      app: typeof body.app === "string" ? body.app : "verifone_cstoresku",
+      mode: typeof body.mode === "string" ? body.mode : "local_first",
+      cloudRelayEnabled: body.cloudRelayEnabled === true,
+    });
+    store.appendActivity("connector_activated", {
+      connectorId: registration.connectorId,
+      tenantConfigured: Boolean(registration.tenantId),
+      cloudRelayEnabled: registration.cloudRelayEnabled === true,
+    });
+    sendJson(res, 200, registration);
+    return;
+  }
+
+  if (path === "/api/messages/inbound" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const messageText = requireString(body, "messageText");
+      const source = typeof body.source === "string" ? body.source : "unknown";
+      const registration = store.connectorStatus();
+      const tenantId = typeof body.tenantId === "string" ? body.tenantId : String(registration.tenantId || "");
+      const storeId = typeof body.storeId === "string" ? body.storeId : String(registration.storeId || "");
+      const userId = typeof body.userId === "string" ? body.userId : "";
+      const classification = classifyMessage(messageText);
+      const queueItem = store.enqueue({
+        target: classification.target,
+        entityType: "message",
+        entityId: typeof body.messageId === "string" ? body.messageId : randomUUID(),
+        operation: classification.operation,
+        payload: {
+          source,
+          tenantId,
+          storeId,
+          userId,
+          messageText,
+          intent: classification.intent,
+          receivedAt: new Date().toISOString(),
+        },
+      });
+      const response = {
+        accepted: true,
+        mode: registration.cloudRelayEnabled ? "cloud_relay" : "local_first",
+        intent: classification.intent,
+        queuedOperation: queueItem.id,
+        message: "Message accepted locally and queued for processing.",
+      };
+      const audit = store.saveChatAudit({
+        source,
+        tenantId,
+        storeId,
+        userId,
+        messageText,
+        intent: classification.intent,
+        status: "queued",
+        response,
+      });
+      store.appendActivity("inbound_message_queued", {
+        source,
+        intent: classification.intent,
+        queueId: queueItem.id,
+      });
+      sendJson(res, 202, { ...response, auditId: audit.id });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/messages/audit") {
+    sendJson(res, 200, { messages: store.chatAudit(100) });
     return;
   }
 

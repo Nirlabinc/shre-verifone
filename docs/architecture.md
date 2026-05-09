@@ -27,6 +27,8 @@ local store machine
 remote
 ├─ Shre control plane
 ├─ Shre events plane
+├─ MIB/Shre connector registry
+├─ message gateways
 ├─ Shre Cortex/RAG/training services
 └─ Rapid Infosoft support/operations
 ```
@@ -107,6 +109,10 @@ Owns Shre integration:
 - Heartbeat.
 - Chat/RAG/training handoff.
 
+### message gateways
+
+External user channels such as WhatsApp, ShreChat, Claude, and Codex should route through the MIB/Shre connector registry before reaching the local connector. Local-only mode can receive messages directly through `POST /api/messages/inbound`.
+
 ## Runtime Storage
 
 The current implementation uses SQLite for local-first runtime state.
@@ -133,8 +139,11 @@ Tables:
 - `sync_attempts`
 - `conflicts`
 - `diagnostic_bundles`
+- `chat_audit_log`
 
 The `app_state` table stores current profile, onboarding, Verifone connection, Verifone status, password status, and queue replay status as JSON documents. Dedicated tables are used where replay/history matters.
+
+See [Connector Flow](connector-flow.md) for cloud-to-local message routing.
 
 ## Local Ports
 

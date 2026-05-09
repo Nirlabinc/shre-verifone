@@ -53,6 +53,8 @@ shre-connector -> Shre control plane / events / RAG / training
 
 See [docs/architecture.md](docs/architecture.md).
 
+Message gateway and connector routing are documented in [docs/connector-flow.md](docs/connector-flow.md).
+
 ## Shre SDK Findings
 
 The existing Shre SDK family uses the same wire contract across Swift, .NET, Python, and the private platform SDK:
@@ -173,5 +175,8 @@ Implemented now:
 - Activity log endpoint.
 - E2E API test for the local-first flow.
 - SQLite-backed runtime store with migrations.
+- Connector activation/status endpoints.
+- Inbound message gateway endpoint.
+- Chat/message audit log.
 
-Next implementation step: wire live Commander/Shre tenant integrations behind the existing API contracts, then add typed tables for sync commands, Shre exports, and chat audit records.
+Next implementation step: wire live Commander/Shre tenant integrations behind the existing API contracts, then add secure cloud relay authentication and local command authorization.

@@ -138,9 +138,43 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(queueItem.response.status, 201);
     assert.equal(queueItem.body.status, "pending");
 
+    const connector = await json("/api/connector/activate", {
+      method: "POST",
+      body: JSON.stringify({
+        connectorId: "verifone-commander",
+        tenantId: "tenant_rapid_001",
+        storeId: "store_001",
+        app: "verifone_cstoresku",
+        cloudRelayEnabled: true,
+      }),
+    });
+    assert.equal(connector.response.status, 200);
+    assert.equal(connector.body.status, "activated");
+    assert.equal(connector.body.cloudRelayEnabled, true);
+
+    const inbound = await json("/api/messages/inbound", {
+      method: "POST",
+      body: JSON.stringify({
+        source: "whatsapp",
+        tenantId: "tenant_rapid_001",
+        storeId: "store_001",
+        userId: "operator_1",
+        messageId: "msg_001",
+        messageText: "What were sales today?",
+      }),
+    });
+    assert.equal(inbound.response.status, 202);
+    assert.equal(inbound.body.intent, "sales_query");
+    assert.equal(inbound.body.mode, "cloud_relay");
+    assert.ok(inbound.body.queuedOperation);
+
+    const audit = await json("/api/messages/audit");
+    assert.equal(audit.response.status, 200);
+    assert.equal(audit.body.messages.at(-1).intent, "sales_query");
+
     const replay = await json("/api/queue/replay", { method: "POST", body: JSON.stringify({}) });
     assert.equal(replay.response.status, 200);
-    assert.equal(replay.body.items[0].status, "completed");
+    assert.equal(replay.body.items.every((item) => item.status === "completed"), true);
 
     const bundle = await json("/api/diagnostics/bundle", { method: "POST", body: JSON.stringify({}) });
     assert.equal(bundle.response.status, 201);
@@ -153,6 +187,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const names = activity.body.events.map((event) => event.eventName);
     assert.ok(names.includes("profile_saved"));
     assert.ok(names.includes("verifone_connection_validated"));
+    assert.ok(names.includes("inbound_message_queued"));
     assert.ok(names.includes("offline_queue_replayed"));
   } finally {
     child.kill("SIGTERM");
