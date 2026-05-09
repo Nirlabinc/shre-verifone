@@ -91,6 +91,10 @@
     .login-panel { display: none; position: fixed; inset: 0; background: rgba(244, 246, 248, 0.96); z-index: 30; align-items: center; justify-content: center; padding: 18px; }
     .login-panel.open { display: flex; }
     .login-box { width: min(460px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; }
+    .chat-log { display: grid; gap: 10px; margin-bottom: 12px; max-height: 420px; overflow: auto; }
+    .chat-msg { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--panel); }
+    .chat-msg.user { margin-left: 12%; background: #eaf1ff; }
+    .chat-msg.assistant { margin-right: 12%; }
     tr.clickable { cursor: pointer; }
     tr.clickable:hover { background: #f8fafc; }
     @media (max-width: 860px) {
@@ -117,6 +121,7 @@
       <button data-tab="setup">Setup</button>
       <button data-tab="verifone">Verifone</button>
       <button data-tab="connector">Marketplace</button>
+      <button data-tab="chat">Chat</button>
       <button data-tab="sales">Sales Query</button>
       <button data-tab="usage">Usage & Billing</button>
       <button data-tab="queue">Queue</button>
@@ -250,6 +255,18 @@
           </form>
         </div>
         <div class="card"><h2>Sales Response</h2><pre id="salesResponse">No query yet</pre></div>
+      </section>
+
+      <section id="chat">
+        <div class="card">
+          <h2>Local Data Chat</h2>
+          <div id="chatLog" class="chat-log"></div>
+          <form id="chatForm">
+            <label>Message<textarea name="messageText">What were sales today?</textarea></label>
+            <div class="toolbar"><button class="primary" type="submit">Send</button></div>
+          </form>
+          <div class="hint">Current tools: local sales query and local help. Cloud models and remote access through Cloudflare are planned for the next phase.</div>
+        </div>
       </section>
 
       <section id="queue">
@@ -438,6 +455,13 @@
       $("uEvents").textContent = events.length;
       $("usageRows").innerHTML = events.slice().reverse().map((event) => `<tr><td>${event.createdAt}</td><td>${event.source}</td><td>${event.model}</td><td>${event.inputTokens + event.outputTokens}</td><td>$${Number(event.estimatedCostUsd || 0).toFixed(6)}</td><td><span class="badge pending">${event.status}</span></td></tr>`).join("") || '<tr><td colspan="6">No usage events</td></tr>';
     }
+    function addChatMessage(role, text, meta = null) {
+      const entry = document.createElement("div");
+      entry.className = `chat-msg ${role}`;
+      entry.innerHTML = `<div class="label">${role}</div><div>${text}</div>${meta ? `<pre>${JSON.stringify(meta, null, 2)}</pre>` : ""}`;
+      $("chatLog").appendChild(entry);
+      $("chatLog").scrollTop = $("chatLog").scrollHeight;
+    }
     function renderNotifications(summary) {
       const items = summary.items || [];
       const severity = summary.highestSeverity || "ok";
@@ -514,6 +538,18 @@
       await refresh();
     };
     $("validateLogin").onclick = async () => { await api("/api/auth/validate", { method: "POST", body: "{}" }); await refresh(); };
+    $("chatForm").onsubmit = async (event) => {
+      event.preventDefault();
+      const body = formObject(event.target);
+      addChatMessage("user", body.messageText);
+      try {
+        const result = await api("/api/chat/local", { method: "POST", body: JSON.stringify(body) });
+        addChatMessage("assistant", result.message, { intent: result.intent, usage: result.usage });
+      } catch (error) {
+        addChatMessage("assistant", error.message);
+      }
+      await refresh();
+    };
     $("profileForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/profile", { method: "POST", body: JSON.stringify(formObject(event.target)) }); await refresh(); };
     $("onboardingForm").onsubmit = async (event) => {
       event.preventDefault();

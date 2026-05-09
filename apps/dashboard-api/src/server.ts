@@ -179,19 +179,51 @@ async function validateLoginRemote(reason: string): Promise<void> {
         reason,
       }),
     });
+    const payload = await response.json().catch(() => ({})) as JsonObject;
+    const entitlement = String(
+      payload.entitlementState ||
+      payload.status ||
+      (response.ok ? "active" : response.status === 402 ? "suspended" : response.status === 403 ? "deactivated" : "rejected"),
+    );
     state.remoteValidation = {
-      state: response.ok ? "valid" : "rejected",
+      state: entitlement === "active" ? "valid" : entitlement,
+      entitlementState: entitlement,
       lastCheckedAt: new Date().toISOString(),
-      message: response.ok ? "Remote validation succeeded." : `Remote validation failed with HTTP ${response.status}.`,
+      message: entitlement === "active"
+        ? "Remote validation succeeded."
+        : String(payload.message || `Remote validation returned ${entitlement} with HTTP ${response.status}.`),
+      keyVersion: typeof payload.keyVersion === "string" ? payload.keyVersion : "",
+      refreshedAt: entitlement === "active" ? new Date().toISOString() : null,
     };
   } catch (error) {
     state.remoteValidation = {
       state: "offline_pending",
+      entitlementState: "offline_pending",
       lastCheckedAt: new Date().toISOString(),
       message: `Remote validation unavailable: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
   store.setJson("auth", "local-login", state);
+}
+
+function entitlementState(): string {
+  const remote = asObject(authState().remoteValidation || {});
+  return String(remote.entitlementState || remote.state || "unknown");
+}
+
+function meteredActionsAllowed(): boolean {
+  const state = entitlementState();
+  return !["suspended", "deactivated", "rejected"].includes(state);
+}
+
+function blockMeteredAction(res: ServerResponse): boolean {
+  if (meteredActionsAllowed()) return false;
+  sendJson(res, 402, {
+    error: "Account is not active",
+    entitlementState: entitlementState(),
+    message: "This account must be reactivated before chat, cloud relay, or metered Shre services can continue.",
+  });
+  return true;
 }
 
 function estimateTokens(text: string): number {
@@ -427,6 +459,22 @@ function currentNotifications(): JsonObject {
         "Offline login is allowed, and remote validation will retry when the service is reachable.",
         "Review login status",
       ));
+    } else if (remote.state === "suspended") {
+      items.push(notification(
+        "account_suspended",
+        "critical",
+        "Account is suspended",
+        String(remote.message || "Reactivate billing or resolve the account hold to resume chat and cloud relay."),
+        "Reactivate account",
+      ));
+    } else if (remote.state === "deactivated") {
+      items.push(notification(
+        "account_deactivated",
+        "critical",
+        "Account is deactivated",
+        String(remote.message || "Reactivate this install before using chat and cloud relay."),
+        "Reactivate account",
+      ));
     } else if (remote.state === "rejected") {
       items.push(notification(
         "login_validation_rejected",
@@ -575,6 +623,17 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   if (path === "/api/auth/validate" && req.method === "POST") {
     await validateLoginRemote("manual");
     sendJson(res, 200, authState());
+    return;
+  }
+
+  if (path === "/api/auth/refresh-key" && req.method === "POST") {
+    await validateLoginRemote("refresh_key");
+    const state = authState();
+    store.appendActivity("auth_key_refresh_checked", {
+      entitlementState: entitlementState(),
+      remoteValidation: asObject(state.remoteValidation || {}).state || "unknown",
+    });
+    sendJson(res, 200, state);
     return;
   }
 
@@ -933,6 +992,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/messages/inbound" && req.method === "POST") {
     try {
+      if (blockMeteredAction(res)) return;
       const bodyText = await requestText(req);
       const registration = store.connectorStatus();
       const signature = verifyConnectorSignature(req, bodyText, registration);
@@ -1005,6 +1065,60 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         auditId: audit.id,
       });
       sendJson(res, 202, { ...response, auditId: audit.id });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/chat/local" && req.method === "POST") {
+    try {
+      if (blockMeteredAction(res)) return;
+      const body = asObject(await requestBody(req));
+      const messageText = requireString(body, "messageText");
+      const connector = store.connectorStatus();
+      const tenantId = typeof body.tenantId === "string" ? body.tenantId : String(connector.tenantId || "");
+      const storeId = typeof body.storeId === "string" ? body.storeId : String(connector.storeId || "");
+      const classification = classifyMessage(messageText);
+      const connectorResponse = classification.intent === "sales_query"
+        ? store.answerSalesQuery(messageText, typeof body.businessDate === "string" ? body.businessDate : undefined)
+        : {
+            status: "answered",
+            requiresDataSource: false,
+            answer: "I can answer local sales questions now. Commander write commands and richer model tools are planned for the next phase.",
+          };
+      const answer = String(connectorResponse.answer || "No answer available.");
+      const usage = recordUsage("local-chat", tenantId, storeId, "local-tool-router", messageText, answer, {
+        intent: classification.intent,
+        tool: classification.intent === "sales_query" ? "sales_query" : "local_help",
+      });
+      const audit = store.saveChatAudit({
+        source: "local-chat",
+        tenantId,
+        storeId,
+        userId: typeof body.userId === "string" ? body.userId : "local-dashboard",
+        messageText,
+        intent: classification.intent,
+        status: String(connectorResponse.status || "answered"),
+        response: {
+          message: answer,
+          connectorResponse,
+          usage,
+        },
+      });
+      store.appendActivity("local_chat_answered", {
+        intent: classification.intent,
+        auditId: audit.id,
+        usageId: usage.id,
+      });
+      sendJson(res, 200, {
+        accepted: true,
+        intent: classification.intent,
+        message: answer,
+        connectorResponse,
+        usage,
+        auditId: audit.id,
+      });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
     }

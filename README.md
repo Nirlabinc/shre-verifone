@@ -11,6 +11,7 @@ Phase 1 packaged the existing Verifone Commander sync worker as a single contain
 Phase 2 turns that install into a local platform:
 
 - Browser dashboard and local API.
+- Local data chat backed by tool calls.
 - Setup/onboarding and user profile.
 - Verifone connection validation.
 - Pull/push command visibility.

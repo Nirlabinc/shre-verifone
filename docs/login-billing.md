@@ -17,6 +17,8 @@ Offline behavior:
 - Remote validation is best-effort.
 - If Shre validation is unavailable, login continues and the status becomes `offline_pending`.
 - Background validation retries every 5 minutes while the API is running.
+- If the server returns `suspended`, `deactivated`, or `rejected`, the dashboard shows a critical notification and blocks metered chat/cloud relay actions.
+- If validation later returns `active`, the app updates the entitlement/key metadata and resumes metered operations.
 
 Remote validation endpoint:
 
@@ -25,6 +27,22 @@ SHRE_AUTH_VALIDATE_URL=
 ```
 
 When configured, the app POSTs tenant/store/app identity to this endpoint at startup, login, manual validation, and background retry.
+
+Manual entitlement/key refresh:
+
+```http
+POST /api/auth/refresh-key
+```
+
+The validation response can include:
+
+```json
+{
+  "status": "active",
+  "entitlementState": "active",
+  "keyVersion": "2026-05"
+}
+```
 
 ## Usage And Billing
 
@@ -46,6 +64,32 @@ SHRE_COST_ENDPOINT=
 If the cost endpoint is unavailable or not configured, events remain stored locally and are queued as `shre-cost` work. This prevents silent free use while still allowing offline store operation.
 
 Current token estimates use a deterministic local estimate of approximately 4 characters per token. When a cloud model is added, provider-reported token counts should replace this estimate.
+
+## Suspended Or Deactivated Accounts
+
+Local data capture should continue while an account is suspended. The store should not lose POS continuity because of a billing outage.
+
+Allowed while suspended:
+
+- Local Verifone/Commander setup and validation.
+- Local sales ingest/snapshots.
+- Local diagnostics and support data.
+- Local queue/backlog storage.
+
+Blocked while suspended:
+
+- Local chat.
+- Cloud relay inbound messages.
+- Metered Shre/model/tool actions.
+
+Backfill:
+
+- Local snapshots and queue entries remain stored.
+- `usage_events` remain stored.
+- `shre-cost` queue items remain pending.
+- When the account is active again, queue replay/backfill can report the missed usage and sync pending cloud events.
+
+This protects store operations while still preventing suspended accounts from continuing billable AI/chat services without reactivation.
 
 ## Limits
 

@@ -105,9 +105,12 @@ POST /api/auth/logout
 POST /api/auth/validate
 GET  /api/usage/summary
 POST /api/usage/record
+POST /api/chat/local
 ```
 
 Local login works offline from an encrypted local hash. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. Usage events are stored locally and queued to `shre-cost` for billing.
+
+The first chat implementation uses local tools only. Sales questions use the local SQLite sales snapshot/query tool. Future model calls should be routed through the same usage metering path.
 
 ## Commander Concurrency
 

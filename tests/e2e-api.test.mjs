@@ -283,6 +283,14 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(usage.body.outputTokens > 0);
     assert.ok(usage.body.events.length >= 1);
 
+    const localChat = await json("/api/chat/local", {
+      method: "POST",
+      body: JSON.stringify({ messageText: "What were sales today?", businessDate: "2026-05-09" }),
+    });
+    assert.equal(localChat.response.status, 200);
+    assert.equal(localChat.body.intent, "sales_query");
+    assert.match(localChat.body.message, /\$1842\.55/);
+
     const replayedInbound = await json("/api/messages/inbound", {
       method: "POST",
       ...signedInbound,

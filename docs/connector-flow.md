@@ -79,6 +79,7 @@ The local install remains the system of action.
 - Local offline queue stores work.
 - Commander/SQL actions run locally.
 - Cloud can enrich, route, and learn from approved data, but does not need to be in the critical path for local operations.
+- If remote entitlement is suspended or deactivated, local data capture continues but chat/cloud relay and metered Shre actions are blocked until reactivated.
 
 ## Current Implemented Local APIs
 
@@ -145,6 +146,14 @@ Message audit:
 ```http
 GET /api/messages/audit
 ```
+
+Local chat:
+
+```http
+POST /api/chat/local
+```
+
+The current chat uses local tools, not a general model. It routes sales questions to the local sales query tool and records usage for billing.
 
 Sales snapshot ingest:
 
