@@ -25,6 +25,17 @@ jobs:
       - name: Build and E2E
         run: npm run check
 
+      - name: Runtime guard smoke
+        run: |
+          tmp_runtime="$(mktemp -d)"
+          VERIFONE_SHRE_HOME="$tmp_runtime" ./scripts/protect-runtime.sh mark
+          test -f "$tmp_runtime/.runtime-protected"
+          if VERIFONE_SHRE_HOME="$tmp_runtime" ./scripts/protect-runtime.sh allow-reset; then
+            echo "Runtime reset unexpectedly allowed without override"
+            exit 1
+          fi
+          ALLOW_VERIFONE_RUNTIME_RESET=I_UNDERSTAND_DELETE_LOCAL_DATA VERIFONE_SHRE_HOME="$tmp_runtime" ./scripts/protect-runtime.sh allow-reset
+
       - name: Check required docs
         run: |
           test -s README.md

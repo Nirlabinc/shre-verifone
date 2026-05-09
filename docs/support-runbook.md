@@ -55,6 +55,30 @@ If `LOCAL_ADMIN_TOKEN` is configured, enter it in the dashboard header before us
 
 ## Common Issues
 
+### Runtime Folder Protection
+
+Runtime data is customer data and should survive updates. The protected runtime folder is:
+
+```text
+Windows: %USERPROFILE%\.verifone-shre-cstoresku
+macOS/Linux: ~/.verifone-shre-cstoresku
+```
+
+Update/install scripts must run the runtime guard and must not delete this folder:
+
+```powershell
+npm run runtime:check
+```
+
+The runtime folder contains `.runtime-protected`. A reset must be a deliberate support/admin action:
+
+```powershell
+$env:ALLOW_VERIFONE_RUNTIME_RESET="I_UNDERSTAND_DELETE_LOCAL_DATA"
+powershell -ExecutionPolicy Bypass -File scripts/protect-runtime.ps1 -AllowReset
+```
+
+Only reset after exporting/backing up required data and confirming the customer understands local login, connector settings, queue, logs, and local sales snapshots may be removed by the follow-up delete operation.
+
 ### Commander Not Reachable
 
 Check:

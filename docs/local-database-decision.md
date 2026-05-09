@@ -10,6 +10,9 @@ SQLite is the right default because:
 
 - One file: `runtime.sqlite`.
 - No database server to install, patch, start, or repair.
+- It fits a single-store edge device where local offline operation matters more than multi-node database clustering.
+- It keeps local reads, queues, audit, heartbeat, and sales snapshots available even when Shre/cloud is offline.
+- It can be backed up with the runtime folder and protected by the install secret for encrypted JSON state.
 - Works well on Windows, macOS, Linux, and ARM64.
 - Easy backup and diagnostics.
 - Good fit for one store machine with one local API and a few worker processes.
@@ -33,6 +36,8 @@ Add local Postgres only if we hit one of these needs:
 - Complex reporting that SQLite cannot handle comfortably.
 - Need for server-side roles, row-level security, or remote SQL clients.
 - Queue volume high enough that SQLite write contention becomes measurable.
+
+SQLite should not become the source of truth for Shre tenant/account records, billing, marketplace entitlement, or remote fine-tuning governance. Those remain cloud/Shre Platform concerns. SQLite stores the local operational copy, offline queue, diagnostics, and cached facts needed for local service continuity.
 
 ## Upgrade And Version Persistence
 
