@@ -39,7 +39,7 @@ Download installer
 | Verifone | Commander URL/IP | user/support/local network discovery | yes | encrypted connection state | Example: `http://192.168.1.50`. |
 | Verifone | Commander username | user/support | yes | encrypted connection state | Needs the minimum POS access required for configured operations. |
 | Verifone | Commander password | user/support | yes | encrypted connection state | Redacted in API/UI/logs. |
-| Verifone | application key | user/support/Commander config | if required | encrypted connection state | Optional in current scaffold, may be required by live Commander integration. |
+| Verifone | application key | existing CStoreSKU/RapidRMS or Commander integration config, Verifone dealer/support, or Rapid Infosoft support | if required | encrypted connection state | Optional in current scaffold. If live Commander integration requires it, support or the POS integration owner must provide it. |
 | Verifone | password expiration days | Commander validation result or user during test | recommended | password status | Drives notifications and reset workflow. |
 | Connector | connector ID | app default | yes | connector registration | `verifone-commander`. |
 | Connector | registry URL | app default or Shre config | yes for cloud relay | connector registration | Default: `https://connector.aros.live`. |
@@ -67,7 +67,7 @@ Cloud/gateway setup adds:
 - Tenant ID.
 - Store ID that matches Shre/MIB registry.
 - Connector activation choice.
-- Shared connector secret or activation token from Shre/MIB.
+- Activation token from Shre/MIB. Advanced support mode can accept tenant ID, store ID, and connector signing secret directly.
 
 ## What The App Discovers
 
@@ -91,6 +91,8 @@ Cloud/gateway setup adds:
 - Entitlement status: active, suspended, deactivated, rejected, or offline pending.
 - Billing/cost reporting endpoint.
 - Future tunnel or relay identity for remote messages.
+
+Detailed credential steps are in [Credential Acquisition](credential-acquisition.md).
 
 ## Go-Live Checklist
 

@@ -29,6 +29,8 @@ Have these ready:
 
 See [Installation Data Map](installation-data-map.md) for the full field list and where each value comes from.
 
+See [Credential Acquisition](credential-acquisition.md) for where to obtain the application key, Shre/MIB tenant/store activation, and connector credentials.
+
 ## Setup Steps
 
 1. Install the application.
@@ -42,7 +44,7 @@ See [Installation Data Map](installation-data-map.md) for the full field list an
 9. Ask a test sales question and confirm the response uses local data.
 10. Review activity log and diagnostics.
 
-Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally requires Shre/MIB tenant/store activation and connector signing credentials.
+Minimum local-only setup requires only local login, store profile, and Commander connection details. Cloud/message gateway setup additionally requires Shre/MIB tenant/store activation. In production, users should enter a one-time activation token instead of manually handling connector signing secrets.
 
 ## Normal Daily Operation
 
