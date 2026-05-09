@@ -311,6 +311,38 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(catalog.body.connectors.find((item) => item.connectorId === "verifone-fcc").installState, "available_add_on");
     assert.equal(catalog.body.connectors.find((item) => item.connectorId === "verifone-loyalty").bundled, false);
 
+    const addons = await json("/api/addons");
+    assert.equal(addons.response.status, 200);
+    assert.equal(addons.body.addOns.find((addon) => addon.id === "verifone-fcc").status, "available");
+
+    const fccActivation = await json("/api/addons/activate", {
+      method: "POST",
+      body: JSON.stringify({ id: "verifone-fcc", enabled: true }),
+    });
+    assert.equal(fccActivation.response.status, 200);
+    assert.equal(fccActivation.body.enabled, true);
+
+    const fccStatus = await json("/api/addons/fcc/status");
+    assert.equal(fccStatus.body.status, "enabled");
+
+    const loyaltyStatus = await json("/api/addons/loyalty/status");
+    assert.equal(loyaltyStatus.body.status, "available");
+
+    const adapters = await json("/api/adapters");
+    assert.equal(adapters.response.status, 200);
+    assert.ok(adapters.body.adapters.some((adapter) => adapter.id === "mcp" && adapter.status === "contract_available"));
+
+    const remoteAccess = await json("/api/remote-access", {
+      method: "POST",
+      body: JSON.stringify({ provider: "cloudflare", enabled: true, publicUrl: "https://edge.example.test", tunnelId: "tunnel-001" }),
+    });
+    assert.equal(remoteAccess.response.status, 200);
+    assert.equal(remoteAccess.body.ready, true);
+
+    const mcpTools = await json("/api/mcp/tools");
+    assert.equal(mcpTools.response.status, 200);
+    assert.ok(mcpTools.body.tools.some((tool) => tool.name === "verifone.fcc.status"));
+
     const manifest = await json("/api/connector/manifest");
     assert.equal(manifest.response.status, 200);
     assert.equal(manifest.body.connectorId, "verifone-commander");
@@ -510,6 +542,8 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const names = activity.body.events.map((event) => event.eventName);
     assert.ok(names.includes("api_request_completed"));
     assert.ok(names.includes("access_mode_updated"));
+    assert.ok(names.includes("addon_activated"));
+    assert.ok(names.includes("remote_access_updated"));
     assert.ok(names.includes("shre_auth_signup_activated"));
     assert.ok(names.includes("profile_saved"));
     assert.ok(names.includes("verifone_connection_validated"));

@@ -139,6 +139,21 @@ Supported modes:
 
 The default comes from `COMMANDER_ACCESS_MODE`, falling back to `SHRE_MODE`, then `read_only`. Inventory updates and Commander write commands must go through `outbound_queue` and the Commander lease. Direct writes to Commander are not allowed from chat or gateway handlers.
 
+## Add-ons, Remote Access, And MCP Contract
+
+```http
+GET  /api/addons
+POST /api/addons/activate
+GET  /api/addons/fcc/status
+GET  /api/addons/loyalty/status
+GET  /api/adapters
+GET  /api/remote-access
+POST /api/remote-access
+GET  /api/mcp/tools
+```
+
+FCC and Loyalty are marketplace add-ons. They are disabled by default and depend on `verifone-commander`. `/api/adapters` reports core/add-on/future adapter readiness for the edge device. `/api/remote-access` stores Cloudflare or equivalent tunnel metadata. `/api/mcp/tools` exposes the local HTTP tool contract for future MCP gateways; it is a contract endpoint, not a full MCP server yet.
+
 All local Commander-facing work should be:
 
 1. Queued in `outbound_queue`.

@@ -121,6 +121,7 @@
       <button data-tab="setup">Setup</button>
       <button data-tab="verifone">Verifone</button>
       <button data-tab="connector">Marketplace</button>
+      <button data-tab="addons">Add-ons</button>
       <button data-tab="chat">Chat</button>
       <button data-tab="sales">Sales Query</button>
       <button data-tab="usage">Usage & Billing</button>
@@ -260,6 +261,32 @@
         <div class="card">
           <h2>Runtime Manifest</h2>
           <pre id="manifestJson">Loading</pre>
+        </div>
+      </section>
+
+      <section id="addons">
+        <div class="grid" id="addonCards"></div>
+        <div class="split">
+          <div class="card">
+            <h2>Adapter Status</h2>
+            <pre id="adapterJson">Loading</pre>
+          </div>
+          <form id="remoteAccessForm">
+            <h2>Remote Access</h2>
+            <div class="fields">
+              <label>Provider<input name="provider" value="cloudflare"></label>
+              <label>Public URL<input name="publicUrl" placeholder="https://store-edge.example.com"></label>
+              <label>Tunnel ID<input name="tunnelId" placeholder="cloudflare-tunnel-id"></label>
+              <label>Enabled
+                <select name="enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select>
+              </label>
+            </div>
+            <div class="toolbar"><button class="primary" type="submit">Save Remote Access</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <h2>MCP Tool Contract</h2>
+          <pre id="mcpJson">Loading</pre>
         </div>
       </section>
 
@@ -429,7 +456,7 @@
           return;
         }
         $("loginPanel").classList.remove("open");
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -442,7 +469,11 @@
           api("/api/messages/audit"),
           api("/api/notifications"),
           api("/api/usage/summary"),
-          api("/api/access-mode")
+          api("/api/access-mode"),
+          api("/api/addons"),
+          api("/api/adapters"),
+          api("/api/remote-access"),
+          api("/api/mcp/tools")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
@@ -460,6 +491,13 @@
         $("onboardingSteps").textContent = `Current: ${onboarding.currentStep || "profile"} | Completed: ${(onboarding.completedSteps || []).join(", ") || "none"}`;
         showJson("manifestJson", manifest);
         showJson("diagnosticsJson", { health, diagnostics });
+        showJson("adapterJson", adapters);
+        showJson("mcpJson", mcpTools);
+        renderAddons(addons.addOns || []);
+        document.querySelector('#remoteAccessForm input[name="provider"]').value = remoteAccess.provider || "cloudflare";
+        document.querySelector('#remoteAccessForm input[name="publicUrl"]').value = remoteAccess.publicUrl || "";
+        document.querySelector('#remoteAccessForm input[name="tunnelId"]').value = remoteAccess.tunnelId || "";
+        document.querySelector('#remoteAccessForm select[name="enabled"]').value = remoteAccess.enabled ? "true" : "false";
         renderQueue(queue.items || []);
         renderActivity(activity.events || []);
         renderMessages(messageAudit.messages || []);
@@ -518,6 +556,23 @@
     }
     function renderQueue(items) {
       $("queueRows").innerHTML = items.map((item) => `<tr><td><span class="badge ${item.status}">${item.status}</span></td><td>${item.target}</td><td>${item.operation}</td><td>${item.entityType}:${item.entityId || ""}</td><td>${item.attemptCount || 0}</td><td class="mono">${JSON.stringify(item.payload || {})}</td><td>${item.updatedAt}</td></tr>`).join("") || '<tr><td colspan="7">No queue items</td></tr>';
+    }
+    function renderAddons(addons) {
+      $("addonCards").innerHTML = addons.map((addon) => `
+        <div class="card metric">
+          <div class="label">${addon.id}</div>
+          <div class="value">${addon.name}</div>
+          <div class="hint">Status: ${addon.status}</div>
+          <div class="hint">Scopes: ${(addon.scopes || []).join(", ")}</div>
+          <div class="toolbar"><button class="secondary" type="button" data-addon-id="${addon.id}">${addon.enabled ? "Refresh" : "Enable"}</button></div>
+        </div>
+      `).join("") || '<div class="card">No add-ons available</div>';
+      $("addonCards").querySelectorAll("button[data-addon-id]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api("/api/addons/activate", { method: "POST", body: JSON.stringify({ id: button.dataset.addonId, enabled: true }) });
+          await refresh();
+        });
+      });
     }
     function renderActivity(events) {
       const ordered = events.slice().reverse();
@@ -614,6 +669,13 @@
     $("accessModeForm").onsubmit = async (event) => {
       event.preventDefault();
       await api("/api/access-mode", { method: "POST", body: JSON.stringify(formObject(event.target)) });
+      await refresh();
+    };
+    $("remoteAccessForm").onsubmit = async (event) => {
+      event.preventDefault();
+      const body = formObject(event.target);
+      body.enabled = body.enabled === "true";
+      await api("/api/remote-access", { method: "POST", body: JSON.stringify(body) });
       await refresh();
     };
     $("shreSignupForm").onsubmit = async (event) => {

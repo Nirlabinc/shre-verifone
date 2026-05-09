@@ -125,10 +125,9 @@ Do not show FCC/Loyalty setup screens until the marketplace says the module is a
 
 ## Open Implementation Work
 
-- Add `addon_installations` or equivalent encrypted state.
-- Add `/api/addons` catalog/status endpoints.
-- Add FCC status and sync endpoints.
-- Add Loyalty status and sync endpoints.
-- Add dashboard Add-ons page.
+- Add-on install state is stored in encrypted `app_state` under `addons/installations`.
+- Local API exposes `GET /api/addons`, `POST /api/addons/activate`, `GET /api/addons/fcc/status`, and `GET /api/addons/loyalty/status`.
+- Dashboard has an `Add-ons` page with install/status, adapter status, remote access config, and MCP tool contract.
 - Add marketplace activation flow for module-level entitlements.
 - Add E2E tests for add-on disabled/enabled states and write-scope blocking.
+- Implement live FCC and Loyalty protocol adapters.

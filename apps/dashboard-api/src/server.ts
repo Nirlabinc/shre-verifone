@@ -319,6 +319,141 @@ function blockCommanderWriteIfNeeded(res: ServerResponse, item: JsonObject): boo
   return true;
 }
 
+const addonDefinitions: JsonObject[] = [
+  {
+    id: "verifone-fcc",
+    name: "FCC",
+    category: "payments",
+    bundled: false,
+    enabledByDefault: false,
+    dependsOn: ["verifone-commander"],
+    scopes: ["fcc.status.read", "fcc.sync.write"],
+    queueTarget: "verifone-fcc",
+  },
+  {
+    id: "verifone-loyalty",
+    name: "Loyalty",
+    category: "loyalty",
+    bundled: false,
+    enabledByDefault: false,
+    dependsOn: ["verifone-commander"],
+    scopes: ["loyalty.status.read", "loyalty.sync.write"],
+    queueTarget: "verifone-loyalty",
+  },
+];
+
+function addonState(): JsonObject {
+  return store.getJson<JsonObject>("addons", "installations", {});
+}
+
+function addonStatus(id: string): JsonObject {
+  const definition = addonDefinitions.find((addon) => addon.id === id);
+  if (!definition) return {};
+  const state = asObject(addonState()[id] || {});
+  const connector = store.connectorStatus();
+  return {
+    ...definition,
+    installed: state.installed === true,
+    enabled: state.enabled === true,
+    status: state.enabled === true ? "enabled" : state.installed === true ? "installed" : "available",
+    activatedAt: state.activatedAt || null,
+    marketplaceRequired: true,
+    dependencyReady: connector.status === "activated",
+    lastSyncAt: state.lastSyncAt || null,
+    lastError: state.lastError || null,
+  };
+}
+
+function addonsStatus(): JsonObject {
+  return {
+    addOns: addonDefinitions.map((addon) => addonStatus(String(addon.id))),
+  };
+}
+
+function saveAddonState(id: string, patch: JsonObject): JsonObject {
+  const definition = addonDefinitions.find((addon) => addon.id === id);
+  if (!definition) throw new Error(`Unknown add-on: ${id}`);
+  const state = addonState();
+  const current = asObject(state[id] || {});
+  const next = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  state[id] = next;
+  store.setJson("addons", "installations", state);
+  return addonStatus(id);
+}
+
+function remoteAccessStatus(): JsonObject {
+  const config = store.getJson<JsonObject>("remote-access", "config", {
+    provider: "cloudflare",
+    enabled: false,
+    tunnelId: "",
+    publicUrl: "",
+    updatedAt: null,
+  });
+  return {
+    ...config,
+    ready: config.enabled === true && Boolean(config.publicUrl),
+    localBaseUrl: localBaseUrlFromString(""),
+    inboundEndpoint: "/api/messages/inbound",
+    requirements: ["connector activation", "signed inbound messages", "tunnel identity", "local admin access"],
+  };
+}
+
+function adapterStatus(): JsonObject {
+  const connector = store.connectorStatus();
+  const addons = addonsStatus().addOns as JsonObject[];
+  return {
+    edgeDevice: true,
+    adapters: [
+      {
+        id: "verifone-commander",
+        name: "POS/BOS",
+        type: "core",
+        status: connector.status === "activated" ? "configured" : "pending_activation",
+        read: true,
+        write: commanderWritesAllowed(),
+      },
+      {
+        id: "verifone-fcc",
+        name: "FCC",
+        type: "addon",
+        status: asObject(addons.find((addon) => addon.id === "verifone-fcc") || {}).status || "available",
+        read: asObject(addons.find((addon) => addon.id === "verifone-fcc") || {}).enabled === true,
+        write: asObject(addons.find((addon) => addon.id === "verifone-fcc") || {}).enabled === true && commanderWritesAllowed(),
+      },
+      {
+        id: "verifone-loyalty",
+        name: "Loyalty",
+        type: "addon",
+        status: asObject(addons.find((addon) => addon.id === "verifone-loyalty") || {}).status || "available",
+        read: asObject(addons.find((addon) => addon.id === "verifone-loyalty") || {}).enabled === true,
+        write: asObject(addons.find((addon) => addon.id === "verifone-loyalty") || {}).enabled === true && commanderWritesAllowed(),
+      },
+      { id: "hardware", name: "Hardware", type: "future", status: "not_implemented", read: false, write: false },
+      { id: "network", name: "Network", type: "future", status: "not_implemented", read: false, write: false },
+      { id: "tlog", name: "TLog", type: "future", status: "not_implemented", read: false, write: false },
+      { id: "mcp", name: "MCP", type: "contract", status: "contract_available", read: true, write: false },
+    ],
+  };
+}
+
+function mcpTools(): JsonObject {
+  return {
+    protocol: "mcp-compatible-tool-contract",
+    transport: "local-http",
+    tools: [
+      { name: "verifone.sales.query", endpoint: "/api/sales/query", mutating: false, scopes: ["sales.read"] },
+      { name: "verifone.queue.enqueue", endpoint: "/api/queue/enqueue", mutating: true, scopes: ["sync.write"] },
+      { name: "verifone.health.read", endpoint: "/api/diagnostics", mutating: false, scopes: ["diagnostics.read"] },
+      { name: "verifone.fcc.status", endpoint: "/api/addons/fcc/status", mutating: false, scopes: ["fcc.status.read"], optionalAddOn: true },
+      { name: "verifone.loyalty.status", endpoint: "/api/addons/loyalty/status", mutating: false, scopes: ["loyalty.status.read"], optionalAddOn: true },
+    ],
+  };
+}
+
 function secretKey(): Buffer {
   const installSecretPath = join(runtimeRoot, ".install-secret");
   const installSecret = existsSync(installSecretPath) ? readFileSync(installSecretPath, "utf8").trim() : "";
@@ -1188,6 +1323,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       notifications: "/api/notifications",
       readiness: "/api/readiness",
       accessMode: "/api/access-mode",
+      addons: "/api/addons",
+      adapters: "/api/adapters",
+      remoteAccess: "/api/remote-access",
+      mcpTools: "/api/mcp/tools",
       usage: "/api/usage/summary",
       shreSignupActivate: "/api/shre/signup-activate",
       activitySummary: store.activitySummary(),
@@ -1225,6 +1364,71 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       } catch (error) {
         badRequest(res, error instanceof Error ? error.message : String(error));
       }
+      return;
+    }
+  }
+
+  if (path === "/api/addons") {
+    sendJson(res, 200, addonsStatus());
+    return;
+  }
+
+  if (path === "/api/addons/activate" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const id = requireString(body, "id");
+      const status = saveAddonState(id, {
+        installed: true,
+        enabled: body.enabled !== false,
+        activatedAt: new Date().toISOString(),
+        source: typeof body.source === "string" ? body.source : "marketplace",
+        scopes: Array.isArray(body.scopes) ? body.scopes : addonDefinitions.find((addon) => addon.id === id)?.scopes || [],
+      });
+      store.appendActivity("addon_activated", { id, enabled: status.enabled });
+      sendJson(res, 200, status);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/addons/fcc/status") {
+    sendJson(res, 200, addonStatus("verifone-fcc"));
+    return;
+  }
+
+  if (path === "/api/addons/loyalty/status") {
+    sendJson(res, 200, addonStatus("verifone-loyalty"));
+    return;
+  }
+
+  if (path === "/api/adapters") {
+    sendJson(res, 200, adapterStatus());
+    return;
+  }
+
+  if (path === "/api/mcp/tools") {
+    sendJson(res, 200, mcpTools());
+    return;
+  }
+
+  if (path === "/api/remote-access") {
+    if (req.method === "GET") {
+      sendJson(res, 200, remoteAccessStatus());
+      return;
+    }
+    if (req.method === "POST") {
+      const body = asObject(await requestBody(req));
+      const config = {
+        provider: typeof body.provider === "string" ? body.provider : "cloudflare",
+        enabled: body.enabled === true,
+        tunnelId: typeof body.tunnelId === "string" ? body.tunnelId : "",
+        publicUrl: typeof body.publicUrl === "string" ? body.publicUrl : "",
+        updatedAt: new Date().toISOString(),
+      };
+      store.setJson("remote-access", "config", config);
+      store.appendActivity("remote_access_updated", { provider: config.provider, enabled: config.enabled });
+      sendJson(res, 200, remoteAccessStatus());
       return;
     }
   }

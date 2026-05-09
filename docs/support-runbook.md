@@ -19,6 +19,10 @@ GET /api/verifone/status
 GET /api/password/status
 GET /api/queue
 GET /api/access-mode
+GET /api/addons
+GET /api/adapters
+GET /api/remote-access
+GET /api/mcp/tools
 GET /api/connector/manifest
 GET /api/notifications
 GET /api/readiness
@@ -117,6 +121,17 @@ Check:
 - Activity log for `access_mode_updated`
 
 Inventory writes require `read_write` or `write_only`. Keep stores in `read_only` until write-back has been approved and validated.
+
+### Add-on Not Available
+
+Check:
+
+- `/api/addons`
+- `/api/adapters`
+- Marketplace entitlement for tenant/workspace/store.
+- Access mode if the add-on needs writes.
+
+FCC and Loyalty are not installed by default. They must be enabled through marketplace activation before add-on workflows should appear for the user.
 
 ## Diagnostics Bundle
 
