@@ -73,6 +73,7 @@ Setup, onboarding, support, and specs:
 - [Connectivity Rules](docs/connectivity-rules.md)
 - [Storage, Retention, And Backup](docs/storage-retention-backup.md)
 - [Production Update And Restart](docs/production-update.md)
+- [Verifone PDK Command Catalog](docs/verifone-pdk-command-catalog.md)
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)
 - [App Boundary Decision](docs/app-boundary-decision.md)

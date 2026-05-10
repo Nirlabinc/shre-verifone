@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { homedir, hostname, platform, arch, totalmem, freemem, cpus } from "node:os";
 import { createHash, createHmac, randomBytes, randomUUID, createCipheriv, createDecipheriv, scryptSync, timingSafeEqual } from "node:crypto";
 import { RuntimeStore, type JsonObject, type JsonValue } from "./store.js";
+import { pdkCommandById, pdkCommandCatalog, type PdkCommand } from "./pdk-catalog.js";
 
 const port = Number(process.env.PORT || 5480);
 const host = process.env.HOST || "127.0.0.1";
@@ -714,7 +715,7 @@ function capitalize(value: string): string {
 function redactCommanderUrl(value: string): string {
   try {
     const url = new URL(value);
-    for (const key of ["passwd", "password", "user", "username", "token", "key"]) {
+    for (const key of ["passwd", "password", "user", "username", "token", "key", "cookie"]) {
       if (url.searchParams.has(key)) url.searchParams.set(key, "***");
     }
     return url.toString();
@@ -955,6 +956,165 @@ function matchXmlNumber(text: string, names: string[]): number | null {
     if (value !== null) return value;
   }
   return null;
+}
+
+async function executePdkCommand(body: JsonObject): Promise<JsonObject> {
+  const commandId = requireString(body, "commandId");
+  const definition = pdkCommandById(commandId);
+  if (!definition) {
+    return { ok: false, status: "unknown_command", message: `PDK command not found: ${commandId}` };
+  }
+  if (definition.mutating && !commanderWritesAllowed()) {
+    return {
+      ok: false,
+      status: "blocked",
+      commandId: definition.id,
+      accessMode: accessMode(),
+      message: "PDK update/control commands require access mode read_write or write_only.",
+    };
+  }
+  const connection = store.getJson<JsonObject>("connections", "verifone", {});
+  const commanderUrl = String(connection.commanderUrl || "").replace(/\/$/, "");
+  const username = String(connection.username || "");
+  const password = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
+  if (!commanderUrl || !username || !password) {
+    return { ok: false, status: "not_configured", message: "Verifone connection is not configured." };
+  }
+  const params = asObject(body.params || {});
+  const cookie = definition.cmd === "validate" ? "" : await pdkCookie(commanderUrl, username, password, connection);
+  const url = buildPdkUrl(commanderUrl, definition, params, cookie, username, password);
+  const owner = `pdk-${definition.cmd}`;
+  const lease = store.acquireCommanderLease(owner, definition.mutating ? 180 : 60);
+  if (lease.acquired !== true) {
+    return { ok: false, status: "lease_blocked", message: "Commander command is already running.", lease };
+  }
+  try {
+    const response = await fetchCommander(url, username, password, connection);
+    const text = await response.text();
+    const ok = response.ok && !isCommanderFault(text);
+    const contentType = response.headers.get("content-type") || "";
+    const reportType = definition.reportType || classifyConexxusReport(text, definition.category, xmlRootName(text));
+    let savedReport: JsonObject | null = null;
+    if (text.trim().startsWith("<") && !isCommanderFault(text)) {
+      const normalized = normalizeCommanderXmlReport(text, contentType, reportType, String(params.businessDate || new Date().toISOString().slice(0, 10)));
+      savedReport = store.saveCommanderReport({
+        reportType: String(normalized?.reportType || reportType),
+        businessDate: String(params.businessDate || new Date().toISOString().slice(0, 10)),
+        source: `verifone-pdk:${definition.id}`,
+        rootName: String(normalized?.rootName || xmlRootName(text)),
+        xml: text,
+        normalized: asObject(normalized?.normalized || { commandId: definition.id, cmd: definition.cmd }),
+      });
+    }
+    store.appendActivity("verifone_pdk_command_executed", {
+      commandId: definition.id,
+      cmd: definition.cmd,
+      category: definition.category,
+      mutating: definition.mutating,
+      ok,
+      statusCode: response.status,
+    });
+    return {
+      ok,
+      status: ok ? "completed" : "failed",
+      command: sanitizePdkCommand(definition),
+      request: {
+        url: redactCommanderUrl(url),
+      },
+      response: {
+        statusCode: response.status,
+        contentType,
+        bytes: text.length,
+        fault: isCommanderFault(text) ? summarizeCommanderFault(text) : null,
+      },
+      report: savedReport,
+      bodyPreview: text.slice(0, 1000),
+    };
+  } finally {
+    store.releaseCommanderLease(owner);
+  }
+}
+
+async function pdkCookie(commanderUrl: string, username: string, password: string, connection: JsonObject): Promise<string> {
+  const state = store.getJson<JsonObject>("connections", "pdk-session", {});
+  const expiresAt = typeof state.expiresAt === "string" ? Date.parse(state.expiresAt) : 0;
+  if (typeof state.cookie === "string" && state.cookie && expiresAt > Date.now() + 60_000) {
+    return decryptSecret(state.cookie);
+  }
+  const url = new URL(`${commanderUrl}/cgi-bin/CGILink`);
+  url.searchParams.set("cmd", "validate");
+  url.searchParams.set("user", username);
+  url.searchParams.set("passwd", password);
+  const response = await fetchCommander(url.toString(), username, password, connection);
+  const text = await response.text();
+  const cookie = extractPdkCookie(text);
+  if (!response.ok || !cookie) {
+    throw new Error(`PDK login failed: ${summarizeCommanderFault(text) || response.status}`);
+  }
+  store.setJson("connections", "pdk-session", {
+    cookie: encryptSecret(cookie),
+    updatedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+  });
+  store.appendActivity("verifone_pdk_login_succeeded", { expiresInMinutes: 15 });
+  return cookie;
+}
+
+function buildPdkUrl(commanderUrl: string, definition: PdkCommand, params: JsonObject, cookie: string, username: string, password: string): string {
+  const url = new URL(`${commanderUrl}/cgi-bin/CGILink`);
+  url.searchParams.set("cmd", definition.cmd);
+  if (definition.cmd === "validate") {
+    url.searchParams.set("user", String(params.user || username));
+    url.searchParams.set("passwd", String(params.passwd || password));
+  } else {
+    url.searchParams.set("cookie", String(params.cookie || cookie));
+  }
+  for (const [key, value] of Object.entries(definition.defaults || {})) {
+    url.searchParams.set(key, value);
+  }
+  for (const key of definition.params) {
+    if (key === "cookie" || key === "user" || key === "passwd") continue;
+    const value = params[key];
+    if (value !== undefined && value !== null && String(value) !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+  return url.toString();
+}
+
+function extractPdkCookie(text: string): string {
+  const patterns = [
+    /<cookie[^>]*>\s*([^<\s]+)\s*<\/cookie>/i,
+    /<Cookie[^>]*>\s*([^<\s]+)\s*<\/Cookie>/i,
+    /cookie["'=:\s]+([A-Za-z0-9._:-]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return match[1];
+  }
+  return "";
+}
+
+function isCommanderFault(text: string): boolean {
+  return /<\s*(?:[^:>]+:)?Fault\b/i.test(text) || /<faultCode>/i.test(text);
+}
+
+function summarizeCommanderFault(text: string): string {
+  return findXmlText(text, ["faultString", "faultCode", "message", "Message"]) || "";
+}
+
+function sanitizePdkCommand(command: PdkCommand): JsonObject {
+  return {
+    id: command.id,
+    cmd: command.cmd,
+    category: command.category,
+    params: command.params,
+    mutating: command.mutating,
+    description: command.description,
+    deprecated: command.deprecated === true,
+    reportType: command.reportType || null,
+    defaults: command.defaults || {},
+  };
 }
 
 function heartbeatWorkerStatus(): JsonObject {
@@ -2155,6 +2315,21 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/verifone/pdk/commands") {
+    sendJson(res, 200, {
+      total: pdkCommandCatalog.length,
+      commands: pdkCommandCatalog.map(sanitizePdkCommand),
+      categories: [...new Set(pdkCommandCatalog.map((item) => item.category))].sort(),
+    });
+    return;
+  }
+
+  if (path === "/api/verifone/pdk/execute" && req.method === "POST") {
+    const result = await executePdkCommand(asObject(await requestBody(req)));
+    sendJson(res, result.ok === true ? 200 : result.status === "blocked" ? 403 : result.status === "lease_blocked" ? 423 : 502, result);
+    return;
+  }
+
   if (path === "/api/sync/status") {
     updateCommanderWriteBackState();
     sendJson(res, 200, syncState());
@@ -2403,7 +2578,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     const body = asObject(await requestBody(req));
     const current = storagePolicy();
     const backupPath = typeof body.localBackupPath === "string" && body.localBackupPath.trim() ? body.localBackupPath.trim() : String(current.localBackupPath);
-    const backup = store.backupRuntime(backupPath);
+    const backup = await store.backupRuntime(backupPath);
     const next = {
       ...current,
       backupEnabled: true,

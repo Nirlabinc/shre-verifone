@@ -110,10 +110,14 @@ GET  /api/verifone/heartbeat
 POST /api/verifone/heartbeat
 GET  /api/heartbeat/worker
 POST /api/heartbeat/worker
+GET  /api/verifone/pdk/commands
+POST /api/verifone/pdk/execute
 GET  /api/sync/status
 ```
 
 `POST /api/verifone/ping` is an immediate reachability check and does not change the heartbeat schedule. Validation and heartbeat update the stored connection state. The heartbeat worker runs in the local dashboard API process by default and checks Commander only when the stored heartbeat `nextCheckAt` is due, so repeated failures back off instead of overloading Commander.
+
+The PDK executor is documented in [Verifone PDK Command Catalog](verifone-pdk-command-catalog.md).
 
 Set `DISABLE_HEARTBEAT_WORKER=true` to disable automatic reconnect for controlled test runs. Set `HEARTBEAT_WORKER_INTERVAL_MS` to change how often the worker wakes up to check whether a heartbeat is due.
 

@@ -218,14 +218,14 @@ export class RuntimeStore {
     };
   }
 
-  backupRuntime(backupRoot: string): JsonObject {
+  async backupRuntime(backupRoot: string): Promise<JsonObject> {
     const createdAt = new Date().toISOString();
     const safeStamp = createdAt.replace(/[:.]/g, "-");
     const target = resolve(backupRoot, `verifone-commander-backup-${safeStamp}`);
     mkdirSync(target, { recursive: true });
     securePath(target, 0o700);
     const databasePath = join(target, basename(this.path()));
-    this.db.backup(databasePath);
+    await this.db.backup(databasePath);
     securePath(databasePath, 0o600);
     const secretPath = join(this.runtimeRoot, ".install-secret");
     const copied: string[] = [databasePath];

@@ -54,6 +54,7 @@ jobs:
           test -s docs/connectivity-rules.md
           test -s docs/storage-retention-backup.md
           test -s docs/production-update.md
+          test -s docs/verifone-pdk-command-catalog.md
           test -s docs/technical-specs.md
           test -s docs/environment-promotion.md
           test -s docs/commander-concurrency.md

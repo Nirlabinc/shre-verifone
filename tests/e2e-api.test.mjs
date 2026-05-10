@@ -71,6 +71,16 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
   const commanderRequests = [];
   const commanderServer = createServer(async (req, res) => {
     commanderRequests.push({ url: req.url, authorization: req.headers.authorization });
+    if (req.url.includes("cmd=validate")) {
+      res.writeHead(200, { "content-type": "application/xml" });
+      res.end(`<?xml version="1.0"?><Response><cookie>mock-cookie-001</cookie></Response>`);
+      return;
+    }
+    if (req.url.includes("cmd=vAppInfo")) {
+      res.writeHead(200, { "content-type": "application/xml" });
+      res.end(`<?xml version="1.0"?><ApplicationInfo><Version>1.0</Version><Name>Commander</Name></ApplicationInfo>`);
+      return;
+    }
     res.writeHead(200, { "content-type": "application/xml" });
     if (req.url.includes("tank")) {
       res.end(`<?xml version="1.0"?><NAXML-FuelTankStockReport><BusinessDate>2026-05-09</BusinessDate><TankStockDetail><TankID>1</TankID><TankName>Regular</TankName><GrossVolume>1200.5</GrossVolume><WaterVolume>0.5</WaterVolume></TankStockDetail></NAXML-FuelTankStockReport>`);
@@ -339,6 +349,28 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const commanderReports = await json("/api/verifone/reports");
     assert.equal(commanderReports.response.status, 200);
     assert.equal(commanderReports.body.summary.total >= 2, true);
+
+    const pdkCatalog = await json("/api/verifone/pdk/commands");
+    assert.equal(pdkCatalog.response.status, 200);
+    assert.equal(pdkCatalog.body.commands.some((item) => item.id === "vAppInfo"), true);
+    assert.equal(pdkCatalog.body.commands.some((item) => item.id === "vrubyrept.summary.filename"), true);
+
+    const pdkInfo = await json("/api/verifone/pdk/execute", {
+      method: "POST",
+      body: JSON.stringify({ commandId: "vAppInfo", params: {} }),
+    });
+    assert.equal(pdkInfo.response.status, 200);
+    assert.equal(pdkInfo.body.ok, true);
+    assert.equal(pdkInfo.body.report.reportType, "information");
+    assert.equal(commanderRequests.some((request) => request.url.includes("cmd=validate")), true);
+    assert.equal(commanderRequests.some((request) => request.url.includes("cmd=vAppInfo") && request.url.includes("cookie=mock-cookie-001")), true);
+
+    const blockedPdkUpdate = await json("/api/verifone/pdk/execute", {
+      method: "POST",
+      body: JSON.stringify({ commandId: "ufuelcfg", params: {} }),
+    });
+    assert.equal(blockedPdkUpdate.response.status, 403);
+    assert.equal(blockedPdkUpdate.body.status, "blocked");
 
     const syncStatus = await json("/api/sync/status");
     assert.equal(syncStatus.response.status, 200);
@@ -701,6 +733,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(names.includes("heartbeat_worker_checked"));
     assert.ok(names.includes("verifone_connection_validated"));
     assert.ok(names.includes("commander_report_pull_completed"));
+    assert.ok(names.includes("verifone_pdk_command_executed"));
     assert.ok(names.includes("sales_snapshot_saved"));
     assert.ok(names.includes("sales_query_answered"));
     assert.ok(names.includes("inbound_message_queued"));
