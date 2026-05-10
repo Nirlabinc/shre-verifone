@@ -80,6 +80,8 @@ Setup, onboarding, support, and specs:
 - [App Boundary Decision](docs/app-boundary-decision.md)
 - [Add-on Architecture](docs/addon-architecture.md)
 - [FCC Connector Add-on](docs/fcc-connector.md)
+- [MCP Server](docs/mcp-server.md)
+- [Shre AI Learning And Fine-Tuning](docs/shre-ai-learning.md)
 - [Local AI / Ollama Option](docs/local-ai-ollama.md)
 - [Security Hardening](docs/security-hardening.md)
 - [Local Login And Billing](docs/login-billing.md)

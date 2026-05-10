@@ -322,6 +322,33 @@ function recordUsage(source: string, tenantId: string, storeId: string, model: s
   return event;
 }
 
+function redactTrainingText(value: string): string {
+  return value
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
+    .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[phone]")
+    .replace(/\b\d{12,19}\b/g, "[long-number]")
+    .replace(/\b(password|secret|token|key)\s*[:=]\s*\S+/gi, "$1=[redacted]")
+    .slice(0, 4000);
+}
+
+function recordLearningCandidate(source: string, tenantId: string, storeId: string, intent: string, toolName: string, inputText: string, outputText: string, metadata: JsonObject = {}): JsonObject {
+  return store.saveLearningExample({
+    source,
+    tenantId,
+    storeId,
+    intent,
+    toolName,
+    inputText: redactTrainingText(inputText),
+    outputText: redactTrainingText(outputText),
+    metadata: {
+      ...metadata,
+      rawXmlIncluded: false,
+      approvalRequired: true,
+      destination: "shre-ai-rag-or-finetune",
+    },
+  });
+}
+
 function asObject(value: JsonValue): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as JsonObject;
@@ -1694,9 +1721,13 @@ function adapterStatus(): JsonObject {
 function mcpTools(): JsonObject {
   return {
     protocol: "mcp-compatible-tool-contract",
-    transport: "local-http",
+    transport: "local-http and stdio",
+    stdioCommand: "npm run start:mcp",
     tools: [
       { name: "verifone.sales.query", endpoint: "/api/sales/query", mutating: false, scopes: ["sales.read"] },
+      { name: "verifone.commander.data_query", endpoint: "/api/commander/data-query", mutating: false, scopes: ["commander.local.read", "inventory.read", "fuel.read", "tank.read"] },
+      { name: "verifone.commander.entities", endpoint: "/api/verifone/entities", mutating: false, scopes: ["commander.local.read"] },
+      { name: "verifone.learning.examples", endpoint: "/api/learning/examples", mutating: false, scopes: ["learning.read"] },
       { name: "verifone.queue.enqueue", endpoint: "/api/queue/enqueue", mutating: true, scopes: ["sync.write"] },
       { name: "verifone.commander.writeback", endpoint: "/api/commander/writeback", mutating: true, scopes: ["sync.write", "commander.write"] },
       { name: "verifone.health.read", endpoint: "/api/diagnostics", mutating: false, scopes: ["diagnostics.read"] },
@@ -3491,6 +3522,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         intent: classification.intent,
         queueId: queueItem.id,
       });
+      const learning = recordLearningCandidate(source, tenantId, storeId, classification.intent, classification.operation, messageText, String(connectorResponse.answer || ""), {
+        queueId: queueItem.id,
+        gateway: true,
+      });
       const response = {
         accepted: true,
         mode: registration.cloudRelayEnabled ? "cloud_relay" : "local_first",
@@ -3503,6 +3538,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         message: String(connectorResponse.answer || "Message accepted locally and queued for processing."),
         connectorResponse,
         usage,
+        learning,
         gatewayResponse: {
           schemaVersion: "2026-05-09",
           connectorId: registration.connectorId || "verifone-commander",
@@ -3581,6 +3617,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         intent: classification.intent,
         tool: classification.intent === "sales_query" ? "sales_query" : "local_help",
       });
+      const learning = recordLearningCandidate("local-chat", tenantId, storeId, classification.intent, classification.operation, messageText, answer, {
+        dashboard: true,
+      });
       const audit = store.saveChatAudit({
         source: "local-chat",
         tenantId,
@@ -3594,6 +3633,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
           message: answer,
           connectorResponse,
           usage,
+          learning,
         },
       });
       store.appendActivity("local_chat_answered", {
@@ -3607,6 +3647,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         message: answer,
         connectorResponse,
         usage,
+        learning,
         auditId: audit.id,
       });
     } catch (error) {
@@ -3617,6 +3658,35 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/messages/audit") {
     sendJson(res, 200, { messages: store.chatAudit(100) });
+    return;
+  }
+
+  if (path === "/api/learning/examples") {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    sendJson(res, 200, {
+      examples: store.learningExamples(
+        Number(url.searchParams.get("limit") || 100),
+        url.searchParams.get("status") || "",
+      ),
+      policy: {
+        rawXmlIncluded: false,
+        approvalRequired: true,
+        exportDestinations: ["shre-rag", "shre-finetune"],
+      },
+    });
+    return;
+  }
+
+  if (path === "/api/learning/approve" && req.method === "POST") {
+    const body = asObject(await requestBody(req));
+    const id = requireString(body, "id");
+    const example = store.approveLearningExample(id);
+    if (!example) {
+      sendJson(res, 404, { error: "Learning example not found" });
+      return;
+    }
+    store.appendActivity("learning_example_approved", { id, intent: example.intent });
+    sendJson(res, 200, example);
     return;
   }
 

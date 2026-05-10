@@ -121,6 +121,21 @@ interface UsageRow {
   created_at: string;
 }
 
+interface LearningExampleRow {
+  id: string;
+  source: string;
+  tenant_id: string | null;
+  store_id: string | null;
+  intent: string;
+  tool_name: string;
+  input_text: string;
+  output_text: string;
+  metadata_json: string;
+  status: string;
+  created_at: string;
+  approved_at: string | null;
+}
+
 export interface RuntimeStoreOptions {
   connectorRegistryUrl: string;
 }
@@ -1144,6 +1159,87 @@ export class RuntimeStore {
     };
   }
 
+  saveLearningExample(entry: {
+    source: string;
+    tenantId?: string;
+    storeId?: string;
+    intent: string;
+    toolName: string;
+    inputText: string;
+    outputText: string;
+    metadata?: JsonObject;
+    status?: string;
+  }): JsonObject {
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    this.db.prepare(`
+      insert into learning_examples (
+        id, source, tenant_id, store_id, intent, tool_name, input_text,
+        output_text, metadata_json, status, created_at, approved_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      entry.source,
+      entry.tenantId || null,
+      entry.storeId || null,
+      entry.intent,
+      entry.toolName,
+      encryptText(entry.inputText, this.key),
+      encryptText(entry.outputText, this.key),
+      this.stringifyJson(entry.metadata || {}),
+      entry.status || "candidate",
+      createdAt,
+      null,
+    );
+    return {
+      id,
+      source: entry.source,
+      tenantId: entry.tenantId || "",
+      storeId: entry.storeId || "",
+      intent: entry.intent,
+      toolName: entry.toolName,
+      inputText: entry.inputText,
+      outputText: entry.outputText,
+      metadata: entry.metadata || {},
+      status: entry.status || "candidate",
+      createdAt,
+      approvedAt: "",
+    };
+  }
+
+  learningExamples(limit = 100, status = ""): JsonObject[] {
+    const rows = status
+      ? this.db.prepare(`
+          select id, source, tenant_id, store_id, intent, tool_name, input_text,
+                 output_text, metadata_json, status, created_at, approved_at
+          from learning_examples
+          where status = ?
+          order by created_at desc, rowid desc
+          limit ?
+        `).all(status, limit) as LearningExampleRow[]
+      : this.db.prepare(`
+          select id, source, tenant_id, store_id, intent, tool_name, input_text,
+                 output_text, metadata_json, status, created_at, approved_at
+          from learning_examples
+          order by created_at desc, rowid desc
+          limit ?
+        `).all(limit) as LearningExampleRow[];
+    return rows.map((row) => this.mapLearningExample(row));
+  }
+
+  approveLearningExample(id: string): JsonObject | null {
+    const approvedAt = new Date().toISOString();
+    this.db.prepare("update learning_examples set status = 'approved', approved_at = ? where id = ?").run(approvedAt, id);
+    const row = this.db.prepare(`
+      select id, source, tenant_id, store_id, intent, tool_name, input_text,
+             output_text, metadata_json, status, created_at, approved_at
+      from learning_examples
+      where id = ?
+    `).get(id) as LearningExampleRow | undefined;
+    return row ? this.mapLearningExample(row) : null;
+  }
+
   saveChatAudit(entry: {
     source: string;
     tenantId?: string;
@@ -1330,6 +1426,23 @@ export class RuntimeStore {
       status: row.status,
       createdAt: row.created_at,
       resolvedAt: row.resolved_at,
+    };
+  }
+
+  private mapLearningExample(row: LearningExampleRow): JsonObject {
+    return {
+      id: row.id,
+      source: row.source,
+      tenantId: row.tenant_id || "",
+      storeId: row.store_id || "",
+      intent: row.intent,
+      toolName: row.tool_name,
+      inputText: decryptText(row.input_text, this.key),
+      outputText: decryptText(row.output_text, this.key),
+      metadata: this.parseJson(row.metadata_json) as JsonObject,
+      status: row.status,
+      createdAt: row.created_at,
+      approvedAt: row.approved_at || "",
     };
   }
 
@@ -1539,6 +1652,24 @@ export class RuntimeStore {
         status text not null,
         created_at text not null
       );
+
+      create table if not exists learning_examples (
+        id text primary key,
+        source text not null,
+        tenant_id text,
+        store_id text,
+        intent text not null,
+        tool_name text not null,
+        input_text text not null,
+        output_text text not null,
+        metadata_json text not null,
+        status text not null,
+        created_at text not null,
+        approved_at text
+      );
+
+      create index if not exists idx_learning_examples_status
+      on learning_examples (status, intent, created_at);
 
       insert or ignore into schema_migrations (version, applied_at)
       values (1, datetime('now'));

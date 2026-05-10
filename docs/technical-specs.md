@@ -161,11 +161,13 @@ GET  /api/usage/summary
 POST /api/usage/record
 POST /api/usage/replay
 POST /api/chat/local
+GET  /api/learning/examples
+POST /api/learning/approve
 ```
 
 Local login works offline from an encrypted local hash. Once configured, sensitive local APIs require either a valid local login session or `LOCAL_ADMIN_TOKEN`. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. `POST /api/shre/signup-activate` is the preferred first-run cloud setup path: it uses Shre Auth signup/login details to create or find tenant/workspace/store records, activate the connector, store the returned signing secret locally, and avoid manual tenant/secret entry. Usage events are stored locally and queued to `shre-cost` for billing. `POST /api/usage/replay` backfills pending usage reports and marks local usage rows as `reported` when replay succeeds.
 
-The first chat implementation uses local tools only. Sales questions use the local SQLite sales snapshot/query tool. Future model calls should be routed through the same usage metering path.
+The first chat implementation uses local tools only. Sales questions use the local SQLite sales snapshot/query tool. Commander data questions use normalized local entity rows. Future model calls should be routed through the same usage metering path. Every local chat or signed gateway message also creates an encrypted, redacted learning candidate in `learning_examples`; candidates require approval before Shre AI RAG or fine-tuning export.
 
 ## Commander Concurrency
 
@@ -199,7 +201,7 @@ POST /api/remote-access
 GET  /api/mcp/tools
 ```
 
-FCC and Loyalty are marketplace add-ons. They are disabled by default and depend on `verifone-commander`. `/api/adapters` reports core/add-on/future adapter readiness for the edge device. `/api/remote-access` stores Cloudflare or equivalent tunnel metadata. `/api/mcp/tools` exposes the local HTTP tool contract for future MCP gateways; it is a contract endpoint, not a full MCP server yet.
+FCC and Loyalty are marketplace add-ons. They are disabled by default and depend on `verifone-commander`. `/api/adapters` reports core/add-on/future adapter readiness for the edge device. `/api/remote-access` stores Cloudflare or equivalent tunnel metadata. `/api/mcp/tools` exposes the local HTTP and stdio tool contract. The stdio MCP server runs with `npm run start:mcp` and wraps the same local APIs.
 
 All local Commander-facing work should be:
 

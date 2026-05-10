@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "dev:api": "node --watch dist/apps/dashboard-api/src/server.js",
     "start:api": "node dist/apps/dashboard-api/src/server.js",
+    "start:mcp": "node dist/services/mcp-server/src/server.js",
     "start:shre": "node dist/services/shre-connector/src/worker.js",
     "start:fcc": "node dist/services/fcc-connector/src/worker.js",
     "alias:check": "powershell -ExecutionPolicy Bypass -File scripts/configure-local-alias.ps1 -Check",

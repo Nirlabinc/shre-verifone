@@ -748,6 +748,19 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(localChat.response.status, 200);
     assert.equal(localChat.body.intent, "sales_query");
     assert.match(localChat.body.message, /\$1842\.55/);
+    assert.equal(localChat.body.learning.status, "candidate");
+
+    const learningExamples = await json("/api/learning/examples?status=candidate");
+    assert.equal(learningExamples.response.status, 200);
+    assert.equal(learningExamples.body.policy.rawXmlIncluded, false);
+    assert.ok(learningExamples.body.examples.some((item) => item.intent === "sales_query" && item.toolName === "query_sales"));
+
+    const approveLearning = await json("/api/learning/approve", {
+      method: "POST",
+      body: JSON.stringify({ id: learningExamples.body.examples[0].id }),
+    });
+    assert.equal(approveLearning.response.status, 200);
+    assert.equal(approveLearning.body.status, "approved");
 
     const usageReplay = await json("/api/usage/replay", { method: "POST", body: JSON.stringify({}) });
     assert.equal(usageReplay.response.status, 200);
@@ -790,6 +803,10 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       assert.match(authRow.value_json, /^encjson:v1:/);
       const usageRow = db.prepare("select metadata_json from usage_events limit 1").get();
       assert.match(usageRow.metadata_json, /^encjson:v1:/);
+      const learningRow = db.prepare("select input_text, output_text, metadata_json from learning_examples limit 1").get();
+      assert.match(learningRow.input_text, /^encjson:v1:/);
+      assert.match(learningRow.output_text, /^encjson:v1:/);
+      assert.match(learningRow.metadata_json, /^encjson:v1:/);
       const commanderReport = db.prepare("select xml_json, normalized_json from commander_reports limit 1").get();
       assert.match(commanderReport.xml_json, /^encjson:v1:/);
       assert.match(commanderReport.normalized_json, /^encjson:v1:/);
