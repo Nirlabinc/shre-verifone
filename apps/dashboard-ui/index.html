@@ -236,11 +236,20 @@
         <section>
           <h2>CStoreSKU Legacy XML Runtime</h2>
           <div class="hint">Runtime path used by the legacy CStoreSKU connector.</div>
+          <div class="mini-grid">
+            <div class="mini"><span class="label">Runtime</span><strong id="csRuntimeState">Unknown</strong></div>
+            <div class="mini"><span class="label">Config</span><strong id="csConfigState">Unknown</strong></div>
+            <div class="mini"><span class="label">XML Files</span><strong id="csXmlCount">0</strong></div>
+            <div class="mini"><span class="label">Latest XML</span><strong id="csLatestXml">None</strong></div>
+            <div class="mini"><span class="label">Sidecar</span><strong id="csSidecarState">Unknown</strong></div>
+            <div class="mini"><span class="label">Storage</span><strong id="csStorage">0 KB</strong></div>
+          </div>
           <div id="cstoreskuRuntimeStatus" class="hint">Runtime status unknown.</div>
           <div class="toolbar">
             <button id="exportCstoreskuConfig" class="secondary" type="button">Export Config XML</button>
             <button id="stageCstoreskuXml" class="secondary" type="button">Stage Latest XML</button>
             <button id="stageCstoreskuTlog" class="secondary" type="button">Stage TLog XML</button>
+            <button id="viewCstoreskuRuntime" class="secondary" type="button">View Runtime Details</button>
           </div>
         </section>
         <form id="shreActivationTokenForm">
@@ -640,10 +649,7 @@
         $("verifoneFormStatus").className = `hint ${verifone.lastValidation?.status === "connected" ? "ok" : verifone.lastValidation?.status === "failed" ? "bad" : ""}`;
         $("cstoreskuKeyStatus").textContent = verifone.cstoreskuKeyConfigured ? "CStoreSKU application key is stored locally." : "No CStoreSKU application key stored.";
         $("cstoreskuKeyStatus").className = `hint ${verifone.cstoreskuKeyConfigured ? "ok" : "warn"}`;
-        $("cstoreskuRuntimeStatus").textContent = cstoreskuRuntime.configExists
-          ? `Runtime ready at ${cstoreskuRuntime.runtimeRoot}`
-          : `Runtime folders ready. Config XML not exported yet: ${cstoreskuRuntime.runtimeRoot}`;
-        $("cstoreskuRuntimeStatus").className = `hint ${cstoreskuRuntime.configExists ? "ok" : "warn"}`;
+        renderCstoreskuRuntime(cstoreskuRuntime);
         renderSync(sync, heartbeatWorker);
         $("mConnector").textContent = connector.status || "local_only";
         $("mTenant").textContent = connector.tenantId ? `${connector.tenantId} / ${connector.workspaceId || "no_workspace"} / ${connector.storeId}` : "No cloud tenant mapped";
@@ -710,6 +716,22 @@
       const normalized = String(status || "unknown").toLowerCase();
       const text = label || normalized.replaceAll("_", " ");
       return `<span class="status-indicator"><span class="status-dot ${normalized}"></span><span class="status-text ${normalized}">${text}</span></span>`;
+    }
+    function renderCstoreskuRuntime(runtime) {
+      const state = runtime.state || (runtime.configExists ? "ready" : "config_missing");
+      const latestXml = runtime.xml?.newest || null;
+      const sidecar = runtime.sidecar || {};
+      $("csRuntimeState").innerHTML = statusIndicator(state.includes("missing") ? "failed" : state.includes("waiting") ? "pending" : "connected", state.replaceAll("_", " "));
+      $("csConfigState").innerHTML = statusIndicator(runtime.configExists ? "connected" : "failed", runtime.configExists ? "exported" : "missing");
+      $("csXmlCount").textContent = runtime.xml?.files || 0;
+      $("csLatestXml").textContent = latestXml?.modifiedAt ? new Date(latestXml.modifiedAt).toLocaleTimeString() : "None";
+      $("csSidecarState").innerHTML = statusIndicator(sidecar.status === "blocked_until_config_exported" ? "failed" : "connected", sidecar.status || "unknown");
+      $("csStorage").textContent = formatBytes(runtime.storage?.bytes);
+      $("cstoreskuRuntimeStatus").textContent = runtime.configExists
+        ? `Runtime ${state.replaceAll("_", " ")} at ${runtime.runtimeRoot}`
+        : `Runtime folders ready. Config XML not exported yet: ${runtime.runtimeRoot}`;
+      $("cstoreskuRuntimeStatus").className = `hint ${runtime.configExists ? "ok" : "warn"}`;
+      $("viewCstoreskuRuntime").onclick = () => openDrawer("CStoreSKU Runtime", runtime);
     }
     function renderSync(sync, heartbeatWorker = {}) {
       const heartbeat = sync.heartbeat || {};

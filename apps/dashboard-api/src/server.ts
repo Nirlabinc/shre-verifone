@@ -2146,6 +2146,133 @@ async function stageCstoreskuCommanderXml(body: JsonObject, forcedReportType = "
   };
 }
 
+async function newestFile(root: string, extensions: string[], maxDepth = 4): Promise<JsonObject | null> {
+  if (!existsSync(root) || maxDepth < 0) return null;
+  let newest: JsonObject | null = null;
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) {
+      const nested = await newestFile(path, extensions, maxDepth - 1);
+      if (nested && (!newest || String(nested.modifiedAt) > String(newest.modifiedAt))) newest = nested;
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const lowerName = entry.name.toLowerCase();
+    if (extensions.length && !extensions.some((extension) => lowerName.endsWith(extension))) continue;
+    try {
+      const info = await stat(path);
+      const candidate: JsonObject = {
+        path,
+        name: entry.name,
+        bytes: info.size,
+        modifiedAt: info.mtime.toISOString(),
+      };
+      if (!newest || String(candidate.modifiedAt) > String(newest.modifiedAt)) newest = candidate;
+    } catch {
+      // Ignore files that move while scanning.
+    }
+  }
+  return newest;
+}
+
+async function countFiles(root: string, extensions: string[], maxDepth = 4): Promise<JsonObject> {
+  if (!existsSync(root) || maxDepth < 0) return { files: 0, bytes: 0 };
+  let files = 0;
+  let bytes = 0;
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return { files, bytes };
+  }
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) {
+      const nested = await countFiles(path, extensions, maxDepth - 1);
+      files += Number(nested.files || 0);
+      bytes += Number(nested.bytes || 0);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const lowerName = entry.name.toLowerCase();
+    if (extensions.length && !extensions.some((extension) => lowerName.endsWith(extension))) continue;
+    try {
+      const info = await stat(path);
+      files += 1;
+      bytes += info.size;
+    } catch {
+      // Ignore files that move while scanning.
+    }
+  }
+  return { files, bytes };
+}
+
+async function tailTextFile(path: string, maxBytes = 4096): Promise<string> {
+  try {
+    const info = await stat(path);
+    const text = await readFile(path, "utf8");
+    return text.slice(Math.max(0, text.length - Math.min(info.size, maxBytes)));
+  } catch {
+    return "";
+  }
+}
+
+async function cstoreskuRuntimeHealth(): Promise<JsonObject> {
+  const dataSourcePath = join(cstoreskuRuntimeRoot, "DataSource");
+  const xmlPath = join(cstoreskuRuntimeRoot, "xml");
+  const logsPath = join(cstoreskuRuntimeRoot, "logs");
+  const configPath = join(dataSourcePath, "DatabaseServers.xml");
+  const [runtimeStorage, xmlStorage, newestXml, newestLog] = await Promise.all([
+    directorySize(cstoreskuRuntimeRoot),
+    countFiles(xmlPath, [".xml"]),
+    newestFile(xmlPath, [".xml"]),
+    newestFile(logsPath, [".log", ".txt", ".json"]),
+  ]);
+  const configExists = existsSync(configPath);
+  const logTail = newestLog ? await tailTextFile(String(newestLog.path || "")) : "";
+  const state = !existsSync(cstoreskuRuntimeRoot)
+    ? "missing_runtime"
+    : !configExists
+      ? "config_missing"
+      : newestXml
+        ? "ready_with_xml"
+        : "ready_waiting_for_xml";
+  return {
+    runtimeRoot: cstoreskuRuntimeRoot,
+    expectedMounts: {
+      dataSource: dataSourcePath,
+      xml: xmlPath,
+      logs: logsPath,
+    },
+    configPath,
+    configExists,
+    state,
+    sidecar: {
+      expectedContainer: "cstoresku-legacy",
+      expectedImage: process.env.CSTORESKU_LEGACY_IMAGE || "varifone-service:latest",
+      expectedPlatform: process.env.CSTORESKU_LEGACY_PLATFORM || "linux/amd64",
+      managedByComposeProfile: "cstoresku",
+      status: configExists ? "ready_to_start_or_running" : "blocked_until_config_exported",
+    },
+    xml: {
+      ...xmlStorage,
+      newest: newestXml,
+    },
+    logs: {
+      newest: newestLog,
+      tail: logTail,
+    },
+    storage: runtimeStorage,
+    sync: syncState().cstoresku || {},
+  };
+}
+
 function activeConnectorSharedSecret(): string {
   if (connectorSharedSecret) return connectorSharedSecret;
   const credentials = store.getJson<JsonObject>("connector", "credentials", {});
@@ -3145,17 +3272,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   }
 
   if (path === "/api/cstoresku/runtime") {
-    sendJson(res, 200, {
-      runtimeRoot: cstoreskuRuntimeRoot,
-      expectedMounts: {
-        dataSource: join(cstoreskuRuntimeRoot, "DataSource"),
-        xml: join(cstoreskuRuntimeRoot, "xml"),
-        logs: join(cstoreskuRuntimeRoot, "logs"),
-      },
-      configPath: join(cstoreskuRuntimeRoot, "DataSource", "DatabaseServers.xml"),
-      configExists: existsSync(join(cstoreskuRuntimeRoot, "DataSource", "DatabaseServers.xml")),
-      sync: syncState().cstoresku || {},
-    });
+    sendJson(res, 200, await cstoreskuRuntimeHealth());
     return;
   }
 
@@ -3516,6 +3633,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       commanderWriteBack: "/api/commander/writeback",
       activitySummary: store.activitySummary(),
       errorSummary: store.errorSummary(),
+      cstoreskuRuntimeHealth: await cstoreskuRuntimeHealth(),
     });
     return;
   }

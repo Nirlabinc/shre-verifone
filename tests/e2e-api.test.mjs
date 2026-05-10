@@ -322,6 +322,8 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const cstoreskuRuntime = await json("/api/cstoresku/runtime");
     assert.equal(cstoreskuRuntime.response.status, 200);
     assert.match(cstoreskuRuntime.body.configPath, /DatabaseServers\.xml$/);
+    assert.equal(cstoreskuRuntime.body.state, "config_missing");
+    assert.equal(cstoreskuRuntime.body.sidecar.expectedContainer, "cstoresku-legacy");
 
     const cstoreskuConfig = await json("/api/cstoresku/export-config", { method: "POST", body: JSON.stringify({}) });
     assert.equal(cstoreskuConfig.response.status, 200);
@@ -419,6 +421,12 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(cstoreskuXmlExport.body.status, "staged");
     assert.equal(cstoreskuXmlExport.body.report.reportType, "plu");
     await access(cstoreskuXmlExport.body.xmlPath);
+
+    const cstoreskuRuntimeAfterXml = await json("/api/cstoresku/runtime");
+    assert.equal(cstoreskuRuntimeAfterXml.response.status, 200);
+    assert.equal(cstoreskuRuntimeAfterXml.body.state, "ready_with_xml");
+    assert.equal(cstoreskuRuntimeAfterXml.body.xml.files >= 1, true);
+    assert.equal(cstoreskuRuntimeAfterXml.body.xml.newest.name.endsWith(".xml"), true);
 
     const itemMaintenancePull = await json("/api/verifone/pull-report", {
       method: "POST",

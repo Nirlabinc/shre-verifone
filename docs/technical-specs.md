@@ -130,6 +130,8 @@ POST /api/cstoresku/export-tlog
 
 The data split is intentional: CStoreSKU receives native Commander XML, while chat/model tools read normalized local SQLite rows. Raw XML is not exposed to chat flows.
 
+`GET /api/cstoresku/runtime` is the operator/support health surface. It reports runtime state, expected sidecar image/platform, config presence, XML file counts, newest staged XML, newest sidecar log file and tail, and storage usage. The dashboard shows the same status in the Verifone setup area and opens full details in the diagnostics drawer.
+
 Linux and macOS deployment should run the original CStoreSKU/Varifone service as a container sidecar instead of installing it directly on the host. The compose profile is:
 
 ```bash

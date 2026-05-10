@@ -103,6 +103,7 @@ Expected:
 
 - CStoreSKU application key is saved after Verifone setup.
 - `GET /api/cstoresku/runtime` shows the runtime root and expected mount folders.
+- Dashboard shows runtime state, config state, XML file count, latest staged XML, sidecar readiness, and runtime storage.
 - `POST /api/cstoresku/export-config` creates `DataSource/DatabaseServers.xml` with `VL`, `VU`, `VP`, and `ApplicationKey`.
 - `POST /api/cstoresku/export-xml` stages native Commander XML into `xml/<reportType>/`.
 - `POST /api/cstoresku/export-tlog` stages transaction-log XML into `xml/tlog/`.
