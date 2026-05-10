@@ -76,6 +76,7 @@ Setup, onboarding, support, and specs:
 - [Production Update And Restart](docs/production-update.md)
 - [Pilot Installation Guide](docs/pilot-installation-guide.md)
 - [Pilot Production Readiness](docs/pilot-production-readiness.md)
+- [Cloudflare Remote Access](docs/cloudflare-remote-access.md)
 - [Verifone PDK Command Catalog](docs/verifone-pdk-command-catalog.md)
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)

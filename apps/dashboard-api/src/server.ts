@@ -1782,14 +1782,23 @@ function remoteAccessStatus(): JsonObject {
     enabled: false,
     tunnelId: "",
     publicUrl: "",
+    dashboardUrl: "",
+    verifoneUrl: "",
+    verifoneLanUrl: "",
+    verifoneDetectedIp: "",
     updatedAt: null,
   });
+  const dashboardUrl = String(config.dashboardUrl || config.publicUrl || "");
+  const verifoneUrl = String(config.verifoneUrl || "");
   return {
     ...config,
-    ready: config.enabled === true && Boolean(config.publicUrl),
+    dashboardUrl,
+    verifoneUrl,
+    ready: config.enabled === true && Boolean(dashboardUrl),
+    verifoneReady: config.enabled === true && Boolean(verifoneUrl),
     localBaseUrl: localBaseUrlFromString(""),
     inboundEndpoint: "/api/messages/inbound",
-    requirements: ["connector activation", "signed inbound messages", "tunnel identity", "local admin access"],
+    requirements: ["connector activation", "signed inbound messages", "Cloudflare Access policy", "tunnel identity", "local admin access"],
   };
 }
 
@@ -3833,6 +3842,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         enabled: body.enabled === true,
         tunnelId: typeof body.tunnelId === "string" ? body.tunnelId : "",
         publicUrl: typeof body.publicUrl === "string" ? body.publicUrl : "",
+        dashboardUrl: typeof body.dashboardUrl === "string" ? body.dashboardUrl : "",
+        verifoneUrl: typeof body.verifoneUrl === "string" ? body.verifoneUrl : "",
+        verifoneLanUrl: typeof body.verifoneLanUrl === "string" ? body.verifoneLanUrl : "",
+        verifoneDetectedIp: typeof body.verifoneDetectedIp === "string" ? body.verifoneDetectedIp : "",
         updatedAt: new Date().toISOString(),
       };
       store.setJson("remote-access", "config", config);

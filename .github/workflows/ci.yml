@@ -70,5 +70,6 @@ jobs:
           test -s docs/login-billing.md
           test -s docs/pilot-installation-guide.md
           test -s docs/pilot-production-readiness.md
+          test -s docs/cloudflare-remote-access.md
           test -s marketplace/verifone-commander.connector.json
           test -s apps/product-landing/index.html

@@ -408,12 +408,16 @@
             <h2>Remote Access</h2>
             <div class="fields">
               <label>Provider<input name="provider" value="cloudflare"></label>
-              <label>Public URL<input name="publicUrl" placeholder="https://store-edge.example.com"></label>
+              <label>Dashboard URL<input name="dashboardUrl" placeholder="https://store001-dashboard.example.com"></label>
+              <label>Verifone URL<input name="verifoneUrl" placeholder="https://store001-verifone.example.com"></label>
+              <label>Verifone LAN URL<input name="verifoneLanUrl" placeholder="http://192.168.14.11/ConfigClient.html"></label>
               <label>Tunnel ID<input name="tunnelId" placeholder="cloudflare-tunnel-id"></label>
+              <label>Legacy Public URL<input name="publicUrl" placeholder="optional compatibility value"></label>
               <label>Enabled
                 <select name="enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select>
               </label>
             </div>
+            <div class="hint">Use Cloudflare Access policies on both public URLs. Verifone IP can vary by location; the installer can probe and store the LAN URL here.</div>
             <div class="toolbar"><button class="primary" type="submit">Save Remote Access</button></div>
           </form>
         </div>
@@ -722,6 +726,9 @@
         renderAddons(addons.addOns || []);
         document.querySelector('#remoteAccessForm input[name="provider"]').value = remoteAccess.provider || "cloudflare";
         document.querySelector('#remoteAccessForm input[name="publicUrl"]').value = remoteAccess.publicUrl || "";
+        document.querySelector('#remoteAccessForm input[name="dashboardUrl"]').value = remoteAccess.dashboardUrl || remoteAccess.publicUrl || "";
+        document.querySelector('#remoteAccessForm input[name="verifoneUrl"]').value = remoteAccess.verifoneUrl || "";
+        document.querySelector('#remoteAccessForm input[name="verifoneLanUrl"]').value = remoteAccess.verifoneLanUrl || "";
         document.querySelector('#remoteAccessForm input[name="tunnelId"]').value = remoteAccess.tunnelId || "";
         document.querySelector('#remoteAccessForm select[name="enabled"]').value = remoteAccess.enabled ? "true" : "false";
         renderQueue(queue.items || []);
