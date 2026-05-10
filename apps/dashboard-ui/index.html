@@ -233,6 +233,16 @@
           <div id="cstoreskuKeyStatus" class="hint">Key status unknown.</div>
           <div class="toolbar"><button class="primary" type="submit">Save CStoreSKU Key</button></div>
         </form>
+        <section>
+          <h2>CStoreSKU Legacy XML Runtime</h2>
+          <div class="hint">Runtime path used by the legacy CStoreSKU connector.</div>
+          <div id="cstoreskuRuntimeStatus" class="hint">Runtime status unknown.</div>
+          <div class="toolbar">
+            <button id="exportCstoreskuConfig" class="secondary" type="button">Export Config XML</button>
+            <button id="stageCstoreskuXml" class="secondary" type="button">Stage Latest XML</button>
+            <button id="stageCstoreskuTlog" class="secondary" type="button">Stage TLog XML</button>
+          </div>
+        </section>
         <form id="shreActivationTokenForm">
           <h2>Shre Activation</h2>
           <div class="fields">
@@ -594,7 +604,7 @@
           return;
         }
         $("loginPanel").classList.remove("open");
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, errors, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage, heartbeatWorker, commanderReports, pdkCatalog] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, errors, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage, heartbeatWorker, commanderReports, cstoreskuRuntime, pdkCatalog] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -617,6 +627,7 @@
           api("/api/storage/analysis"),
           api("/api/heartbeat/worker"),
           api("/api/verifone/reports"),
+          api("/api/cstoresku/runtime"),
           api("/api/verifone/pdk/commands")
         ]);
         setStatus("API running", "ok");
@@ -629,6 +640,10 @@
         $("verifoneFormStatus").className = `hint ${verifone.lastValidation?.status === "connected" ? "ok" : verifone.lastValidation?.status === "failed" ? "bad" : ""}`;
         $("cstoreskuKeyStatus").textContent = verifone.cstoreskuKeyConfigured ? "CStoreSKU application key is stored locally." : "No CStoreSKU application key stored.";
         $("cstoreskuKeyStatus").className = `hint ${verifone.cstoreskuKeyConfigured ? "ok" : "warn"}`;
+        $("cstoreskuRuntimeStatus").textContent = cstoreskuRuntime.configExists
+          ? `Runtime ready at ${cstoreskuRuntime.runtimeRoot}`
+          : `Runtime folders ready. Config XML not exported yet: ${cstoreskuRuntime.runtimeRoot}`;
+        $("cstoreskuRuntimeStatus").className = `hint ${cstoreskuRuntime.configExists ? "ok" : "warn"}`;
         renderSync(sync, heartbeatWorker);
         $("mConnector").textContent = connector.status || "local_only";
         $("mTenant").textContent = connector.tenantId ? `${connector.tenantId} / ${connector.workspaceId || "no_workspace"} / ${connector.storeId}` : "No cloud tenant mapped";
@@ -916,6 +931,45 @@
       await refresh();
     };
     $("cstoreskuKeyForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/cstoresku/key", { method: "POST", body: JSON.stringify(formObject(event.target)) }); event.target.reset(); await refresh(); };
+    $("exportCstoreskuConfig").onclick = async () => {
+      $("cstoreskuRuntimeStatus").textContent = "Exporting CStoreSKU config XML...";
+      $("cstoreskuRuntimeStatus").className = "hint";
+      try {
+        const result = await api("/api/cstoresku/export-config", { method: "POST", body: "{}" });
+        $("cstoreskuRuntimeStatus").textContent = `Config XML exported: ${result.configPath}`;
+        $("cstoreskuRuntimeStatus").className = "hint ok";
+      } catch (error) {
+        $("cstoreskuRuntimeStatus").textContent = error.message || "CStoreSKU config export failed.";
+        $("cstoreskuRuntimeStatus").className = "hint bad";
+      }
+      await refresh();
+    };
+    $("stageCstoreskuXml").onclick = async () => {
+      $("cstoreskuRuntimeStatus").textContent = "Staging latest Commander XML for CStoreSKU...";
+      $("cstoreskuRuntimeStatus").className = "hint";
+      try {
+        const result = await api("/api/cstoresku/export-xml", { method: "POST", body: JSON.stringify({ reportType: $("pullReportType").value }) });
+        $("cstoreskuRuntimeStatus").textContent = `XML staged: ${result.xmlPath}`;
+        $("cstoreskuRuntimeStatus").className = "hint ok";
+      } catch (error) {
+        $("cstoreskuRuntimeStatus").textContent = error.message || "CStoreSKU XML staging failed.";
+        $("cstoreskuRuntimeStatus").className = "hint bad";
+      }
+      await refresh();
+    };
+    $("stageCstoreskuTlog").onclick = async () => {
+      $("cstoreskuRuntimeStatus").textContent = "Staging latest TLog XML for CStoreSKU...";
+      $("cstoreskuRuntimeStatus").className = "hint";
+      try {
+        const result = await api("/api/cstoresku/export-tlog", { method: "POST", body: JSON.stringify({ reportType: "journal" }) });
+        $("cstoreskuRuntimeStatus").textContent = `TLog XML staged: ${result.xmlPath}`;
+        $("cstoreskuRuntimeStatus").className = "hint ok";
+      } catch (error) {
+        $("cstoreskuRuntimeStatus").textContent = error.message || "CStoreSKU TLog staging failed.";
+        $("cstoreskuRuntimeStatus").className = "hint bad";
+      }
+      await refresh();
+    };
     $("shreActivationTokenForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/shre/activation-token", { method: "POST", body: JSON.stringify(formObject(event.target)) }); event.target.reset(); await refresh(); };
     $("validateVerifone").onclick = async () => {
       $("verifoneFormStatus").textContent = "Validating Commander connection...";

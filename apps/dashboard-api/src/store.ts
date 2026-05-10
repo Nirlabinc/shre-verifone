@@ -1028,6 +1028,41 @@ export class RuntimeStore {
     }));
   }
 
+  commanderReportXmlForExport(reportType = "", reportId = ""): JsonObject | null {
+    const row = reportId
+      ? this.db.prepare(`
+          select id, report_type, business_date, source, root_name, xml_json, normalized_json, created_at
+          from commander_reports
+          where id = ?
+          limit 1
+        `).get(reportId) as CommanderReportRow | undefined
+      : reportType
+        ? this.db.prepare(`
+            select id, report_type, business_date, source, root_name, xml_json, normalized_json, created_at
+            from commander_reports
+            where report_type = ?
+            order by created_at desc, rowid desc
+            limit 1
+          `).get(reportType) as CommanderReportRow | undefined
+        : this.db.prepare(`
+            select id, report_type, business_date, source, root_name, xml_json, normalized_json, created_at
+            from commander_reports
+            order by created_at desc, rowid desc
+            limit 1
+          `).get() as CommanderReportRow | undefined;
+    if (!row) return null;
+    return {
+      id: row.id,
+      reportType: row.report_type,
+      businessDate: row.business_date,
+      source: row.source,
+      rootName: row.root_name,
+      xml: this.parseJson(row.xml_json) as string,
+      normalized: this.parseJson(row.normalized_json) as JsonObject,
+      createdAt: row.created_at,
+    };
+  }
+
   commanderReportSummary(): JsonObject {
     const rows = this.db.prepare(`
       select report_type, count(*) as count, max(created_at) as newest

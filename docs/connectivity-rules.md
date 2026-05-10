@@ -21,7 +21,7 @@ This runbook is the first place to check when a store reports that Verifone Comm
 | Verifone Commander | API -> Commander | Ping checks immediate reachability. Validate updates connection state. The heartbeat worker retries automatically with backoff and scheduled pulls use the Commander lease. | `POST /api/verifone/ping`, `GET /api/verifone/heartbeat`, `GET /api/heartbeat/worker`, `GET /api/sync/status` |
 | Commander XML ingest | Commander -> local SQLite | Live read pulls use the Commander lease, store raw XML in `commander_reports`, normalize Conexxus/NAXML-style JSON, and derive sales snapshots when applicable. | `POST /api/verifone/pull-report`, `GET /api/verifone/reports`, `POST /api/sales/query` |
 | Commander concurrency | API scheduler -> Commander | One local lease holder at a time. External POS traffic must be accounted for in polling intervals. | `GET /api/commander/lease/status` |
-| CStoreSKU | API -> CStoreSKU/RapidRMS connector | CStoreSKU key is separate from Verifone credentials. Link it only after local setup is complete. | `GET /api/connector/status` |
+| CStoreSKU | API -> CStoreSKU/RapidRMS connector | CStoreSKU key is separate from Verifone credentials. Export legacy runtime config, then stage native Commander XML from local SQLite. | `GET /api/cstoresku/runtime`, `POST /api/cstoresku/export-config`, `POST /api/cstoresku/export-xml` |
 | Shre activation | API -> Shre Auth | Dev/QA uses `https://shre-auth.shre.ai`; beta/prod uses `https://shre-auth.aros.live`. | `POST /api/shre/signup-activate` |
 | Message gateway | Gateway -> connector -> local API | Inbound commands must be tenant/workspace/store scoped and signed before local execution. | `GET /api/messages/contract` |
 | Offline queue | API/worker -> targets | Failed cloud or Commander operations remain queued and replay with backoff. | `GET /api/queue` |
@@ -97,7 +97,37 @@ Fix path:
 4. Confirm `GET /api/heartbeat/worker` shows auto reconnect enabled.
 5. If external POS devices are also polling Commander, reduce local pull frequency and avoid peak sales windows.
 
-### 4. Read, Write, And Queue Rules
+### 4. CStoreSKU Legacy Connector
+
+Expected:
+
+- CStoreSKU application key is saved after Verifone setup.
+- `GET /api/cstoresku/runtime` shows the runtime root and expected mount folders.
+- `POST /api/cstoresku/export-config` creates `DataSource/DatabaseServers.xml` with `VL`, `VU`, `VP`, and `ApplicationKey`.
+- `POST /api/cstoresku/export-xml` stages native Commander XML into `xml/<reportType>/`.
+- `POST /api/cstoresku/export-tlog` stages transaction-log XML into `xml/tlog/`.
+
+First checks:
+
+```http
+GET /api/verifone/status
+GET /api/cstoresku/runtime
+GET /api/verifone/reports
+POST /api/cstoresku/export-config
+POST /api/cstoresku/export-xml
+GET /api/queue
+GET /api/activity
+GET /api/errors
+```
+
+Fix path:
+
+1. If `DatabaseServers.xml` is missing, export config after saving Verifone details and the CStoreSKU key.
+2. If XML staging fails, confirm the required Commander report was pulled first with `POST /api/verifone/pull-report`.
+3. If a file is staged but CStoreSKU does not consume it, confirm the legacy container mounts the same `CSTORESKU_RUNTIME_ROOT` folder.
+4. Do not run a second independent poller against Commander; use the local API pull path and Commander lease.
+
+### 5. Read, Write, And Queue Rules
 
 Expected:
 

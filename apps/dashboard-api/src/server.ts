@@ -1,5 +1,5 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { chmod, readFile, mkdir, readdir, stat, statfs } from "node:fs/promises";
+import { chmod, readFile, mkdir, readdir, stat, statfs, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir, hostname, platform, arch, totalmem, freemem, cpus } from "node:os";
@@ -20,6 +20,7 @@ const shreSetupCaptureUrl = process.env.SHRE_SETUP_CAPTURE_URL || "";
 const shreCostEndpoint = process.env.SHRE_COST_ENDPOINT || "";
 const emailVerificationRequired = process.env.SHRE_EMAIL_VERIFICATION_REQUIRED === "true";
 const commanderAccessMode = process.env.COMMANDER_ACCESS_MODE || process.env.SHRE_MODE || "read_only";
+const cstoreskuRuntimeRoot = process.env.CSTORESKU_RUNTIME_ROOT || process.env.VERIFONE_CSTORESKU_HOME || join(runtimeRoot, "cstoresku-runtime");
 const appVersion = process.env.APP_VERSION || process.env.npm_package_version || "0.1.0";
 const buildChannel = process.env.BUILD_CHANNEL || process.env.SHRE_ENV || "local";
 const buildSha = process.env.BUILD_SHA || "dev";
@@ -39,12 +40,19 @@ async function ensureRuntime(): Promise<void> {
   await mkdir(join(runtimeRoot, "queue"), { recursive: true });
   await mkdir(join(runtimeRoot, "logs"), { recursive: true });
   await mkdir(join(runtimeRoot, "diagnostics"), { recursive: true });
+  await mkdir(join(cstoreskuRuntimeRoot, "DataSource"), { recursive: true });
+  await mkdir(join(cstoreskuRuntimeRoot, "xml"), { recursive: true });
+  await mkdir(join(cstoreskuRuntimeRoot, "logs"), { recursive: true });
   await secureRuntimePath(runtimeRoot, 0o700);
   await Promise.all([
     secureRuntimePath(join(runtimeRoot, "connections"), 0o700),
     secureRuntimePath(join(runtimeRoot, "queue"), 0o700),
     secureRuntimePath(join(runtimeRoot, "logs"), 0o700),
     secureRuntimePath(join(runtimeRoot, "diagnostics"), 0o700),
+    secureRuntimePath(cstoreskuRuntimeRoot, 0o700),
+    secureRuntimePath(join(cstoreskuRuntimeRoot, "DataSource"), 0o700),
+    secureRuntimePath(join(cstoreskuRuntimeRoot, "xml"), 0o700),
+    secureRuntimePath(join(cstoreskuRuntimeRoot, "logs"), 0o700),
   ]);
 }
 
@@ -1698,7 +1706,9 @@ const pluginDefinitions: JsonObject[] = [
     status: "available",
     role: "Send native Commander XML to CStoreSKU and receive XML writeback payloads.",
     scopes: ["cstoresku.xml.write", "commander.xml.read"],
-    endpoint: "/api/cstoresku/key",
+    endpoint: "/api/cstoresku/export-xml",
+    setupEndpoint: "/api/cstoresku/export-config",
+    runtimeEndpoint: "/api/cstoresku/runtime",
   },
   {
     id: "commander-tlog",
@@ -1707,7 +1717,8 @@ const pluginDefinitions: JsonObject[] = [
     status: "available",
     role: "Native TLog/XML capture path for transaction log interchange.",
     scopes: ["tlog.read", "commander.xml.read"],
-    endpoint: "/api/verifone/pull-report",
+    endpoint: "/api/cstoresku/export-tlog",
+    sourceEndpoint: "/api/verifone/pull-report",
   },
   {
     id: "message-connectors",
@@ -1971,6 +1982,125 @@ function decryptSecret(value: string): string {
   const decipher = createDecipheriv("aes-256-gcm", secretKey(), iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+}
+
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function normalizeCstoreskuCommanderUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  return withScheme.endsWith("/") ? withScheme : `${withScheme}/`;
+}
+
+function legacyCstoreskuConfigXml(connection: JsonObject): string {
+  const commanderUrl = normalizeCstoreskuCommanderUrl(String(connection.commanderUrl || ""));
+  const username = String(connection.username || "");
+  const password = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
+  const applicationKey = typeof connection.applicationKey === "string" ? decryptSecret(connection.applicationKey) : "";
+  if (!commanderUrl || !username || !password) throw new Error("Verifone connection must include commanderUrl, username, and password.");
+  if (!applicationKey) throw new Error("CStoreSKU application key is required before exporting legacy config.");
+  return [
+    `<?xml version="1.0" encoding="utf-8"?>`,
+    `<VerifoneServers>`,
+    `  <VerifoneServer>`,
+    `    <VL>${xmlEscape(commanderUrl)}</VL>`,
+    `    <VU>${xmlEscape(username)}</VU>`,
+    `    <VP>${xmlEscape(password)}</VP>`,
+    `    <ApplicationKey>${xmlEscape(applicationKey)}</ApplicationKey>`,
+    `  </VerifoneServer>`,
+    `</VerifoneServers>`,
+    ``,
+  ].join("\n");
+}
+
+async function exportCstoreskuRuntimeConfig(connection: JsonObject): Promise<JsonObject> {
+  const dataSourceRoot = join(cstoreskuRuntimeRoot, "DataSource");
+  await mkdir(dataSourceRoot, { recursive: true });
+  const configPath = join(dataSourceRoot, "DatabaseServers.xml");
+  await writeFile(configPath, legacyCstoreskuConfigXml(connection), { encoding: "utf8", mode: 0o600 });
+  await secureRuntimePath(configPath, 0o600);
+  const sync = markCstoreskuLinked("legacy_runtime_config_exported");
+  store.appendActivity("cstoresku_legacy_config_exported", { configPath });
+  return {
+    ok: true,
+    runtimeRoot: cstoreskuRuntimeRoot,
+    dataSourcePath: dataSourceRoot,
+    configPath,
+    configShape: "DataSource/DatabaseServers.xml",
+    credentialFormat: "legacy_plaintext_xml_local_runtime",
+    sync,
+  };
+}
+
+function safePathSegment(value: string, fallback: string): string {
+  const segment = value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return segment || fallback;
+}
+
+async function stageCstoreskuCommanderXml(body: JsonObject, forcedReportType = ""): Promise<JsonObject> {
+  const sourceReportType = optionalString(body, "reportType");
+  const reportType = sourceReportType || forcedReportType;
+  const reportId = optionalString(body, "reportId");
+  const report = store.commanderReportXmlForExport(reportType, reportId);
+  if (!report) {
+    throw new Error(reportId
+      ? `Commander report not found for id ${reportId}`
+      : `No Commander XML report is available${reportType ? ` for ${reportType}` : ""}.`);
+  }
+  const actualReportType = String(report.reportType || reportType || "commander");
+  const xml = String(report.xml || "");
+  if (!xml.trim().startsWith("<")) throw new Error("Stored Commander report does not contain XML.");
+  const stagedType = forcedReportType === "tlog" ? "tlog" : safePathSegment(actualReportType, "commander");
+  const xmlRoot = join(cstoreskuRuntimeRoot, "xml", stagedType);
+  await mkdir(xmlRoot, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileName = `${timestamp}-${safePathSegment(String(report.id || "report"), "report")}.xml`;
+  const filePath = join(xmlRoot, fileName);
+  await writeFile(filePath, xml, { encoding: "utf8", mode: 0o600 });
+  await secureRuntimePath(filePath, 0o600);
+  const queueItem = store.enqueue({
+    target: "cstoresku-xml",
+    entityType: forcedReportType === "tlog" ? "tlog_xml" : "commander_xml",
+    entityId: String(report.id || ""),
+    operation: forcedReportType === "tlog" ? "stage_tlog_xml_for_cstoresku" : "stage_xml_for_cstoresku",
+    payload: {
+      reportId: String(report.id || ""),
+      reportType: actualReportType,
+      businessDate: String(report.businessDate || ""),
+      rootName: String(report.rootName || ""),
+      filePath,
+      xmlSha256: createHash("sha256").update(xml).digest("hex"),
+    },
+  });
+  markCstoreskuLinked(forcedReportType === "tlog" ? "tlog_xml_staged" : "commander_xml_staged");
+  store.appendActivity(forcedReportType === "tlog" ? "cstoresku_tlog_xml_staged" : "cstoresku_commander_xml_staged", {
+    reportId: report.id,
+    reportType: actualReportType,
+    filePath,
+  });
+  return {
+    ok: true,
+    status: "staged",
+    runtimeRoot: cstoreskuRuntimeRoot,
+    xmlPath: filePath,
+    xmlFolder: xmlRoot,
+    report: {
+      id: String(report.id || ""),
+      reportType: actualReportType,
+      businessDate: String(report.businessDate || ""),
+      rootName: String(report.rootName || ""),
+      createdAt: String(report.createdAt || ""),
+    },
+    queueItem,
+  };
 }
 
 function activeConnectorSharedSecret(): string {
@@ -2971,6 +3101,52 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/cstoresku/runtime") {
+    sendJson(res, 200, {
+      runtimeRoot: cstoreskuRuntimeRoot,
+      expectedMounts: {
+        dataSource: join(cstoreskuRuntimeRoot, "DataSource"),
+        xml: join(cstoreskuRuntimeRoot, "xml"),
+        logs: join(cstoreskuRuntimeRoot, "logs"),
+      },
+      configPath: join(cstoreskuRuntimeRoot, "DataSource", "DatabaseServers.xml"),
+      configExists: existsSync(join(cstoreskuRuntimeRoot, "DataSource", "DatabaseServers.xml")),
+      sync: syncState().cstoresku || {},
+    });
+    return;
+  }
+
+  if (path === "/api/cstoresku/export-config" && req.method === "POST") {
+    try {
+      const connection = store.getJson<JsonObject>("connections", "verifone", {});
+      const result = await exportCstoreskuRuntimeConfig(connection);
+      sendJson(res, 200, result);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/cstoresku/export-xml" && req.method === "POST") {
+    try {
+      const result = await stageCstoreskuCommanderXml(asObject(await requestBody(req)));
+      sendJson(res, 201, result);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
+  if (path === "/api/cstoresku/export-tlog" && req.method === "POST") {
+    try {
+      const result = await stageCstoreskuCommanderXml(asObject(await requestBody(req)), "tlog");
+      sendJson(res, 201, result);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
   if (path === "/api/shre/activation-token" && req.method === "POST") {
     try {
       const body = asObject(await requestBody(req));
@@ -3285,6 +3461,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       heartbeatWorker: "/api/heartbeat/worker",
       verifonePing: "/api/verifone/ping",
       verifoneEntities: "/api/verifone/entities",
+      cstoreskuRuntime: "/api/cstoresku/runtime",
+      cstoreskuExportConfig: "/api/cstoresku/export-config",
+      cstoreskuExportXml: "/api/cstoresku/export-xml",
+      cstoreskuExportTlog: "/api/cstoresku/export-tlog",
       storagePolicy: "/api/storage/policy",
       storageAnalysis: "/api/storage/analysis",
       storageBackup: "/api/storage/backup",

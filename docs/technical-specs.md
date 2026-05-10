@@ -98,6 +98,38 @@ GET  /api/messages/contract
 
 The local mapping is Conexxus/NAXML-aligned: raw Commander XML remains the source of record, then the adapter classifies report family from NAXML roots/elements and maps totals/records into normalized JSON. The parser recognizes NAXML movement reports, NAXML item maintenance exports (`ItemMaintenance` / `ITTDetail` / `POSCode`), Sapphire PLU exports (`domain:PLUs` with `upc`, `description`, `department`, `price`), and Sapphire fuel price exports (`fuel:fuelPrices` with `fuelProduct` / `price`). Normalized records are also projected into `commander_report_entities` for faster local queries by report type, entity type, entity key, amount, quantity, price, and payload metadata such as department or modifier. Exact XSD validation remains pluggable because full Conexxus schemas are licensed/member-controlled.
 
+## CStoreSKU Legacy XML Runtime
+
+The Phase 1 CStoreSKU/Varifone service expects a mounted runtime shape:
+
+```text
+DataSource/DatabaseServers.xml
+xml/
+logs/
+```
+
+Phase 2 creates the same structure under `CSTORESKU_RUNTIME_ROOT`, `VERIFONE_CSTORESKU_HOME`, or the default nested runtime path:
+
+```text
+%USERPROFILE%\.verifone-shre-cstoresku\cstoresku-runtime
+~/.verifone-shre-cstoresku/cstoresku-runtime
+```
+
+API:
+
+```http
+GET  /api/cstoresku/runtime
+POST /api/cstoresku/export-config
+POST /api/cstoresku/export-xml
+POST /api/cstoresku/export-tlog
+```
+
+`POST /api/cstoresku/export-config` writes `DataSource/DatabaseServers.xml` with the legacy fields `VL`, `VU`, `VP`, and `ApplicationKey`. Values are sourced from the local encrypted Verifone/CStoreSKU setup and written only into the local protected runtime folder used by the legacy connector. `VL` is normalized with an HTTP scheme and trailing slash because the original config tool did the same.
+
+`POST /api/cstoresku/export-xml` stages the latest or requested raw Commander XML report from encrypted SQLite into `xml/<reportType>/...xml`. `POST /api/cstoresku/export-tlog` stages transaction-log style XML into `xml/tlog/...xml`. Both endpoints enqueue a `cstoresku-xml` audit item with report id, report type, root name, file path, and SHA-256 so support can trace what was handed to the CStoreSKU side.
+
+The data split is intentional: CStoreSKU receives native Commander XML, while chat/model tools read normalized local SQLite rows. Raw XML is not exposed to chat flows.
+
 Set `COMMANDER_SALES_ENDPOINTS` to a comma-separated list of endpoint paths when a site-specific Commander report/API path is known. The dashboard also exposes `Sales Pull Path` in Verifone setup. Pending writes are not involved; this is read-only ingest and obeys Commander access mode.
 
 `/api/messages/inbound` classifies sales questions and returns an immediate local SQLite answer when a matching snapshot exists. If no local sales data exists, it queues the request and returns `requiresDataSource: true`.

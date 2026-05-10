@@ -111,6 +111,10 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       res.end(`<?xml version="1.0"?><fuel:fuelPrices xmlns:fuel="urn:vfi-sapphire:fuel.2001-10-01"><fuelProducts maxSize="2"><fuelProduct sysid="1" name="REG" NAXMLFuelGradeID="1"><prices><price tier="1" servLevel="1" mop="1">3.469</price></prices></fuelProduct></fuelProducts></fuel:fuelPrices>`);
       return;
     }
+    if (req.url.includes("tlog") || req.url.includes("journal")) {
+      res.end(`<?xml version="1.0"?><NAXML-JournalReport><BusinessDate>2026-05-09</BusinessDate><TransactionDetail><TransactionID>txn-001</TransactionID><TransactionAmount>12.34</TransactionAmount></TransactionDetail></NAXML-JournalReport>`);
+      return;
+    }
     res.end(`<?xml version="1.0"?><NAXML-MovementReport><BusinessDate>2026-05-09</BusinessDate><MerchandiseCodeMovement><MCMDetail><ItemCode>100</ItemCode><ItemDescription>Coffee</ItemDescription><SalesAmount>77.50</SalesAmount><SalesQuantity>31</SalesQuantity></MCMDetail></MerchandiseCodeMovement><TotalSales>1842.55</TotalSales><TransactionCount>74</TransactionCount></NAXML-MovementReport>`);
   });
   const shreAuthServer = createServer(async (req, res) => {
@@ -315,6 +319,15 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(cstoreskuKey.body.connection.applicationKey, "***");
     assert.equal(cstoreskuKey.body.sync.cstoresku.linked, true);
 
+    const cstoreskuRuntime = await json("/api/cstoresku/runtime");
+    assert.equal(cstoreskuRuntime.response.status, 200);
+    assert.match(cstoreskuRuntime.body.configPath, /DatabaseServers\.xml$/);
+
+    const cstoreskuConfig = await json("/api/cstoresku/export-config", { method: "POST", body: JSON.stringify({}) });
+    assert.equal(cstoreskuConfig.response.status, 200);
+    assert.equal(cstoreskuConfig.body.configShape, "DataSource/DatabaseServers.xml");
+    await access(cstoreskuConfig.body.configPath);
+
     const verifoneStatus = await json("/api/verifone/status");
     assert.equal(verifoneStatus.response.status, 200);
     assert.equal(verifoneStatus.body.cstoreskuKeyConfigured, true);
@@ -391,6 +404,15 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(domainPluPull.body.report.reportType, "plu");
     assert.equal(domainPluPull.body.report.normalized.totals.itemCount >= 1, true);
 
+    const cstoreskuXmlExport = await json("/api/cstoresku/export-xml", {
+      method: "POST",
+      body: JSON.stringify({ reportType: "plu" }),
+    });
+    assert.equal(cstoreskuXmlExport.response.status, 201);
+    assert.equal(cstoreskuXmlExport.body.status, "staged");
+    assert.equal(cstoreskuXmlExport.body.report.reportType, "plu");
+    await access(cstoreskuXmlExport.body.xmlPath);
+
     const itemMaintenancePull = await json("/api/verifone/pull-report", {
       method: "POST",
       body: JSON.stringify({ reportType: "maintenance", endpoint: "/reports/item-maintenance", businessDate: "2026-05-09" }),
@@ -406,6 +428,20 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(fuelPricesPull.body.report.reportType, "fuel");
     assert.equal(fuelPricesPull.body.report.normalized.totals.fuelProductCount, 1);
     assert.equal(fuelPricesPull.body.report.normalized.totals.priceCount, 1);
+
+    const tlogPull = await json("/api/verifone/pull-report", {
+      method: "POST",
+      body: JSON.stringify({ reportType: "journal", endpoint: "/reports/tlog", businessDate: "2026-05-09" }),
+    });
+    assert.equal(tlogPull.response.status, 200);
+
+    const tlogExport = await json("/api/cstoresku/export-tlog", {
+      method: "POST",
+      body: JSON.stringify({ reportType: "journal" }),
+    });
+    assert.equal(tlogExport.response.status, 201);
+    assert.equal(tlogExport.body.status, "staged");
+    await access(tlogExport.body.xmlPath);
 
     const sampleEntities = await json("/api/verifone/entities?reportType=plu");
     assert.equal(sampleEntities.body.entities.some((item) => item.entityKey === "00011122233344" && item.price === 2.49), true);
