@@ -28,7 +28,7 @@ Retention choices:
 - 1 year
 - Custom days from 1 to 3650
 
-The selected retention applies to activity logs, diagnostics bundles, chat audit, reported usage records, completed/failed queue rows, and sales snapshots. Pending queue items are not deleted by retention cleanup.
+The selected retention applies to activity logs, resolved error log rows, diagnostics bundles, chat audit, reported usage records, completed/failed queue rows, and sales snapshots. Pending queue items and open error log rows are not deleted by retention cleanup.
 
 ## Backup Targets
 

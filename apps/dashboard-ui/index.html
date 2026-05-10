@@ -456,6 +456,7 @@
         <div class="mini-grid">
           <div class="mini"><span class="label">API Requests</span><strong id="hRequests">0</strong></div>
           <div class="mini"><span class="label">Activity Events</span><strong id="hEvents">0</strong></div>
+          <div class="mini"><span class="label">Open Errors</span><strong id="hErrors">0</strong></div>
           <div class="mini"><span class="label">Messages</span><strong id="hMessages">0</strong></div>
           <div class="mini"><span class="label">Storage</span><strong id="hStorage">0 KB</strong></div>
           <div class="mini"><span class="label">Disk Free</span><strong id="hDiskFree">Unknown</strong></div>
@@ -464,12 +465,18 @@
         <div class="toolbar" style="margin-bottom:12px"><button id="createBundle" class="primary" type="button">Create Diagnostics Bundle</button><button id="refreshHealth" class="secondary" type="button">Refresh</button></div>
         <div class="folder-tabs" id="healthTabs">
           <button class="active" data-health-tab="activityPanel" type="button">Activity Log</button>
+          <button data-health-tab="errorsPanel" type="button">Error Log</button>
           <button data-health-tab="messagesPanel" type="button">Connector Messages</button>
           <button data-health-tab="diagnosticsPanel" type="button">Diagnostics</button>
         </div>
         <div id="activityPanel" class="health-panel active">
           <div class="card">
             <div class="table-wrap scroll-table"><table><thead><tr><th>Time</th><th>Event</th><th>Metadata</th></tr></thead><tbody id="activityRows"></tbody></table></div>
+          </div>
+        </div>
+        <div id="errorsPanel" class="health-panel">
+          <div class="card">
+            <div class="table-wrap scroll-table"><table><thead><tr><th>Time</th><th>Severity</th><th>Source</th><th>Operation</th><th>Status</th><th>Message</th><th></th></tr></thead><tbody id="errorRows"></tbody></table></div>
           </div>
         </div>
         <div id="messagesPanel" class="health-panel">
@@ -587,7 +594,7 @@
           return;
         }
         $("loginPanel").classList.remove("open");
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage, heartbeatWorker, commanderReports, pdkCatalog] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, errors, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage, heartbeatWorker, commanderReports, pdkCatalog] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -597,6 +604,7 @@
           api("/api/connector/manifest"),
           api("/api/diagnostics"),
           api("/api/activity"),
+          api("/api/errors"),
           api("/api/messages/audit"),
           api("/api/notifications"),
           api("/api/usage/summary"),
@@ -632,7 +640,7 @@
         $("passwordHint").textContent = password.daysRemaining == null ? "No expiration value recorded" : `${password.daysRemaining} days remaining`;
         $("onboardingSteps").textContent = `Current: ${onboarding.currentStep || "profile"} | Completed: ${(onboarding.completedSteps || []).join(", ") || "none"}`;
         showJson("manifestJson", manifest);
-        showJson("diagnosticsJson", { health, diagnostics, storage });
+        showJson("diagnosticsJson", { health, diagnostics, storage, errorSummary: errors.summary });
         showJson("adapterJson", adapters);
         showJson("mcpJson", mcpTools);
         renderAddons(addons.addOns || []);
@@ -642,6 +650,7 @@
         document.querySelector('#remoteAccessForm select[name="enabled"]').value = remoteAccess.enabled ? "true" : "false";
         renderQueue(queue.items || []);
         renderActivity(activity.events || []);
+        renderErrors(errors.errors || []);
         renderMessages(messageAudit.messages || []);
         renderUsage(usage);
         renderPdkCatalog(pdkCatalog.commands || []);
@@ -652,6 +661,7 @@
         const apiRequests = (diagnostics.activitySummary?.byEvent || []).find((item) => item.eventName === "api_request_completed");
         $("hRequests").textContent = apiRequests ? apiRequests.count : 0;
         $("hEvents").textContent = diagnostics.activitySummary?.total || 0;
+        $("hErrors").textContent = errors.summary?.open || 0;
         $("hMessages").textContent = (messageAudit.messages || []).length;
         $("hStorage").textContent = `${Math.round((health.storage?.bytes || 0) / 1024)} KB`;
         $("hDiskFree").textContent = formatBytes(health.disk?.freeBytes);
@@ -780,6 +790,32 @@
       $("activityRows").innerHTML = ordered.map((event, index) => `<tr class="clickable" data-activity-index="${index}"><td>${event.timestamp}</td><td>${event.eventName}</td><td class="mono">${JSON.stringify(event.metadata)}</td></tr>`).join("") || '<tr><td colspan="3">No activity</td></tr>';
       $("activityRows").querySelectorAll("tr[data-activity-index]").forEach((row) => {
         row.addEventListener("click", () => openDrawer("Activity Event", ordered[Number(row.dataset.activityIndex)]));
+      });
+    }
+    function renderErrors(errors) {
+      const ordered = errors.slice();
+      $("errorRows").innerHTML = ordered.map((error, index) => `
+        <tr class="clickable" data-error-index="${index}">
+          <td>${error.createdAt}</td>
+          <td><span class="badge ${error.severity}">${error.severity}</span></td>
+          <td>${error.source}</td>
+          <td>${error.operation}</td>
+          <td><span class="badge ${error.status === "resolved" ? "completed" : "failed"}">${error.status}</span></td>
+          <td>${error.message}</td>
+          <td>${error.status === "open" ? `<button class="secondary" type="button" data-resolve-error="${error.id}">Resolve</button>` : ""}</td>
+        </tr>
+      `).join("") || '<tr><td colspan="7">No open errors</td></tr>';
+      $("errorRows").querySelectorAll("tr[data-error-index]").forEach((row) => {
+        row.addEventListener("click", (event) => {
+          if (event.target.closest("button")) return;
+          openDrawer("Error Log", ordered[Number(row.dataset.errorIndex)]);
+        });
+      });
+      $("errorRows").querySelectorAll("button[data-resolve-error]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await api("/api/errors/resolve", { method: "POST", body: JSON.stringify({ id: button.dataset.resolveError, resolution: { source: "dashboard" } }) });
+          await refresh();
+        });
       });
     }
     function renderMessages(messages) {

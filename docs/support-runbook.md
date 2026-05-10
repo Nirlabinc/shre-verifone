@@ -40,10 +40,17 @@ POST /api/storage/retention/apply
 GET /api/messages/contract
 POST /api/sales/query
 GET /api/activity
+GET /api/errors
 POST /api/diagnostics/bundle
 ```
 
 Every API response includes an `x-request-id` header. The activity log records `api_request_completed` with request ID, method, path, status code, duration, and remote address.
+
+Use `/api/errors` for the support failure ledger. It shows unresolved and resolved failures with severity, source, operation, entity ID, redacted details, correlation ID, and resolution status. Resolve an item after support confirms the underlying condition is fixed:
+
+```http
+POST /api/errors/resolve
+```
 
 The dashboard header and Overview screen show notifications from `/api/notifications` when Verifone is disconnected, password action is required, queue work fails or waits, marketplace activation is missing, or local sales data has not been ingested.
 
@@ -198,6 +205,8 @@ Check:
 Inventory writes require `read_write` or `write_only`. Keep stores in `read_only` until write-back has been approved and validated.
 
 For CStoreSKU write-back, check `/api/commander/writeback`, `/api/queue`, and `/api/activity`. A successful write should show `commander_writeback_verified` and a completed queue item. If the queue item is `verification_failed`, Commander accepted the request but the read-back command or expected response check did not prove the data was loaded.
+
+Write-back failures also create `/api/errors` entries. Critical errors mean the write did not complete or the final state is unsafe to assume. Warning errors usually mean Commander accepted a request, but verification did not prove it landed.
 
 ### Add-on Not Available
 

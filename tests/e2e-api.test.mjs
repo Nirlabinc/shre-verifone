@@ -746,6 +746,38 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(replay.response.status, 200);
     assert.equal(replay.body.items.every((item) => item.status === "completed"), true);
 
+    const recordedError = await json("/api/errors", {
+      method: "POST",
+      body: JSON.stringify({
+        severity: "critical",
+        source: "e2e",
+        operation: "manual-check",
+        entityId: "entity-001",
+        message: "Synthetic support error password=secret",
+        details: { password: "secret", url: "http://commander/cgi-bin/CGILink?cmd=vAppInfo&cookie=secret-cookie" },
+        correlationId: "corr-001",
+      }),
+    });
+    assert.equal(recordedError.response.status, 201);
+    assert.equal(recordedError.body.severity, "critical");
+    assert.equal(recordedError.body.details.password, "***");
+    assert.equal(recordedError.body.details.url.includes("cookie=***"), true);
+
+    const errorLog = await json("/api/errors");
+    assert.equal(errorLog.response.status, 200);
+    assert.equal(errorLog.body.summary.highestOpenSeverity, "critical");
+    assert.ok(errorLog.body.errors.some((item) => item.id === recordedError.body.id));
+
+    const errorNotifications = await json("/api/notifications");
+    assert.ok(errorNotifications.body.items.some((item) => item.id === "error_log_open"));
+
+    const resolvedError = await json("/api/errors/resolve", {
+      method: "POST",
+      body: JSON.stringify({ id: recordedError.body.id, resolution: { note: "resolved in e2e" } }),
+    });
+    assert.equal(resolvedError.response.status, 200);
+    assert.equal(resolvedError.body.status, "resolved");
+
     const bundle = await json("/api/diagnostics/bundle", { method: "POST", body: JSON.stringify({}) });
     assert.equal(bundle.response.status, 201);
     assert.equal(bundle.body.ok, true);
@@ -771,6 +803,8 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(names.includes("inbound_message_queued"));
     assert.ok(names.includes("usage_reports_replayed"));
     assert.ok(names.includes("offline_queue_replayed"));
+    assert.ok(names.includes("error_log_recorded"));
+    assert.ok(names.includes("error_log_resolved"));
     assert.ok(names.includes("storage_policy_updated"));
     assert.ok(names.includes("runtime_backup_created"));
     assert.ok(names.includes("storage_retention_applied"));

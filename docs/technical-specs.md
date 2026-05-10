@@ -23,6 +23,7 @@ Tables:
 - `schema_migrations`
 - `app_state`
 - `activity_log`
+- `error_log`
 - `outbound_queue`
 - `sync_attempts`
 - `conflicts`
@@ -35,7 +36,7 @@ Tables:
 - `usage_events`
 - storage policy and backup status in encrypted app state
 
-Activity logging records `api_request_completed` for API request/response visibility. Business events such as queue replay, connector activation, inbound messages, diagnostics bundle creation, and sales queries are recorded separately.
+Activity logging records `api_request_completed` for API request/response visibility. Business events such as queue replay, connector activation, inbound messages, diagnostics bundle creation, and sales queries are recorded separately. The dedicated `error_log` table stores unresolved/resolved operational failures with severity, source, operation, entity ID, redacted details, correlation ID, and resolution status.
 
 Runtime JSON content is encrypted at rest with AES-256-GCM. The SQLite table names remain visible, but app state, queue payloads, chat audit content, activity metadata, diagnostics bundles, and sales item details are stored as encrypted JSON blobs.
 
@@ -127,9 +128,14 @@ Set `DISABLE_HEARTBEAT_WORKER=true` to disable automatic reconnect for controlle
 ```http
 GET /api/notifications
 GET /api/readiness
+GET /api/errors
+POST /api/errors
+POST /api/errors/resolve
 ```
 
 Notifications are computed from current local state. They flag disconnected Verifone status, password action, failed/pending queue work, missing marketplace activation, and missing local sales data.
+
+The error log is the support-facing failure ledger. Commander pull failures, PDK faults, write-back verification failures, heartbeat worker failures, queue replay failures, and unexpected API exceptions are recorded there. Open errors also appear in `/api/notifications`; resolved errors are retained until retention cleanup.
 
 Readiness is a machine-readable go-live checklist. It reports critical blockers, warnings, and per-check status for local login, Shre Auth configuration, tenant/workspace/store activation, connector signing secret, entitlement, Verifone validation, sales data, queue health, and usage billing configuration.
 

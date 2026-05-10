@@ -17,6 +17,20 @@ interface ActivityRow {
   created_at: string;
 }
 
+interface ErrorLogRow {
+  id: string;
+  severity: string;
+  source: string;
+  operation: string;
+  entity_id: string | null;
+  message: string;
+  safe_details_json: string;
+  correlation_id: string | null;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 interface QueueRow {
   id: string;
   target: string;
@@ -163,9 +177,97 @@ export class RuntimeStore {
     };
   }
 
+  recordError(item: {
+    severity: string;
+    source: string;
+    operation: string;
+    entityId?: string;
+    message: string;
+    details?: JsonObject;
+    correlationId?: string;
+    status?: string;
+  }): JsonObject {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const severity = normalizeErrorSeverity(item.severity);
+    const status = item.status === "resolved" ? "resolved" : "open";
+    this.db.prepare(`
+      insert into error_log (
+        id, severity, source, operation, entity_id, message, safe_details_json,
+        correlation_id, status, created_at, resolved_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      severity,
+      item.source,
+      item.operation,
+      item.entityId || null,
+      item.message.slice(0, 1000),
+      this.stringifyJson(item.details || {}),
+      item.correlationId || null,
+      status,
+      now,
+      status === "resolved" ? now : null,
+    );
+    return this.errorLogItem(id)!;
+  }
+
+  errorLog(limit = 100, status = "open"): JsonObject[] {
+    const normalizedStatus = ["open", "resolved", "all"].includes(status) ? status : "open";
+    const rows = this.db.prepare(`
+      select id, severity, source, operation, entity_id, message, safe_details_json,
+             correlation_id, status, created_at, resolved_at
+      from error_log
+      where (? = 'all' or status = ?)
+      order by created_at desc, rowid desc
+      limit ?
+    `).all(normalizedStatus, normalizedStatus, limit) as ErrorLogRow[];
+    return rows.map((row) => this.mapErrorLogRow(row));
+  }
+
+  errorSummary(): JsonObject {
+    const rows = this.db.prepare(`
+      select status, severity, count(*) as count
+      from error_log
+      group by status, severity
+    `).all() as Array<{ status: string; severity: string; count: number }>;
+    const open = this.errorLog(10, "open");
+    const totals = rows.reduce((acc, row) => {
+      const key = `${row.status}_${row.severity}`;
+      acc[key] = row.count;
+      acc.total = Number(acc.total || 0) + row.count;
+      if (row.status === "open") acc.open = Number(acc.open || 0) + row.count;
+      return acc;
+    }, {} as JsonObject);
+    return {
+      ...totals,
+      highestOpenSeverity: highestErrorSeverity(open),
+      recentOpen: open,
+    };
+  }
+
+  resolveError(id: string, details: JsonObject = {}): JsonObject | null {
+    const now = new Date().toISOString();
+    const existing = this.errorLogItem(id);
+    if (!existing) return null;
+    const safeDetails = {
+      ...asJsonObject(existing.details as JsonValue),
+      resolution: details,
+      resolvedAt: now,
+    };
+    this.db.prepare(`
+      update error_log
+      set status = 'resolved', resolved_at = ?, safe_details_json = ?
+      where id = ?
+    `).run(now, this.stringifyJson(safeDetails), id);
+    return this.errorLogItem(id);
+  }
+
   storageAnalysis(retentionDays: number, runtimeBytes: number, freeBytes: number | null): JsonObject {
     const tables = [
       { name: "activity_log", countSql: "select count(*) as count from activity_log", bytesSql: "select coalesce(sum(length(metadata_json)), 0) as bytes from activity_log", dateSql: "select min(created_at) as oldest, max(created_at) as newest from activity_log" },
+      { name: "error_log", countSql: "select count(*) as count from error_log", bytesSql: "select coalesce(sum(length(safe_details_json) + length(message)), 0) as bytes from error_log", dateSql: "select min(created_at) as oldest, max(created_at) as newest from error_log" },
       { name: "outbound_queue", countSql: "select count(*) as count from outbound_queue", bytesSql: "select coalesce(sum(length(payload_json)), 0) as bytes from outbound_queue", dateSql: "select min(created_at) as oldest, max(created_at) as newest from outbound_queue" },
       { name: "diagnostic_bundles", countSql: "select count(*) as count from diagnostic_bundles", bytesSql: "select coalesce(sum(length(bundle_json)), 0) as bytes from diagnostic_bundles", dateSql: "select min(created_at) as oldest, max(created_at) as newest from diagnostic_bundles" },
       { name: "chat_audit_log", countSql: "select count(*) as count from chat_audit_log", bytesSql: "select coalesce(sum(length(message_text) + length(response_json)), 0) as bytes from chat_audit_log", dateSql: "select min(created_at) as oldest, max(created_at) as newest from chat_audit_log" },
@@ -253,6 +355,7 @@ export class RuntimeStore {
     const cutoff = new Date(Date.now() - Math.max(retentionDays, 1) * 86_400_000).toISOString();
     const deletions = [
       ["activity_log", this.db.prepare("delete from activity_log where created_at < ?").run(cutoff).changes],
+      ["error_log", this.db.prepare("delete from error_log where created_at < ? and status = 'resolved'").run(cutoff).changes],
       ["diagnostic_bundles", this.db.prepare("delete from diagnostic_bundles where created_at < ?").run(cutoff).changes],
       ["chat_audit_log", this.db.prepare("delete from chat_audit_log where created_at < ?").run(cutoff).changes],
       ["usage_events", this.db.prepare("delete from usage_events where created_at < ? and status in ('reported', 'report_failed')").run(cutoff).changes],
@@ -1122,6 +1225,32 @@ export class RuntimeStore {
     };
   }
 
+  private errorLogItem(id: string): JsonObject | null {
+    const row = this.db.prepare(`
+      select id, severity, source, operation, entity_id, message, safe_details_json,
+             correlation_id, status, created_at, resolved_at
+      from error_log
+      where id = ?
+    `).get(id) as ErrorLogRow | undefined;
+    return row ? this.mapErrorLogRow(row) : null;
+  }
+
+  private mapErrorLogRow(row: ErrorLogRow): JsonObject {
+    return {
+      id: row.id,
+      severity: row.severity,
+      source: row.source,
+      operation: row.operation,
+      entityId: row.entity_id || "",
+      message: row.message,
+      details: this.parseJson(row.safe_details_json) as JsonObject,
+      correlationId: row.correlation_id || "",
+      status: row.status,
+      createdAt: row.created_at,
+      resolvedAt: row.resolved_at,
+    };
+  }
+
   private migrate(): void {
     this.db.exec(`
       create table if not exists schema_migrations (
@@ -1143,6 +1272,23 @@ export class RuntimeStore {
         metadata_json text not null,
         created_at text not null
       );
+
+      create table if not exists error_log (
+        id text primary key,
+        severity text not null,
+        source text not null,
+        operation text not null,
+        entity_id text,
+        message text not null,
+        safe_details_json text not null,
+        correlation_id text,
+        status text not null,
+        created_at text not null,
+        resolved_at text
+      );
+
+      create index if not exists idx_error_log_status_severity
+      on error_log (status, severity, created_at);
 
       create table if not exists outbound_queue (
         id text primary key,
@@ -1270,6 +1416,18 @@ export class RuntimeStore {
 function asJsonObject(value: JsonValue | undefined): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as JsonObject;
+}
+
+function normalizeErrorSeverity(value: string): string {
+  const severity = value.toLowerCase();
+  if (["critical", "warning", "info"].includes(severity)) return severity;
+  return "warning";
+}
+
+function highestErrorSeverity(items: JsonObject[]): string {
+  const rank: Record<string, number> = { critical: 3, warning: 2, info: 1 };
+  const top = items.reduce((highest, item) => Math.max(highest, rank[String(item.severity)] || 0), 0);
+  return top === 3 ? "critical" : top === 2 ? "warning" : top === 1 ? "info" : "ok";
 }
 
 function securePath(path: string, mode: number): void {

@@ -84,6 +84,46 @@ function badRequest(res: ServerResponse, message: string): void {
   sendJson(res, 400, { error: message });
 }
 
+function recordErrorLog(severity: string, source: string, operation: string, message: string, details: JsonObject = {}, correlationId = "", entityId = ""): JsonObject {
+  return store.recordError({
+    severity,
+    source,
+    operation,
+    entityId,
+    message: redactSensitiveText(message),
+    details: sanitizeErrorDetails(details),
+    correlationId,
+  });
+}
+
+function sanitizeErrorDetails(details: JsonObject): JsonObject {
+  const scrub = (value: JsonValue): JsonValue => {
+    if (Array.isArray(value)) return value.slice(0, 25).map(scrub);
+    if (value && typeof value === "object") {
+      const output: JsonObject = {};
+      for (const [key, child] of Object.entries(value)) {
+        const lower = key.toLowerCase();
+        if (["password", "passwd", "cookie", "token", "key", "secret", "authorization", "applicationkey"].some((item) => lower.includes(item))) {
+          output[key] = "***";
+        } else {
+          output[key] = scrub(child as JsonValue);
+        }
+      }
+      return output;
+    }
+    if (typeof value === "string") return redactSensitiveText(value).slice(0, 2000);
+    return value;
+  };
+  return scrub(details) as JsonObject;
+}
+
+function redactSensitiveText(value: string): string {
+  return value
+    .replace(/(passwd|password|user|username|token|key|cookie|secret)=([^&\s]+)/gi, "$1=***")
+    .replace(/(authorization:\s*basic\s+)[A-Za-z0-9+/=._:-]+/gi, "$1***")
+    .replace(/<\s*(Password|Passwd|Cookie|Token|Secret|Key)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "<$1>***</$1>");
+}
+
 function isMutating(method: string | undefined): boolean {
   return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
 }
@@ -656,6 +696,7 @@ async function pullCommanderReport(body: JsonObject = {}): Promise<JsonObject> {
       lastReportType: reportType,
     });
     store.appendActivity("commander_report_pull_failed", { businessDate, reportType, attempts: attempts.length, message });
+    recordErrorLog("warning", "verifone-commander", "pull-report", message, { businessDate, reportType, attempts }, "", `${reportType}:${businessDate}`);
     return { ok: false, status: "failed", reportType, businessDate, message, attempts };
   } finally {
     store.releaseCommanderLease(owner);
@@ -1015,6 +1056,15 @@ async function executePdkCommand(body: JsonObject): Promise<JsonObject> {
       ok,
       statusCode: response.status,
     });
+    if (!ok) {
+      recordErrorLog("warning", "verifone-pdk", definition.id, summarizeCommanderFault(text) || `PDK command failed with HTTP ${response.status}`, {
+        commandId: definition.id,
+        cmd: definition.cmd,
+        category: definition.category,
+        statusCode: response.status,
+        fault: isCommanderFault(text) ? summarizeCommanderFault(text) : null,
+      }, "", definition.id);
+    }
     return {
       ok,
       status: ok ? "completed" : "failed",
@@ -1117,6 +1167,17 @@ async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
       status: finalStatus,
       verificationStatus: verifyResult.status,
     });
+    if (!complete) {
+      recordErrorLog(
+        finalStatus === "failed" ? "critical" : "warning",
+        "commander-writeback",
+        commandId,
+        String(verifyResult.message || writeResult.message || "Commander write-back did not verify."),
+        { queueId: queueItem.id, entityType, entityId, finalStatus, write: summarizePdkExecution(writeResult), verification: summarizePdkExecution(verifyResult) },
+        "",
+        entityId,
+      );
+    }
     return {
       ok: complete,
       status: finalStatus,
@@ -1136,6 +1197,7 @@ async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
       error: message,
     });
     store.appendActivity("commander_writeback_failed", { queueId: queueItem.id, commandId, message });
+    recordErrorLog("critical", "commander-writeback", commandId, message, { queueId: queueItem.id, entityType, entityId }, "", entityId);
     return { ok: false, status: "failed", queueItem: updated, message };
   }
 }
@@ -1370,7 +1432,9 @@ function startHeartbeatWorker(): void {
     try {
       runHeartbeatWorkerOnce();
     } catch (error) {
-      store.appendActivity("heartbeat_worker_failed", { error: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      store.appendActivity("heartbeat_worker_failed", { error: message });
+      recordErrorLog("warning", "heartbeat-worker", "heartbeat-check", message);
     }
   };
   setTimeout(tick, Math.min(5_000, heartbeatWorkerIntervalMs)).unref();
@@ -1798,6 +1862,7 @@ function currentNotifications(): JsonObject {
   const auth = authState();
   const usage = store.usageSummary(25);
   const mode = accessMode();
+  const errors = store.errorSummary();
 
   if (!connection.commanderUrl || !connection.username || !connection.password) {
     items.push(notification(
@@ -1850,6 +1915,17 @@ function currentNotifications(): JsonObject {
       "Queue has pending work",
       `${queue.pending} queue item(s) are waiting to process.`,
       "Open queue",
+    ));
+  }
+
+  if (Number(errors.open || 0) > 0) {
+    const highest = String(errors.highestOpenSeverity || "warning");
+    items.push(notification(
+      "error_log_open",
+      highest === "critical" ? "critical" : "warning",
+      "Open error log items",
+      `${errors.open} unresolved error(s) need review.`,
+      "Open health error log",
     ));
   }
 
@@ -2647,6 +2723,20 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       failed: items.filter((item) => asObject(item).status === "failed").length,
       completed: items.filter((item) => asObject(item).status === "completed").length,
     });
+    const failedItems = items.filter((item) => asObject(item).status === "failed").map((item) => asObject(item));
+    if (failedItems.length > 0) {
+      recordErrorLog("critical", "offline-queue", "replay", "One or more queue items failed replay.", {
+        failedCount: failedItems.length,
+        failedItems: failedItems.map((item) => ({
+          id: item.id,
+          target: item.target,
+          operation: item.operation,
+          entityType: item.entityType,
+          entityId: item.entityId,
+          lastError: item.lastError,
+        })),
+      });
+    }
     sendJson(res, 200, result);
     return;
   }
@@ -2695,6 +2785,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       messages: "/api/messages/inbound",
       messageContract: "/api/messages/contract",
       activity: "/api/activity",
+      errors: "/api/errors",
       messageAudit: "/api/messages/audit",
       notifications: "/api/notifications",
       readiness: "/api/readiness",
@@ -2718,6 +2809,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       shreSignupActivate: "/api/shre/signup-activate",
       commanderWriteBack: "/api/commander/writeback",
       activitySummary: store.activitySummary(),
+      errorSummary: store.errorSummary(),
     });
     return;
   }
@@ -2910,6 +3002,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       verifoneStatus: store.getJson("connections", "verifone-status", null),
       passwordStatus: store.getJson("connections", "password-status", null),
       queue: store.queueSummary(),
+      errors: store.errorLog(200, "all"),
       activity: store.activity(200),
     };
     const saved = store.saveDiagnosticBundle(bundle);
@@ -2920,6 +3013,49 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/activity") {
     sendJson(res, 200, { events: store.activity(250) });
+    return;
+  }
+
+  if (path === "/api/errors") {
+    if (req.method === "GET") {
+      const status = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`).searchParams.get("status") || "open";
+      sendJson(res, 200, { summary: store.errorSummary(), errors: store.errorLog(250, status) });
+      return;
+    }
+    if (req.method === "POST") {
+      try {
+        const body = asObject(await requestBody(req));
+        const errorLog = recordErrorLog(
+          typeof body.severity === "string" ? body.severity : "warning",
+          typeof body.source === "string" ? body.source : "manual",
+          typeof body.operation === "string" ? body.operation : "manual",
+          requireString(body, "message"),
+          asObject(body.details || {}),
+          typeof body.correlationId === "string" ? body.correlationId : "",
+          typeof body.entityId === "string" ? body.entityId : "",
+        );
+        store.appendActivity("error_log_recorded", { id: errorLog.id, severity: errorLog.severity, source: errorLog.source });
+        sendJson(res, 201, errorLog);
+      } catch (error) {
+        badRequest(res, error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+  }
+
+  if (path === "/api/errors/resolve" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const resolved = store.resolveError(requireString(body, "id"), asObject(body.resolution || {}));
+      if (!resolved) {
+        sendJson(res, 404, { error: "Error log item not found" });
+        return;
+      }
+      store.appendActivity("error_log_resolved", { id: resolved.id, severity: resolved.severity, source: resolved.source });
+      sendJson(res, 200, resolved);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
     return;
   }
 
@@ -3304,7 +3440,13 @@ async function main(): Promise<void> {
       });
     });
     handleRequest(req, res, url.pathname).catch((error: unknown) => {
-      sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      const errorLog = recordErrorLog("critical", "dashboard-api", `${req.method || "GET"} ${url.pathname}`, message, {
+        requestId,
+        path: url.pathname,
+        method: req.method || "GET",
+      }, requestId);
+      sendJson(res, 500, { error: redactSensitiveText(message), errorId: errorLog.id, requestId });
     });
   });
   server.listen(port, host, () => {
