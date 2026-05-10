@@ -99,6 +99,18 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       res.end(`<?xml version="1.0"?><NAXML-FuelTankStockReport><BusinessDate>2026-05-09</BusinessDate><TankStockDetail><TankID>1</TankID><TankName>Regular</TankName><GrossVolume>1200.5</GrossVolume><WaterVolume>0.5</WaterVolume></TankStockDetail></NAXML-FuelTankStockReport>`);
       return;
     }
+    if (req.url.includes("plu-domain")) {
+      res.end(`<?xml version="1.0"?><domain:PLUs page="1" ofPages="1" xmlns:domain="urn:vfi-sapphire:np.domain.2001-07-01"><domain:PLU><upc>00011122233344</upc><upcModifier>000</upcModifier><description>SAMPLE COFFEE</description><department>30</department><price>2.49</price><SellUnit>1.000</SellUnit></domain:PLU></domain:PLUs>`);
+      return;
+    }
+    if (req.url.includes("item-maintenance")) {
+      res.end(`<?xml version="1.0"?><NAXML-MaintenanceRequest version="3.4" xmlns="http://www.naxml.org/POSBO/Vocabulary/2003-10-16"><ItemMaintenance><TableAction type="update"/><RecordAction type="addchange"/><ITTDetail><ItemCode><POSCodeFormat format="PLU"/><POSCode>00000000001234</POSCode><POSCodeModifier>000</POSCodeModifier></ItemCode><ITTData><MerchandiseCode>91</MerchandiseCode><RegularSellPrice>3.99</RegularSellPrice><Description>SAMPLE BAG</Description><SellingUnits>1.000</SellingUnits></ITTData></ITTDetail></ItemMaintenance></NAXML-MaintenanceRequest>`);
+      return;
+    }
+    if (req.url.includes("fuelprices")) {
+      res.end(`<?xml version="1.0"?><fuel:fuelPrices xmlns:fuel="urn:vfi-sapphire:fuel.2001-10-01"><fuelProducts maxSize="2"><fuelProduct sysid="1" name="REG" NAXMLFuelGradeID="1"><prices><price tier="1" servLevel="1" mop="1">3.469</price></prices></fuelProduct></fuelProducts></fuel:fuelPrices>`);
+      return;
+    }
     res.end(`<?xml version="1.0"?><NAXML-MovementReport><BusinessDate>2026-05-09</BusinessDate><MerchandiseCodeMovement><MCMDetail><ItemCode>100</ItemCode><ItemDescription>Coffee</ItemDescription><SalesAmount>77.50</SalesAmount><SalesQuantity>31</SalesQuantity></MCMDetail></MerchandiseCodeMovement><TotalSales>1842.55</TotalSales><TransactionCount>74</TransactionCount></NAXML-MovementReport>`);
   });
   const shreAuthServer = createServer(async (req, res) => {
@@ -367,6 +379,34 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const commanderEntities = await json("/api/verifone/entities?reportType=tank");
     assert.equal(commanderEntities.response.status, 200);
     assert.equal(commanderEntities.body.entities.some((item) => item.reportType === "tank" && item.entityKey === "1"), true);
+
+    const domainPluPull = await json("/api/verifone/pull-report", {
+      method: "POST",
+      body: JSON.stringify({ reportType: "plu", endpoint: "/reports/plu-domain", businessDate: "2026-05-09" }),
+    });
+    assert.equal(domainPluPull.response.status, 200);
+    assert.equal(domainPluPull.body.report.reportType, "plu");
+    assert.equal(domainPluPull.body.report.normalized.totals.itemCount >= 1, true);
+
+    const itemMaintenancePull = await json("/api/verifone/pull-report", {
+      method: "POST",
+      body: JSON.stringify({ reportType: "maintenance", endpoint: "/reports/item-maintenance", businessDate: "2026-05-09" }),
+    });
+    assert.equal(itemMaintenancePull.response.status, 200);
+    assert.equal(itemMaintenancePull.body.report.reportType, "plu");
+
+    const fuelPricesPull = await json("/api/verifone/pull-report", {
+      method: "POST",
+      body: JSON.stringify({ reportType: "fuel", endpoint: "/reports/fuelprices", businessDate: "2026-05-09" }),
+    });
+    assert.equal(fuelPricesPull.response.status, 200);
+    assert.equal(fuelPricesPull.body.report.reportType, "fuel");
+    assert.equal(fuelPricesPull.body.report.normalized.totals.fuelProductCount, 1);
+    assert.equal(fuelPricesPull.body.report.normalized.totals.priceCount, 1);
+
+    const sampleEntities = await json("/api/verifone/entities?reportType=plu");
+    assert.equal(sampleEntities.body.entities.some((item) => item.entityKey === "00011122233344" && item.price === 2.49), true);
+    assert.equal(sampleEntities.body.entities.some((item) => item.entityKey === "00000000001234" && item.price === 3.99), true);
 
     const pdkCatalog = await json("/api/verifone/pdk/commands");
     assert.equal(pdkCatalog.response.status, 200);

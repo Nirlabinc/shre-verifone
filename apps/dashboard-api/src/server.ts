@@ -838,7 +838,17 @@ function xmlRootName(xml: string): string {
 function classifyConexxusReport(xml: string, requestedType: string, rootName: string): string {
   const haystack = `${rootName} ${xml.slice(0, 4000)}`.toLowerCase();
   if (haystack.includes("movementreport") || haystack.includes("merchandisecodemovement") || haystack.includes("retailtransaction")) return "sales";
-  if (haystack.includes("plu") || haystack.includes("pricebook") || haystack.includes("pluconfig") || haystack.includes("plumaintenance")) return "plu";
+  if (
+    haystack.includes("plu")
+    || haystack.includes("pricebook")
+    || haystack.includes("pluconfig")
+    || haystack.includes("plumaintenance")
+    || haystack.includes("itemmaintenance")
+    || haystack.includes("ittdetail")
+    || haystack.includes("poscode")
+  ) return "plu";
+  if (haystack.includes("itemlist")) return "item_list";
+  if (haystack.includes("mixmatch")) return "promotion";
   if (haystack.includes("department") || haystack.includes("dept")) return "department";
   if (haystack.includes("category")) return "category";
   if (haystack.includes("tax")) return "tax";
@@ -847,7 +857,14 @@ function classifyConexxusReport(xml: string, requestedType: string, rootName: st
   if (haystack.includes("esafe") || haystack.includes("safecontent")) return "esafe";
   if (haystack.includes("carwash") || haystack.includes("car wash")) return "carwash";
   if (haystack.includes("fueltankstock") || haystack.includes("tankstock") || haystack.includes("atg")) return "tank";
-  if (haystack.includes("fuelgrademovement") || haystack.includes("fgmdetail") || haystack.includes("fuelgrade")) return "fuel";
+  if (
+    haystack.includes("fuelgrademovement")
+    || haystack.includes("fgmdetail")
+    || haystack.includes("fuelgrade")
+    || haystack.includes("fuelprices")
+    || haystack.includes("fuelconfig")
+    || haystack.includes("fuelproduct")
+  ) return "fuel";
   if (haystack.includes("batchsummary") || haystack.includes("batchmovement") || haystack.includes("batch")) return "batch";
   if (haystack.includes("journal")) return "journal";
   return requestedType;
@@ -868,7 +885,7 @@ function normalizeConexxusXml(xml: string, reportType: string, businessDate: str
 function normalizeConexxusTotals(xml: string, reportType: string): JsonObject {
   if (reportType === "plu" || reportType === "item") {
     return {
-      itemCount: countTags(xml, ["PLU", "Item", "PricebookItem", "MerchandiseCodeMovement"]),
+      itemCount: countTags(xml, ["PLU", "Item", "PricebookItem", "MerchandiseCodeMovement", "ItemMaintenance", "ITTDetail", "POSCode"]),
       salesAmount: matchXmlNumber(xml, ["SalesAmount", "ItemSalesAmount", "TotalSales", "NetSales"]) || 0,
       salesQuantity: matchXmlNumber(xml, ["SalesQuantity", "Quantity", "ItemSalesQuantity"]) || 0,
     };
@@ -917,8 +934,11 @@ function normalizeConexxusTotals(xml: string, reportType: string): JsonObject {
   }
   if (reportType === "fuel") {
     return {
+      fuelProductCount: countTags(xml, ["FuelProduct"]),
+      priceCount: countTags(xml, ["Price"]),
       fuelGradeSalesVolume: matchXmlNumber(xml, ["FuelGradeSalesVolume", "SalesVolume", "FuelSalesVolume"]) || 0,
       fuelGradeSalesAmount: matchXmlNumber(xml, ["FuelGradeSalesAmount", "SalesAmount", "FuelSalesAmount"]) || 0,
+      firstPrice: matchXmlNumber(xml, ["Price", "price"]) || 0,
     };
   }
   if (reportType === "batch") {
@@ -940,11 +960,11 @@ function normalizeConexxusRecords(xml: string, reportType: string): JsonValue[] 
   const recordNames = reportType === "tank"
     ? ["TankStockDetail", "Tank", "TankRecord"]
     : reportType === "fuel"
-      ? ["FGMDetail", "FuelGradeMovement", "FuelGradeRecord"]
+      ? ["FGMDetail", "FuelGradeMovement", "FuelGradeRecord", "FuelProduct"]
       : reportType === "batch"
         ? ["BatchDetail", "BatchSummary", "BatchRecord"]
         : reportType === "plu" || reportType === "item"
-          ? ["PLU", "PricebookItem", "Item", "MCMDetail", "ItemLine"]
+          ? ["ITTDetail", "PLU", "PricebookItem", "ItemMaintenance", "Item", "MCMDetail", "ItemLine"]
           : reportType === "department"
             ? ["Department", "DepartmentMovement", "DepartmentSummary", "DeptDetail"]
             : reportType === "category"
@@ -998,16 +1018,29 @@ function extractXmlRecords(xml: string, names: string[], limit: number): JsonVal
     while ((match = pattern.exec(xml)) && records.length < limit) {
       records.push({
         recordType: name,
-        id: findXmlText(match[0], ["ID", "TankID", "FuelGradeID", "BatchID", "TransactionID", "ItemCode", "PLUCode", "DepartmentID", "CategoryID", "TenderID", "CashierID"]) || "",
-        name: findXmlText(match[0], ["Name", "Description", "FuelGradeName", "TankName", "ItemDescription", "DepartmentDescription", "CategoryDescription", "TenderName", "CashierName"]) || "",
-        amount: matchXmlNumber(match[0], ["Amount", "SalesAmount", "TotalAmount", "NetSales", "PaymentAmount", "TenderAmount", "TaxAmount"]) || 0,
-        quantity: matchXmlNumber(match[0], ["Quantity", "SalesQuantity", "Volume", "FuelGradeSalesVolume", "TransactionCount", "Count"]) || 0,
+        id: findXmlText(match[0], ["ID", "SysID", "sysid", "TankID", "FuelGradeID", "NAXMLFuelGradeID", "BatchID", "TransactionID", "ItemCode", "PLUCode", "POSCode", "UPC", "upc", "pcode", "DepartmentID", "MerchandiseCode", "CategoryID", "TenderID", "CashierID"]) || findXmlAttribute(match[0], ["sysid", "id", "NAXMLFuelGradeID"]) || "",
+        name: findXmlText(match[0], ["Name", "Description", "description", "FuelGradeName", "TankName", "ItemDescription", "DepartmentDescription", "CategoryDescription", "TenderName", "CashierName"]) || findXmlAttribute(match[0], ["name"]) || "",
+        amount: matchXmlNumber(match[0], ["Amount", "amount", "SalesAmount", "TotalAmount", "NetSales", "PaymentAmount", "TenderAmount", "TaxAmount"]) || 0,
+        quantity: matchXmlNumber(match[0], ["Quantity", "SalesQuantity", "Volume", "FuelGradeSalesVolume", "TransactionCount", "Count", "SellingUnits", "SellUnit"]) || 0,
         price: matchXmlNumber(match[0], ["Price", "RegularSellPrice", "UnitPrice", "CurrentPrice"]) || 0,
+        department: findXmlText(match[0], ["Department", "department", "MerchandiseCode"]) || "",
+        modifier: findXmlText(match[0], ["POSCodeModifier", "upcModifier"]) || "",
       });
     }
     if (records.length >= limit) break;
   }
   return records;
+}
+
+function findXmlAttribute(xml: string, names: string[]): string | null {
+  const openTag = xml.match(/<[^>]+>/);
+  if (!openTag) return null;
+  for (const name of names) {
+    const pattern = new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, "i");
+    const match = openTag[0].match(pattern);
+    if (match) return match[1].trim();
+  }
+  return null;
 }
 
 function normalizeSalesJson(value: JsonValue, businessDate: string): JsonObject | null {
