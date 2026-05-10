@@ -176,6 +176,24 @@ The E2E test starts the dashboard API against a temporary runtime folder and ver
 docker compose -f infra/docker-compose.yml up --build
 ```
 
+Run with the legacy CStoreSKU/Varifone sidecar:
+
+```powershell
+$env:CSTORESKU_LEGACY_IMAGE="varifone-service:latest"
+$env:CSTORESKU_LEGACY_PLATFORM="linux/amd64"
+docker compose -f infra/docker-compose.yml --profile cstoresku up --build
+```
+
+This sidecar profile requires Docker Compose v2 with named-volume `subpath` support.
+
+The sidecar shares the protected runtime volume and receives the original CStoreSKU mount shape:
+
+```text
+/app/DataSource -> /runtime/cstoresku-runtime/DataSource
+/app/xml        -> /runtime/cstoresku-runtime/xml
+/app/logs       -> /runtime/cstoresku-runtime/logs
+```
+
 ## Configuration
 
 Runtime files live under:
@@ -191,6 +209,7 @@ Expected future configuration:
 runtime.sqlite
 logs/
 diagnostics/
+cstoresku-runtime/
 ```
 
 ## Data Policy

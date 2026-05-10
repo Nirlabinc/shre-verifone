@@ -2000,6 +2000,49 @@ function normalizeCstoreskuCommanderUrl(value: string): string {
   return withScheme.endsWith("/") ? withScheme : `${withScheme}/`;
 }
 
+function legacyPasswordDeriveBytes32(): Buffer {
+  const salt = Buffer.from("E#1tValue", "ascii");
+  const password = Buffer.from("epsARpr@se", "utf8");
+  const base = createHash("md5").update(Buffer.concat([password, salt])).digest();
+  const block1 = createHash("md5").update(base).digest();
+  const block2 = createHash("md5").update(Buffer.concat([Buffer.from("1", "ascii"), base])).digest();
+  return Buffer.concat([block1, block2]);
+}
+
+function legacyCstoreskuBase32(bytes: Buffer): string {
+  const alphabet = "QAZ2WSX3EDC4RFV5TGB6YHN7UJM8K9LP";
+  let output = "";
+  let bitPosition = 5;
+  let byteIndex = 0;
+  while (byteIndex < bytes.length) {
+    let value: number;
+    if (bitPosition > 8) {
+      value = bytes[byteIndex++] >> (bitPosition - 5);
+      if (byteIndex !== bytes.length) {
+        value = ((((bytes[byteIndex] << (16 - bitPosition)) & 0xff) >> 3) | value) & 0xff;
+      }
+      bitPosition -= 3;
+    } else if (bitPosition === 8) {
+      value = bytes[byteIndex++] >> 3;
+      bitPosition -= 3;
+    } else {
+      value = ((bytes[byteIndex] << (8 - bitPosition)) & 0xff) >> 3;
+      bitPosition += 5;
+    }
+    output += alphabet[value];
+  }
+  return output;
+}
+
+function protectLegacyCstoreskuValue(value: string): string {
+  const cipher = createCipheriv(
+    "aes-256-cbc",
+    legacyPasswordDeriveBytes32(),
+    Buffer.from("@6S2c3D4e8F6g7L8", "ascii"),
+  );
+  return legacyCstoreskuBase32(Buffer.concat([cipher.update(value, "utf8"), cipher.final()]));
+}
+
 function legacyCstoreskuConfigXml(connection: JsonObject): string {
   const commanderUrl = normalizeCstoreskuCommanderUrl(String(connection.commanderUrl || ""));
   const username = String(connection.username || "");
@@ -2011,9 +2054,9 @@ function legacyCstoreskuConfigXml(connection: JsonObject): string {
     `<?xml version="1.0" encoding="utf-8"?>`,
     `<VerifoneServers>`,
     `  <VerifoneServer>`,
-    `    <VL>${xmlEscape(commanderUrl)}</VL>`,
-    `    <VU>${xmlEscape(username)}</VU>`,
-    `    <VP>${xmlEscape(password)}</VP>`,
+    `    <VL>${xmlEscape(protectLegacyCstoreskuValue(commanderUrl))}</VL>`,
+    `    <VU>${xmlEscape(protectLegacyCstoreskuValue(username))}</VU>`,
+    `    <VP>${xmlEscape(protectLegacyCstoreskuValue(password))}</VP>`,
     `    <ApplicationKey>${xmlEscape(applicationKey)}</ApplicationKey>`,
     `  </VerifoneServer>`,
     `</VerifoneServers>`,
@@ -2035,7 +2078,7 @@ async function exportCstoreskuRuntimeConfig(connection: JsonObject): Promise<Jso
     dataSourcePath: dataSourceRoot,
     configPath,
     configShape: "DataSource/DatabaseServers.xml",
-    credentialFormat: "legacy_plaintext_xml_local_runtime",
+    credentialFormat: "legacy_cstoresku_aes_base32",
     sync,
   };
 }

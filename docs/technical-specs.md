@@ -124,11 +124,31 @@ POST /api/cstoresku/export-xml
 POST /api/cstoresku/export-tlog
 ```
 
-`POST /api/cstoresku/export-config` writes `DataSource/DatabaseServers.xml` with the legacy fields `VL`, `VU`, `VP`, and `ApplicationKey`. Values are sourced from the local encrypted Verifone/CStoreSKU setup and written only into the local protected runtime folder used by the legacy connector. `VL` is normalized with an HTTP scheme and trailing slash because the original config tool did the same.
+`POST /api/cstoresku/export-config` writes `DataSource/DatabaseServers.xml` with the legacy fields `VL`, `VU`, `VP`, and `ApplicationKey`. Values are sourced from the local encrypted Verifone/CStoreSKU setup and written only into the local protected runtime folder used by the legacy connector. `VL`, `VU`, and `VP` are serialized with the original CStoreSKU AES-CBC/custom-Base32 format. `ApplicationKey` remains plain because that is how the legacy config tool writes it. `VL` is normalized with an HTTP scheme and trailing slash because the original config tool did the same.
 
 `POST /api/cstoresku/export-xml` stages the latest or requested raw Commander XML report from encrypted SQLite into `xml/<reportType>/...xml`. `POST /api/cstoresku/export-tlog` stages transaction-log style XML into `xml/tlog/...xml`. Both endpoints enqueue a `cstoresku-xml` audit item with report id, report type, root name, file path, and SHA-256 so support can trace what was handed to the CStoreSKU side.
 
 The data split is intentional: CStoreSKU receives native Commander XML, while chat/model tools read normalized local SQLite rows. Raw XML is not exposed to chat flows.
+
+Linux and macOS deployment should run the original CStoreSKU/Varifone service as a container sidecar instead of installing it directly on the host. The compose profile is:
+
+```bash
+CSTORESKU_LEGACY_IMAGE=varifone-service:latest \
+CSTORESKU_LEGACY_PLATFORM=linux/amd64 \
+docker compose -f infra/docker-compose.yml --profile cstoresku up --build
+```
+
+This profile requires Docker Compose v2 with named-volume `subpath` support because the legacy image expects three separate mount targets while the platform keeps one protected runtime volume.
+
+The `dashboard-api` container uses `CSTORESKU_RUNTIME_ROOT=/runtime/cstoresku-runtime`. The sidecar mounts the same volume subfolders to the paths the original image expects:
+
+```text
+/app/DataSource
+/app/xml
+/app/logs
+```
+
+If the legacy image is only available as `linux/amd64`, Apple Silicon and ARM Linux can run it through Docker emulation by leaving `CSTORESKU_LEGACY_PLATFORM=linux/amd64`. For production ARM edge hardware, prefer publishing a true `linux/arm64` image and changing `CSTORESKU_LEGACY_PLATFORM=linux/arm64`.
 
 Set `COMMANDER_SALES_ENDPOINTS` to a comma-separated list of endpoint paths when a site-specific Commander report/API path is known. The dashboard also exposes `Sales Pull Path` in Verifone setup. Pending writes are not involved; this is read-only ingest and obeys Commander access mode.
 

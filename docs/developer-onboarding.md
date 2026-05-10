@@ -100,6 +100,9 @@ $env:VERIFONE_SHRE_HOME="C:\temp\verifone-shre"
 ```text
 PORT=5480
 VERIFONE_SHRE_HOME=
+CSTORESKU_RUNTIME_ROOT=
+CSTORESKU_LEGACY_IMAGE=varifone-service:latest
+CSTORESKU_LEGACY_PLATFORM=linux/amd64
 CONNECTOR_REGISTRY_URL=https://connector.aros.live
 CONNECTOR_SHARED_SECRET=
 HOST=127.0.0.1
@@ -113,6 +116,24 @@ COMMANDER_ACCESS_MODE=read_only
 SHRE_BOOTSTRAP_KEY=
 SHRE_AUTH_SIGNUP_URL=https://shre-auth.aros.live/api/connectors/verifone-commander/signup-activate
 ```
+
+## CStoreSKU Legacy Sidecar
+
+The default local stack starts only the Phase 2 services:
+
+```powershell
+docker compose -f infra/docker-compose.yml up --build
+```
+
+To include the original CStoreSKU/Varifone connector, enable the `cstoresku` profile:
+
+```powershell
+$env:CSTORESKU_LEGACY_IMAGE="varifone-service:latest"
+$env:CSTORESKU_LEGACY_PLATFORM="linux/amd64"
+docker compose -f infra/docker-compose.yml --profile cstoresku up --build
+```
+
+The dashboard writes the legacy encrypted `DataSource/DatabaseServers.xml` and staged XML under `/runtime/cstoresku-runtime`. The sidecar mounts those folders into `/app/DataSource`, `/app/xml`, and `/app/logs`.
 
 Installer/onboarding field ownership is tracked in [Installation Data Map](installation-data-map.md). Use that document when adding installer prompts, first-run setup fields, activation-token exchange, or support scripts.
 

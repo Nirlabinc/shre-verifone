@@ -8,6 +8,7 @@ services:
       PORT: "5480"
       HOST: "0.0.0.0"
       VERIFONE_SHRE_HOME: /runtime
+      CSTORESKU_RUNTIME_ROOT: /runtime/cstoresku-runtime
       SHRE_ENDPOINT: ${SHRE_ENDPOINT:-https://apiauth.shre.ai}
       SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://events.shre.ai}
       SHRE_TENANT_ID: ${SHRE_TENANT_ID:-}
@@ -23,6 +24,42 @@ services:
       - verifone-shre-runtime:/runtime
     ports:
       - "127.0.0.1:5480:5480"
+    restart: unless-stopped
+
+  cstoresku-runtime-init:
+    image: alpine:3.20
+    command: ["sh", "-c", "mkdir -p /runtime/cstoresku-runtime/DataSource /runtime/cstoresku-runtime/xml /runtime/cstoresku-runtime/logs && chmod -R 700 /runtime/cstoresku-runtime"]
+    volumes:
+      - verifone-shre-runtime:/runtime
+    profiles:
+      - cstoresku
+
+  cstoresku-legacy:
+    image: ${CSTORESKU_LEGACY_IMAGE:-varifone-service:latest}
+    platform: ${CSTORESKU_LEGACY_PLATFORM:-linux/amd64}
+    depends_on:
+      cstoresku-runtime-init:
+        condition: service_completed_successfully
+      dashboard-api:
+        condition: service_started
+    volumes:
+      - type: volume
+        source: verifone-shre-runtime
+        target: /app/DataSource
+        volume:
+          subpath: cstoresku-runtime/DataSource
+      - type: volume
+        source: verifone-shre-runtime
+        target: /app/xml
+        volume:
+          subpath: cstoresku-runtime/xml
+      - type: volume
+        source: verifone-shre-runtime
+        target: /app/logs
+        volume:
+          subpath: cstoresku-runtime/logs
+    profiles:
+      - cstoresku
     restart: unless-stopped
 
   shre-connector:

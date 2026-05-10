@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtemp, rm, access, stat } from "node:fs/promises";
+import { mkdtemp, rm, access, stat, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHmac, randomUUID } from "node:crypto";
@@ -326,7 +326,14 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const cstoreskuConfig = await json("/api/cstoresku/export-config", { method: "POST", body: JSON.stringify({}) });
     assert.equal(cstoreskuConfig.response.status, 200);
     assert.equal(cstoreskuConfig.body.configShape, "DataSource/DatabaseServers.xml");
+    assert.equal(cstoreskuConfig.body.credentialFormat, "legacy_cstoresku_aes_base32");
     await access(cstoreskuConfig.body.configPath);
+    const cstoreskuConfigXml = await readFile(cstoreskuConfig.body.configPath, "utf8");
+    assert.match(cstoreskuConfigXml, /<VerifoneServers>/);
+    assert.match(cstoreskuConfigXml, /<VL>[QAZ2WSX3EDC4RFV5TGB6YHN7UJM8K9LP]+<\/VL>/);
+    assert.match(cstoreskuConfigXml, /<VU>TNALWF7FAHK2L8TQLRBR6TVXEX<\/VU>/);
+    assert.match(cstoreskuConfigXml, /<VP>2L9J4VJ3HYGEWPL8F9BTUVP7NA<\/VP>/);
+    assert.match(cstoreskuConfigXml, /<ApplicationKey>updated-cstoresku-key<\/ApplicationKey>/);
 
     const verifoneStatus = await json("/api/verifone/status");
     assert.equal(verifoneStatus.response.status, 200);
