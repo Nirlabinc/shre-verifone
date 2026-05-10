@@ -29,6 +29,7 @@ const uiRoot = resolve("apps/dashboard-ui");
 const landingRoot = resolve("apps/product-landing");
 const portalRoot = resolve("apps/access-portal");
 const chatRoot = resolve("apps/chat-ui");
+const downloadsRoot = resolve("scripts");
 let store: RuntimeStore;
 
 const retentionOptions = [7, 14, 30, 60, 90, 180, 365];
@@ -4526,6 +4527,29 @@ async function serveChat(res: ServerResponse): Promise<void> {
   res.end(html);
 }
 
+async function serveDownload(res: ServerResponse, path: string): Promise<void> {
+  const allowed: Record<string, string> = {
+    "/downloads/install-oneclick.ps1": "install-oneclick.ps1",
+    "/downloads/install-oneclick.sh": "install-oneclick.sh",
+    "/downloads/install-oneclick-aarch64.sh": "install-oneclick-aarch64.sh",
+    "/downloads/install-oneclick-android-termux.sh": "install-oneclick-android-termux.sh",
+  };
+  const fileName = allowed[path];
+  if (!fileName) {
+    sendJson(res, 404, { error: "Download not found" });
+    return;
+  }
+  const body = await readFile(join(downloadsRoot, fileName), "utf8");
+  res.writeHead(200, {
+    "content-type": fileName.endsWith(".ps1") ? "text/plain; charset=utf-8" : "application/x-sh; charset=utf-8",
+    "content-disposition": `attachment; filename="${fileName}"`,
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+  });
+  res.end(body);
+}
+
 async function main(): Promise<void> {
   await ensureRuntime();
   store = new RuntimeStore(runtimeRoot, { connectorRegistryUrl });
@@ -4578,6 +4602,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, path: st
   }
   if (path === "/chat" || path === "/chat/") {
     await serveChat(res);
+    return;
+  }
+  if (path.startsWith("/downloads/")) {
+    await serveDownload(res, path);
     return;
   }
   await serveUi(res);

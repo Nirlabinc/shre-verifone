@@ -13,3 +13,4 @@ runtime/
 *.sqlite-shm
 *.sqlite-wal
 coverage/
+.tools/

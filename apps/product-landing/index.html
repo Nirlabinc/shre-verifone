@@ -48,6 +48,10 @@
     .lead-form .wide { grid-column:1 / -1; }
     .lead-form button { justify-self:start; border:0; border-radius:6px; padding:11px 15px; background:var(--blue); color:#fff; font-weight:700; cursor:pointer; }
     .form-status { color:var(--muted); align-self:center; }
+    .download { display:grid; gap:10px; }
+    .download a { display:flex; justify-content:space-between; gap:12px; align-items:center; border:1px solid var(--line); background:#fff; color:var(--ink); text-decoration:none; border-radius:8px; padding:14px 16px; font-weight:650; }
+    .download a span { color:var(--muted); font-weight:400; font-size:13px; }
+    .download a:hover { border-color:#9eb8eb; }
     footer { border-top:1px solid var(--line); padding:22px 6vw; color:var(--muted); }
     @media (max-width:760px){ .preview-grid{grid-template-columns:1fr}.side{display:none}.metrics{grid-template-columns:1fr}.lead-form{grid-template-columns:1fr} nav{align-items:flex-start;gap:10px;flex-direction:column} }
   </style>
@@ -91,6 +95,16 @@
       <div class="card"><h3>2. Activate</h3><p>Sign up through Shre Auth, map tenant/workspace/store, and configure Commander credentials.</p></div>
       <div class="card"><h3>3. Validate</h3><p>Ping Commander, pull XML, export CStoreSKU config, and review readiness.</p></div>
       <div class="card"><h3>4. Go Live</h3><p>Enable sidecar, monitor health, use messenger, and backfill queue/usage when connectivity returns.</p></div>
+    </div>
+  </section>
+  <section id="downloads">
+    <h2>Download Installer</h2>
+    <div class="download">
+      <a href="/downloads/install-oneclick.ps1">Windows PowerShell Installer <span>Windows 10/11 store PC</span></a>
+      <a href="/downloads/install-oneclick.sh">macOS Intel / Linux Installer <span>macOS Intel, Ubuntu, Debian, Fedora</span></a>
+      <a href="/downloads/install-oneclick-aarch64.sh">ARM64 / aarch64 Installer <span>Linux ARM64 edge device</span></a>
+      <a href="/downloads/install-oneclick-android-termux.sh">Android Termux Installer <span>Experimental Android pilot</span></a>
+      <a href="https://github.com/Nirpat3/Verifone-Commander-Shre-Cstoresku">GitHub Repository <span>Docs, releases, and source</span></a>
     </div>
   </section>
   <section id="lead">
