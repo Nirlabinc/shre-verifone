@@ -64,3 +64,35 @@ Do not fine-tune on:
 7. Keep model answers grounded in local tools; do not let fine-tuned memory override SQLite/Commander facts.
 
 This keeps the edge app local-first while allowing Shre AI to improve routing and language quality across tenants with explicit governance.
+
+## ShreAI Mesh Alignment
+
+The Shre SDK repo uses three relevant contracts:
+
+- `mesh`: nodes have role, services, health, and failover metadata.
+- `tool-memory`: successful tool selections are learned as intent/domain/tool patterns.
+- `training`: approved conversation records use `{ source, agentId, messages, quality, model, tenantId, taskType, domain, conversationType, meta }`.
+
+This app exposes matching edge-compute endpoints:
+
+```http
+GET  /api/shre/mesh/node
+POST /api/shre/mesh/register
+GET  /api/learning/export
+POST /api/learning/export
+```
+
+`POST /api/shre/mesh/register` stores the local edge node identity and queues a `mesh.edge.registered` event for Shre events ingestion. `POST /api/learning/export` converts approved local learning examples into Shre training-record shape and queues them for Shre training ingestion.
+
+Each deployed store PC should therefore be treated as a Shre edge node:
+
+```text
+edge node
+-> Commander XML ingest/writeback
+-> local SQLite facts
+-> MCP tools
+-> learning candidates
+-> approved Shre training/RAG/tool-memory export
+```
+
+Raw XML remains local. Approved export records include `meta.rawXmlIncluded=false`.

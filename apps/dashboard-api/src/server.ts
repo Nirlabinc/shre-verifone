@@ -1723,6 +1723,7 @@ function mcpTools(): JsonObject {
     protocol: "mcp-compatible-tool-contract",
     transport: "local-http and stdio",
     stdioCommand: "npm run start:mcp",
+    launch: mcpClientConfig(),
     tools: [
       { name: "verifone.sales.query", endpoint: "/api/sales/query", mutating: false, scopes: ["sales.read"] },
       { name: "verifone.commander.data_query", endpoint: "/api/commander/data-query", mutating: false, scopes: ["commander.local.read", "inventory.read", "fuel.read", "tank.read"] },
@@ -1734,6 +1735,108 @@ function mcpTools(): JsonObject {
       { name: "verifone.fcc.status", endpoint: "/api/addons/fcc/status", mutating: false, scopes: ["fcc.status.read"], optionalAddOn: true },
       { name: "verifone.loyalty.status", endpoint: "/api/addons/loyalty/status", mutating: false, scopes: ["loyalty.status.read"], optionalAddOn: true },
     ],
+  };
+}
+
+function mcpClientConfig(): JsonObject {
+  const cwd = process.cwd();
+  const baseUrl = localBaseUrlFromString("");
+  return {
+    claudeDesktop: {
+      mcpServers: {
+        "verifone-commander-shre-cstoresku": {
+          command: "node",
+          args: ["dist/services/mcp-server/src/server.js"],
+          cwd,
+          env: {
+            LOCAL_API_URL: baseUrl,
+            LOCAL_ADMIN_TOKEN: "${LOCAL_ADMIN_TOKEN}",
+            MCP_ENABLE_WRITES: "false",
+          },
+        },
+      },
+    },
+    codex: {
+      command: "node",
+      args: ["dist/services/mcp-server/src/server.js"],
+      cwd,
+      env: {
+        LOCAL_API_URL: baseUrl,
+        LOCAL_ADMIN_TOKEN: "${LOCAL_ADMIN_TOKEN}",
+        MCP_ENABLE_WRITES: "false",
+      },
+    },
+  };
+}
+
+function edgeNodeId(): string {
+  const registration = store.connectorStatus();
+  return String(registration.storeId || registration.tenantId || hostname()).replace(/[^a-zA-Z0-9_.-]+/g, "-").toLowerCase();
+}
+
+function shreMeshNode(): JsonObject {
+  const registration = store.connectorStatus();
+  const profile = store.getJson<JsonObject>("profile", "current", {});
+  const sync = syncState();
+  return {
+    id: `edge-verifone-${edgeNodeId()}`,
+    hostname: hostname(),
+    role: "edge",
+    app: "verifone_cstoresku",
+    connectorId: registration.connectorId || "verifone-commander",
+    tenantId: registration.tenantId || "",
+    workspaceId: registration.workspaceId || "",
+    storeId: registration.storeId || "",
+    storeName: profile.dba || profile.storeName || "",
+    services: [
+      "verifone-commander",
+      "verifone-commander-mcp",
+      "commander-local-db",
+      "commander-learning-candidates",
+    ],
+    localBaseUrl: localBaseUrlFromString(""),
+    mcp: {
+      command: "npm run start:mcp",
+      toolsEndpoint: "/api/mcp/tools",
+    },
+    status: {
+      connector: registration.status || "local_only",
+      sync,
+      entitlement: entitlementState(),
+    },
+    capabilities: {
+      rawXmlForCstoresku: true,
+      normalizedDbForChat: true,
+      mcpStdio: true,
+      learningCandidates: true,
+      trainingExportRequiresApproval: true,
+    },
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+function shreTrainingRecordFromExample(example: JsonObject): JsonObject {
+  return {
+    source: "verifone-commander-shre-cstoresku",
+    agentId: "verifone-commander-edge",
+    messages: [
+      { role: "user", content: String(example.inputText || "") },
+      { role: "assistant", content: String(example.outputText || "") },
+    ],
+    quality: null,
+    model: "local-tool-router",
+    tenantId: String(example.tenantId || "unknown"),
+    taskType: String(example.intent || "commander_query"),
+    domain: "cstore-pos",
+    conversationType: "chat",
+    meta: {
+      workspaceConsent: "unknown",
+      storeId: example.storeId || "",
+      toolName: example.toolName || "",
+      approvedAt: example.approvedAt || "",
+      rawXmlIncluded: false,
+      edgeNodeId: shreMeshNode().id,
+    },
   };
 }
 
@@ -3211,6 +3314,41 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/mcp/client-config") {
+    sendJson(res, 200, mcpClientConfig());
+    return;
+  }
+
+  if (path === "/api/shre/mesh/node") {
+    sendJson(res, 200, shreMeshNode());
+    return;
+  }
+
+  if (path === "/api/shre/mesh/register" && req.method === "POST") {
+    const node = shreMeshNode();
+    store.setJson("shre-mesh", "node", node);
+    store.enqueue({
+      target: "shre-events",
+      entityType: "mesh_node",
+      entityId: String(node.id),
+      operation: "register_edge_node",
+      payload: {
+        endpoint: process.env.SHRE_EVENTS_ENDPOINT || "https://events.shre.ai/v1/events/batch",
+        event: {
+          eventId: randomUUID(),
+          eventName: "mesh.edge.registered",
+          entityType: "mesh_node",
+          entityId: node.id,
+          occurredAt: new Date().toISOString(),
+          data: node,
+        },
+      },
+    });
+    store.appendActivity("shre_mesh_node_registered", { id: node.id, tenantId: node.tenantId, storeId: node.storeId });
+    sendJson(res, 200, { status: "registered_locally", node, queuedForShre: true });
+    return;
+  }
+
   if (path === "/api/remote-access") {
     if (req.method === "GET") {
       sendJson(res, 200, remoteAccessStatus());
@@ -3687,6 +3825,31 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     }
     store.appendActivity("learning_example_approved", { id, intent: example.intent });
     sendJson(res, 200, example);
+    return;
+  }
+
+  if (path === "/api/learning/export") {
+    const approved = store.learningExamples(100, "approved");
+    const records = approved.map(shreTrainingRecordFromExample);
+    if (req.method === "POST") {
+      for (const record of records) {
+        const entityId = createHash("sha256").update(JSON.stringify(record)).digest("hex").slice(0, 16);
+        store.enqueue({
+          target: "shre-training",
+          entityType: "training_record",
+          entityId,
+          operation: "write_training_data",
+          payload: {
+            endpoint: process.env.SHRE_TRAINING_ENDPOINT || "shre-sdk/training.writeTrainingData",
+            record,
+          },
+        });
+      }
+      store.appendActivity("learning_examples_export_queued", { count: records.length });
+      sendJson(res, 200, { status: "queued", count: records.length, records });
+      return;
+    }
+    sendJson(res, 200, { status: "preview", count: records.length, records });
     return;
   }
 

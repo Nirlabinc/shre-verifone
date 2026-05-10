@@ -199,9 +199,14 @@ GET  /api/adapters
 GET  /api/remote-access
 POST /api/remote-access
 GET  /api/mcp/tools
+GET  /api/mcp/client-config
+GET  /api/shre/mesh/node
+POST /api/shre/mesh/register
 ```
 
-FCC and Loyalty are marketplace add-ons. They are disabled by default and depend on `verifone-commander`. `/api/adapters` reports core/add-on/future adapter readiness for the edge device. `/api/remote-access` stores Cloudflare or equivalent tunnel metadata. `/api/mcp/tools` exposes the local HTTP and stdio tool contract. The stdio MCP server runs with `npm run start:mcp` and wraps the same local APIs.
+FCC and Loyalty are marketplace add-ons. They are disabled by default and depend on `verifone-commander`. `/api/adapters` reports core/add-on/future adapter readiness for the edge device. `/api/remote-access` stores Cloudflare or equivalent tunnel metadata. `/api/mcp/tools` exposes the local HTTP and stdio tool contract. The stdio MCP server runs with `npm run start:mcp` and wraps the same local APIs. `/api/mcp/client-config` returns Claude Desktop/Codex launch snippets.
+
+Each installed edge machine can register as a ShreAI mesh node through `/api/shre/mesh/register`. The local node record follows the Shre SDK mesh model: edge role, services, tenant/workspace/store mapping, local MCP command, health/status, and capabilities. Registration queues a Shre event instead of requiring cloud connectivity on the critical path.
 
 All local Commander-facing work should be:
 

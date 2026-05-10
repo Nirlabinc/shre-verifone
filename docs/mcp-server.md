@@ -45,3 +45,34 @@ MCP is read-only by default. Writeback requires all of the following:
 - write-back verification succeeds
 
 Raw Commander XML is not exposed through MCP tools. Chat/model clients receive normalized JSON answers and entity rows.
+
+## Claude Desktop
+
+After `npm run build`, add this server to Claude Desktop's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "verifone-commander-shre-cstoresku": {
+      "command": "node",
+      "args": ["dist/services/mcp-server/src/server.js"],
+      "cwd": "C:\\Users\\NiravPatel\\OneDrive - RapidRMS\\Desktop\\Verifone-Commander-Shre-Cstoresku",
+      "env": {
+        "LOCAL_API_URL": "http://127.0.0.1:5480",
+        "LOCAL_ADMIN_TOKEN": "",
+        "MCP_ENABLE_WRITES": "false"
+      }
+    }
+  }
+}
+```
+
+The running API also returns generated launch snippets:
+
+```http
+GET /api/mcp/client-config
+```
+
+## Codex Or Other MCP Clients
+
+Use the same command, args, cwd, and env values returned by `/api/mcp/client-config`. Keep `MCP_ENABLE_WRITES=false` unless the operator explicitly enables write mode and Commander write-back verification.

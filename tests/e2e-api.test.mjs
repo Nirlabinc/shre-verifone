@@ -630,6 +630,21 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const mcpTools = await json("/api/mcp/tools");
     assert.equal(mcpTools.response.status, 200);
     assert.ok(mcpTools.body.tools.some((tool) => tool.name === "verifone.fcc.status"));
+    assert.equal(mcpTools.body.launch.claudeDesktop.mcpServers["verifone-commander-shre-cstoresku"].command, "node");
+
+    const mcpClientConfig = await json("/api/mcp/client-config");
+    assert.equal(mcpClientConfig.response.status, 200);
+    assert.equal(mcpClientConfig.body.claudeDesktop.mcpServers["verifone-commander-shre-cstoresku"].env.MCP_ENABLE_WRITES, "false");
+
+    const meshNode = await json("/api/shre/mesh/node");
+    assert.equal(meshNode.response.status, 200);
+    assert.equal(meshNode.body.role, "edge");
+    assert.equal(meshNode.body.capabilities.mcpStdio, true);
+
+    const meshRegister = await json("/api/shre/mesh/register", { method: "POST", body: "{}" });
+    assert.equal(meshRegister.response.status, 200);
+    assert.equal(meshRegister.body.status, "registered_locally");
+    assert.equal(meshRegister.body.queuedForShre, true);
 
     const manifest = await json("/api/connector/manifest");
     assert.equal(manifest.response.status, 200);
@@ -761,6 +776,11 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     });
     assert.equal(approveLearning.response.status, 200);
     assert.equal(approveLearning.body.status, "approved");
+
+    const learningExport = await json("/api/learning/export", { method: "POST", body: "{}" });
+    assert.equal(learningExport.response.status, 200);
+    assert.equal(learningExport.body.status, "queued");
+    assert.ok(learningExport.body.records.every((record) => record.meta.rawXmlIncluded === false));
 
     const usageReplay = await json("/api/usage/replay", { method: "POST", body: JSON.stringify({}) });
     assert.equal(usageReplay.response.status, 200);
