@@ -86,6 +86,22 @@ interface CommanderReportRow {
   created_at: string;
 }
 
+interface CommanderEntityRow {
+  id: string;
+  report_id: string;
+  report_type: string;
+  business_date: string | null;
+  entity_type: string;
+  entity_key: string | null;
+  entity_name: string | null;
+  amount: number;
+  quantity: number;
+  price: number;
+  payload_json: string;
+  source: string;
+  created_at: string;
+}
+
 interface NonceRow {
   nonce: string;
   expires_at: string;
@@ -870,6 +886,7 @@ export class RuntimeStore {
       this.stringifyJson(report.normalized),
       now,
     );
+    const entityCount = this.saveCommanderEntities(id, report.reportType, businessDate, report.source, report.normalized, now);
     return {
       id,
       reportType: report.reportType,
@@ -877,7 +894,63 @@ export class RuntimeStore {
       source: report.source,
       rootName: report.rootName || null,
       normalized: report.normalized,
+      entityCount,
       createdAt: now,
+    };
+  }
+
+  commanderEntities(limit = 100, reportType = "", entityType = ""): JsonObject[] {
+    const filters: string[] = [];
+    const params: JsonValue[] = [];
+    if (reportType) {
+      filters.push("report_type = ?");
+      params.push(reportType);
+    }
+    if (entityType) {
+      filters.push("entity_type = ?");
+      params.push(entityType);
+    }
+    const where = filters.length ? `where ${filters.join(" and ")}` : "";
+    const rows = this.db.prepare(`
+      select id, report_id, report_type, business_date, entity_type, entity_key,
+             entity_name, amount, quantity, price, payload_json, source, created_at
+      from commander_report_entities
+      ${where}
+      order by created_at desc, rowid desc
+      limit ?
+    `).all(...params, limit) as CommanderEntityRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      reportId: row.report_id,
+      reportType: row.report_type,
+      businessDate: row.business_date,
+      entityType: row.entity_type,
+      entityKey: row.entity_key || "",
+      entityName: row.entity_name || "",
+      amount: row.amount,
+      quantity: row.quantity,
+      price: row.price,
+      payload: this.parseJson(row.payload_json) as JsonObject,
+      source: row.source,
+      createdAt: row.created_at,
+    }));
+  }
+
+  commanderEntitySummary(): JsonObject {
+    const rows = this.db.prepare(`
+      select report_type, entity_type, count(*) as count, max(created_at) as newest
+      from commander_report_entities
+      group by report_type, entity_type
+      order by report_type asc, entity_type asc
+    `).all() as Array<{ report_type: string; entity_type: string; count: number; newest: string }>;
+    return {
+      total: rows.reduce((sum, row) => sum + row.count, 0),
+      byType: rows.map((row) => ({
+        reportType: row.report_type,
+        entityType: row.entity_type,
+        count: row.count,
+        newestAt: row.newest,
+      })),
     };
   }
 
@@ -918,6 +991,7 @@ export class RuntimeStore {
     return {
       total: rows.reduce((sum, row) => sum + row.count, 0),
       byType: rows.map((row) => ({ reportType: row.report_type, count: row.count, newestAt: row.newest })),
+      entities: this.commanderEntitySummary(),
     };
   }
 
@@ -1251,6 +1325,45 @@ export class RuntimeStore {
     };
   }
 
+  private saveCommanderEntities(reportId: string, reportType: string, businessDate: string, source: string, normalized: JsonObject, createdAt: string): number {
+    const records = Array.isArray(normalized.records) ? normalized.records : [];
+    if (records.length === 0) return 0;
+    const insert = this.db.prepare(`
+      insert into commander_report_entities (
+        id, report_id, report_type, business_date, entity_type, entity_key,
+        entity_name, amount, quantity, price, payload_json, source, created_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const tx = this.db.transaction((items: JsonValue[]) => {
+      let count = 0;
+      for (const item of items) {
+        const record = asJsonObject(item);
+        const entityType = String(record.recordType || reportType || "record");
+        const entityKey = typeof record.id === "string" && record.id ? record.id : null;
+        const entityName = typeof record.name === "string" && record.name ? record.name : null;
+        insert.run(
+          randomUUID(),
+          reportId,
+          reportType,
+          businessDate,
+          entityType,
+          entityKey,
+          entityName,
+          numericJson(record.amount),
+          numericJson(record.quantity),
+          numericJson(record.price),
+          this.stringifyJson(record),
+          source,
+          createdAt,
+        );
+        count += 1;
+      }
+      return count;
+    });
+    return tx(records);
+  }
+
   private migrate(): void {
     this.db.exec(`
       create table if not exists schema_migrations (
@@ -1379,6 +1492,26 @@ export class RuntimeStore {
       create index if not exists idx_commander_reports_type_date
       on commander_reports (report_type, business_date, created_at);
 
+      create table if not exists commander_report_entities (
+        id text primary key,
+        report_id text not null,
+        report_type text not null,
+        business_date text,
+        entity_type text not null,
+        entity_key text,
+        entity_name text,
+        amount real not null default 0,
+        quantity real not null default 0,
+        price real not null default 0,
+        payload_json text not null,
+        source text not null,
+        created_at text not null,
+        foreign key(report_id) references commander_reports(id)
+      );
+
+      create index if not exists idx_commander_entities_lookup
+      on commander_report_entities (report_type, entity_type, entity_key, business_date, created_at);
+
       create table if not exists connector_nonces (
         nonce text primary key,
         expires_at text not null,
@@ -1428,6 +1561,15 @@ function highestErrorSeverity(items: JsonObject[]): string {
   const rank: Record<string, number> = { critical: 3, warning: 2, info: 1 };
   const top = items.reduce((highest, item) => Math.max(highest, rank[String(item.severity)] || 0), 0);
   return top === 3 ? "critical" : top === 2 ? "warning" : top === 1 ? "info" : "ok";
+}
+
+function numericJson(value: JsonValue | undefined): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[$,]/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
 }
 
 function securePath(path: string, mode: number): void {

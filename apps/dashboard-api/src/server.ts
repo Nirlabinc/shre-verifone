@@ -2232,6 +2232,7 @@ function capabilitiesInfo(): JsonObject {
       pdkCatalog: true,
       pdkCommandTotal: pdkCommandCatalog.length,
       localLoginApiGuard: true,
+      typedLocalProjections: true,
       conexxusFamilies: ["sales", "batch", "fuel", "tank", "journal", "plu", "department", "category", "tax", "payment", "cashier", "payroll", "esafe", "carwash", "loyalty"],
     },
     timestamp: new Date().toISOString(),
@@ -2717,6 +2718,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/verifone/entities") {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    sendJson(res, 200, {
+      summary: store.commanderEntitySummary(),
+      entities: store.commanderEntities(
+        Number(url.searchParams.get("limit") || 100),
+        url.searchParams.get("reportType") || "",
+        url.searchParams.get("entityType") || "",
+      ),
+    });
+    return;
+  }
+
   if (path === "/api/verifone/pdk/commands") {
     sendJson(res, 200, {
       total: pdkCommandCatalog.length,
@@ -2923,6 +2937,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       heartbeat: "/api/verifone/heartbeat",
       heartbeatWorker: "/api/heartbeat/worker",
       verifonePing: "/api/verifone/ping",
+      verifoneEntities: "/api/verifone/entities",
       storagePolicy: "/api/storage/policy",
       storageAnalysis: "/api/storage/analysis",
       storageBackup: "/api/storage/backup",

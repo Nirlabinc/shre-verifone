@@ -41,7 +41,7 @@ function Invoke-Smoke {
 
   $version = Invoke-RestMethod -Uri "http://localhost:$Port/api/version" -Method Get -TimeoutSec 5
   $capabilities = Invoke-RestMethod -Uri "http://localhost:$Port/api/capabilities" -Method Get -TimeoutSec 5
-  if ($capabilities.capabilities.errorLog -ne $true -or $capabilities.capabilities.commanderWriteBack -ne $true -or $capabilities.capabilities.pdkCommandTotal -lt 200) {
+  if ($capabilities.capabilities.errorLog -ne $true -or $capabilities.capabilities.commanderWriteBack -ne $true -or $capabilities.capabilities.typedLocalProjections -ne $true -or $capabilities.capabilities.pdkCommandTotal -lt 200) {
     throw "Smoke failed: current capabilities do not match the expected build. The old process may still be active."
   }
   try {

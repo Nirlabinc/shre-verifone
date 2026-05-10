@@ -362,6 +362,11 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const commanderReports = await json("/api/verifone/reports");
     assert.equal(commanderReports.response.status, 200);
     assert.equal(commanderReports.body.summary.total >= 2, true);
+    assert.equal(commanderReports.body.summary.entities.total >= 2, true);
+
+    const commanderEntities = await json("/api/verifone/entities?reportType=tank");
+    assert.equal(commanderEntities.response.status, 200);
+    assert.equal(commanderEntities.body.entities.some((item) => item.reportType === "tank" && item.entityKey === "1"), true);
 
     const pdkCatalog = await json("/api/verifone/pdk/commands");
     assert.equal(pdkCatalog.response.status, 200);
@@ -382,6 +387,8 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     });
     assert.equal(pdkPlu.response.status, 200);
     assert.equal(pdkPlu.body.report.reportType, "plu");
+    const pluEntities = await json("/api/verifone/entities?reportType=plu");
+    assert.equal(pluEntities.body.entities.some((item) => item.entityKey === "sku-001"), true);
     assert.equal(commanderRequests.some((request) => request.url.includes("cmd=validate")), true);
     assert.equal(commanderRequests.some((request) => request.url.includes("cmd=vAppInfo") && request.url.includes("cookie=mock-cookie-001")), true);
 

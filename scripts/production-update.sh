@@ -81,7 +81,7 @@ if [[ -n "$EXPECTED_VERSION" ]] && ! echo "$version_json" | grep -q "\"version\"
 fi
 
 capabilities_json="$(curl -fsS "http://localhost:$PORT/api/capabilities")"
-if ! echo "$capabilities_json" | grep -q '"errorLog"[[:space:]]*:[[:space:]]*true' || ! echo "$capabilities_json" | grep -q '"commanderWriteBack"[[:space:]]*:[[:space:]]*true' || ! echo "$capabilities_json" | grep -Eq '"pdkCommandTotal"[[:space:]]*:[[:space:]]*2[0-9][0-9]'; then
+if ! echo "$capabilities_json" | grep -q '"errorLog"[[:space:]]*:[[:space:]]*true' || ! echo "$capabilities_json" | grep -q '"commanderWriteBack"[[:space:]]*:[[:space:]]*true' || ! echo "$capabilities_json" | grep -q '"typedLocalProjections"[[:space:]]*:[[:space:]]*true' || ! echo "$capabilities_json" | grep -Eq '"pdkCommandTotal"[[:space:]]*:[[:space:]]*2[0-9][0-9]'; then
   echo "Smoke failed: current capabilities do not match expected build, old API process may still be running." >&2
   exit 1
 fi

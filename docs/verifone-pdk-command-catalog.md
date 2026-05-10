@@ -110,3 +110,11 @@ If no explicit or default verification rule exists, the write is not marked comp
 Commands beginning with `u`, `c`, `changepasswd`, or `send` are treated as mutating. They are blocked in `read_only` mode.
 
 Read XML normalization currently classifies and maps sales/movement, batch, fuel, tank, journal, PLU/item, department/category, tax, network/payment/VIPER, cashier/payroll, eSafe, car wash, and loyalty-style payloads into Conexxus/NAXML-aligned JSON while preserving raw XML as the source of record.
+
+Normalized records are projected into `commander_report_entities` and exposed at:
+
+```http
+GET /api/verifone/entities
+```
+
+Use `reportType`, `entityType`, and `limit` query parameters for local queries and dashboard/chat tooling.
