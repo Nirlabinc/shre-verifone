@@ -89,6 +89,7 @@ API:
 POST /api/verifone/pull-sales
 POST /api/sales/snapshot
 POST /api/sales/query
+POST /api/commander/data-query
 POST /api/messages/inbound
 GET  /api/messages/contract
 ```
@@ -101,7 +102,13 @@ Set `COMMANDER_SALES_ENDPOINTS` to a comma-separated list of endpoint paths when
 
 `/api/messages/inbound` classifies sales questions and returns an immediate local SQLite answer when a matching snapshot exists. If no local sales data exists, it queues the request and returns `requiresDataSource: true`.
 
-Inbound messages are normalized from canonical local payloads and common gateway payloads. Supported source aliases include ShreChat, message gateway, WhatsApp, Claude/Anthropic, Codex/OpenAI, and Shre CLI. Every accepted message returns `gatewayResponse` for connector.aros.live or a future relay to send back to the user.
+`/api/commander/data-query` is the generic local database query surface for normalized Commander data such as PLU/item, fuel price, tank, batch, payment, tax, department, and category records. It reads `commander_report_entities` only; it does not expose raw encrypted Commander XML.
+
+Inbound messages are normalized from canonical local payloads and common gateway payloads. Supported source aliases include ShreChat, message gateway, WhatsApp, Claude/Anthropic, Codex/OpenAI, and Shre CLI. Every accepted message returns `gatewayResponse` for connector.aros.live or a future relay to send back to the user. The intended routing split is:
+
+- CStoreSKU sync uses native Commander XML from `commander_reports` for TLog/config/read-write interchange.
+- Shre Chat and model tools use local SQLite summaries/entities through connector tools such as `/api/sales/query` and `/api/commander/data-query`.
+- Raw XML is not sent to chat/model flows unless a future entitlement and redaction policy explicitly allows it.
 
 ## Verifone Heartbeat
 

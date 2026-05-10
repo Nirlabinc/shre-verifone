@@ -705,6 +705,7 @@ export class RuntimeStore {
           name: "Verifone Commander Local Dashboard",
           toolIds: [
             "verifone:sales-query",
+            "verifone:commander-data-query",
             "verifone:queue-sync",
             "verifone:health-check",
             "verifone:password-status",
@@ -729,6 +730,13 @@ export class RuntimeStore {
           mutating: false,
           endpoint: `${localBaseUrl}/api/sales/query`,
           scopes: ["sales.read", "sales.summary.read"],
+        },
+        {
+          id: "verifone:commander-data-query",
+          name: "Query normalized local Commander data",
+          mutating: false,
+          endpoint: `${localBaseUrl}/api/commander/data-query`,
+          scopes: ["commander.local.read", "inventory.read", "fuel.read", "tank.read"],
         },
         {
           id: "verifone:queue-sync",

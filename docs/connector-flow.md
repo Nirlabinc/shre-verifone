@@ -81,6 +81,12 @@ The local install remains the system of action.
 - Cloud can enrich, route, and learn from approved data, but does not need to be in the critical path for local operations.
 - If remote entitlement is suspended or deactivated, local data capture continues but chat/cloud relay and metered Shre actions are blocked until reactivated.
 
+## Data Routing Rules
+
+- CStoreSKU receives native Commander XML for TLog/config/read-write sync. The local XML source of record is `commander_reports`, and write-back still goes through `/api/commander/writeback` with read-back verification.
+- Shre Chat, Claude, Codex, WhatsApp, and other message gateways query the local database through connector tools. Sales questions use `/api/sales/query`; PLU/item/fuel/tank/batch/payment/tax style questions use `/api/commander/data-query`.
+- Model/chat flows receive normalized JSON answers and entity rows, not raw XML. This keeps Commander credentials, raw payload structure, and customer XML files local unless a future approved data-sharing scope is added.
+
 ## Current Implemented Local APIs
 
 Connector marketplace manifest:
@@ -126,6 +132,12 @@ Inbound message:
 
 ```http
 POST /api/messages/inbound
+```
+
+Generic local Commander data query:
+
+```http
+POST /api/commander/data-query
 ```
 
 Message contract:

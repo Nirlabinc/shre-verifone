@@ -408,6 +408,15 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(sampleEntities.body.entities.some((item) => item.entityKey === "00011122233344" && item.price === 2.49), true);
     assert.equal(sampleEntities.body.entities.some((item) => item.entityKey === "00000000001234" && item.price === 3.99), true);
 
+    const commanderDataQuery = await json("/api/commander/data-query", {
+      method: "POST",
+      body: JSON.stringify({ query: "show item price for upc 00011122233344", reportType: "plu" }),
+    });
+    assert.equal(commanderDataQuery.response.status, 200);
+    assert.equal(commanderDataQuery.body.status, "answered");
+    assert.equal(commanderDataQuery.body.reportType, "plu");
+    assert.equal(commanderDataQuery.body.data.some((item) => item.entityKey === "00011122233344"), true);
+
     const pdkCatalog = await json("/api/verifone/pdk/commands");
     assert.equal(pdkCatalog.response.status, 200);
     assert.equal(pdkCatalog.body.commands.some((item) => item.id === "vAppInfo"), true);
@@ -625,6 +634,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const manifest = await json("/api/connector/manifest");
     assert.equal(manifest.response.status, 200);
     assert.equal(manifest.body.connectorId, "verifone-commander");
+    assert.equal(manifest.body.tools.some((tool) => tool.id === "verifone:commander-data-query"), true);
     assert.equal(manifest.body.publisher.name, "Rapid Infosoft LLC");
     assert.equal(manifest.body.runtime.database, "sqlite");
     assert.ok(manifest.body.tools.some((tool) => tool.id === "verifone:sales-query"));

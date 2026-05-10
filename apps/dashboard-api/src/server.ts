@@ -1782,6 +1782,9 @@ function classifyMessage(messageText: string): { intent: string; target: string;
   if (/\b(sales|revenue|gross|net|top items?|best sellers?)\b/.test(text)) {
     return { intent: "sales_query", target: "local-db", operation: "query_sales" };
   }
+  if (/\b(plu|sku|upc|item|inventory|price|fuel|tank|batch|payment|tax|department|category)\b/.test(text)) {
+    return { intent: "commander_data_query", target: "local-db", operation: "query_commander_data" };
+  }
   if (/\b(sync|push|pull|update commander|send to commander)\b/.test(text)) {
     return { intent: "sync_command", target: "commander", operation: "sync" };
   }
@@ -1789,6 +1792,53 @@ function classifyMessage(messageText: string): { intent: string; target: string;
     return { intent: "health_check", target: "diagnostics", operation: "inspect" };
   }
   return { intent: "general_question", target: "shre", operation: "answer" };
+}
+
+function inferCommanderReportType(query: string, explicit = ""): string {
+  if (explicit) return explicit.trim().toLowerCase();
+  const text = query.toLowerCase();
+  if (/\b(fuel|grade|gas|price)\b/.test(text)) return "fuel";
+  if (/\b(tank|atg|volume|water)\b/.test(text)) return "tank";
+  if (/\b(batch|settlement)\b/.test(text)) return "batch";
+  if (/\b(payment|tender|mop|card)\b/.test(text)) return "payment";
+  if (/\b(tax)\b/.test(text)) return "tax";
+  if (/\b(department|dept)\b/.test(text)) return "department";
+  if (/\b(category)\b/.test(text)) return "category";
+  if (/\b(plu|sku|upc|item|inventory)\b/.test(text)) return "plu";
+  return "";
+}
+
+function answerCommanderDataQuery(query: string, reportType = "", limit = 10): JsonObject {
+  const inferredReportType = inferCommanderReportType(query, reportType);
+  const entities = store.commanderEntities(Math.min(Math.max(limit, 1), 25), inferredReportType, "");
+  if (entities.length === 0) {
+    return {
+      status: "queued",
+      requiresDataSource: true,
+      answer: inferredReportType
+        ? `No local ${inferredReportType} data is available yet. Pull Commander XML for that report type first.`
+        : "No local Commander entity data is available yet. Pull Commander XML first.",
+      query,
+      reportType: inferredReportType || null,
+      data: [],
+    };
+  }
+  const preview = entities.slice(0, 5).map((entity) => {
+    const name = String(entity.entityName || entity.entityKey || entity.entityType || "record");
+    const parts = [name];
+    if (entity.price !== null && entity.price !== undefined) parts.push(`price ${Number(entity.price).toFixed(2)}`);
+    if (entity.quantity !== null && entity.quantity !== undefined && Number(entity.quantity) !== 0) parts.push(`qty ${Number(entity.quantity).toFixed(3)}`);
+    if (entity.amount !== null && entity.amount !== undefined && Number(entity.amount) !== 0) parts.push(`amount ${Number(entity.amount).toFixed(2)}`);
+    return parts.join(" ");
+  }).join("; ");
+  return {
+    status: "answered",
+    requiresDataSource: false,
+    answer: `Found ${entities.length} local Commander ${inferredReportType || "entity"} record(s). ${preview}`,
+    query,
+    reportType: inferredReportType || null,
+    data: entities,
+  };
 }
 
 function normalizeSource(value: string): string {
@@ -3340,6 +3390,29 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/commander/data-query" && req.method === "POST") {
+    if (!commanderReadsAllowed()) {
+      sendJson(res, 403, {
+        error: "Commander read blocked",
+        accessMode: accessMode(),
+        message: "Commander local data queries require access mode read_only or read_write.",
+      });
+      return;
+    }
+    const body = asObject(await requestBody(req));
+    const query = typeof body.query === "string" && body.query.trim() ? body.query.trim() : "commander data";
+    const reportType = typeof body.reportType === "string" ? body.reportType : "";
+    const limit = typeof body.limit === "number" ? body.limit : 10;
+    const result = answerCommanderDataQuery(query, reportType, limit);
+    store.appendActivity("commander_data_query_answered", {
+      status: result.status,
+      reportType: result.reportType,
+      requiresDataSource: result.requiresDataSource,
+    });
+    sendJson(res, result.status === "answered" ? 200 : 202, result);
+    return;
+  }
+
   if (path === "/api/messages/inbound" && req.method === "POST") {
     try {
       if (blockMeteredAction(res)) return;
@@ -3380,16 +3453,18 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         });
         return;
       }
-      if (classification.intent === "sales_query" && !commanderReadsAllowed()) {
+      if ((classification.intent === "sales_query" || classification.intent === "commander_data_query") && !commanderReadsAllowed()) {
         sendJson(res, 403, {
           error: "Commander read blocked",
           accessMode: accessMode(),
-          message: "Sales reads are blocked in write-only mode.",
+          message: "Commander local data reads are blocked in write-only mode.",
         });
         return;
       }
       const connectorResponse = classification.intent === "sales_query"
         ? store.answerSalesQuery(messageText, typeof inbound.businessDate === "string" && inbound.businessDate ? inbound.businessDate : undefined)
+        : classification.intent === "commander_data_query"
+          ? answerCommanderDataQuery(messageText, typeof body.reportType === "string" ? body.reportType : "")
         : {
             status: "queued",
             answer: "Message accepted locally and queued for processing.",
@@ -3412,7 +3487,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
           receivedAt: new Date().toISOString(),
         },
       });
-      const usage = recordUsage(source, tenantId, storeId, "local-sales-query", messageText, String(connectorResponse.answer || ""), {
+      const usage = recordUsage(source, tenantId, storeId, classification.intent === "sales_query" ? "local-sales-query" : "local-commander-data-query", messageText, String(connectorResponse.answer || ""), {
         intent: classification.intent,
         queueId: queueItem.id,
       });
@@ -3484,16 +3559,18 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         });
         return;
       }
-      if (classification.intent === "sales_query" && !commanderReadsAllowed()) {
+      if ((classification.intent === "sales_query" || classification.intent === "commander_data_query") && !commanderReadsAllowed()) {
         sendJson(res, 403, {
           error: "Commander read blocked",
           accessMode: accessMode(),
-          message: "Sales reads are blocked in write-only mode.",
+          message: "Commander local data reads are blocked in write-only mode.",
         });
         return;
       }
       const connectorResponse = classification.intent === "sales_query"
         ? store.answerSalesQuery(messageText, typeof body.businessDate === "string" ? body.businessDate : undefined)
+        : classification.intent === "commander_data_query"
+          ? answerCommanderDataQuery(messageText, typeof body.reportType === "string" ? body.reportType : "")
         : {
             status: "answered",
             requiresDataSource: false,
