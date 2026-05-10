@@ -71,6 +71,7 @@ Setup, onboarding, support, and specs:
 - [Developer Onboarding](docs/developer-onboarding.md)
 - [Support Runbook](docs/support-runbook.md)
 - [Connectivity Rules](docs/connectivity-rules.md)
+- [Commander PDK Agent Rules](docs/commander-pdk-agent-rules.md)
 - [Storage, Retention, And Backup](docs/storage-retention-backup.md)
 - [Production Update And Restart](docs/production-update.md)
 - [Verifone PDK Command Catalog](docs/verifone-pdk-command-catalog.md)

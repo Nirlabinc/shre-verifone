@@ -2,6 +2,8 @@
 
 The local connector now includes a PDK command catalog extracted from `Verifone PDK.zip`.
 
+Operational rules for agents and workers are maintained in [Commander PDK Agent Rules](commander-pdk-agent-rules.md).
+
 ## Flow
 
 PDK commands use the Commander CGILink endpoint:
