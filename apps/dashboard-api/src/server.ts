@@ -162,14 +162,21 @@ function enforceLocalOrigin(req: IncomingMessage, res: ServerResponse): boolean 
 function enforceLocalAdmin(req: IncomingMessage, res: ServerResponse, path: string): boolean {
   if (path.startsWith("/api/auth/")) return true;
   if (path === "/api/setup/first-run") return true;
-  if (!localAdminToken) return true;
-  if (path === "/api/health" || path === "/api/connector/manifest" || path === "/api/messages/inbound") return true;
+  if (path === "/api/health" || path === "/api/version" || path === "/api/capabilities" || path === "/api/connector/manifest" || path === "/api/messages/inbound") return true;
   if (validSession(req)) return true;
-  const provided = String(req.headers["x-local-admin-token"] || "");
-  const expected = Buffer.from(localAdminToken);
-  const actual = Buffer.from(provided);
-  if (expected.length === actual.length && timingSafeEqual(expected, actual)) return true;
-  sendJson(res, 401, { error: "Local admin token required" });
+  if (localAdminToken) {
+    const provided = String(req.headers["x-local-admin-token"] || "");
+    const expected = Buffer.from(localAdminToken);
+    const actual = Buffer.from(provided);
+    if (expected.length === actual.length && timingSafeEqual(expected, actual)) return true;
+    sendJson(res, 401, { error: "Local admin token or session required" });
+    return false;
+  }
+  if (authState().configured === true) {
+    sendJson(res, 401, { error: "Local login session required" });
+    return false;
+  }
+  sendJson(res, 401, { error: "Local login must be configured first" });
   return false;
 }
 
@@ -696,8 +703,8 @@ async function pullCommanderReport(body: JsonObject = {}): Promise<JsonObject> {
       lastReportType: reportType,
     });
     store.appendActivity("commander_report_pull_failed", { businessDate, reportType, attempts: attempts.length, message });
-    recordErrorLog("warning", "verifone-commander", "pull-report", message, { businessDate, reportType, attempts }, "", `${reportType}:${businessDate}`);
-    return { ok: false, status: "failed", reportType, businessDate, message, attempts };
+    const errorLog = recordErrorLog("warning", "verifone-commander", "pull-report", message, { businessDate, reportType, attempts }, "", `${reportType}:${businessDate}`);
+    return { ok: false, status: "failed", reportType, businessDate, message, attempts, errorId: errorLog.id };
   } finally {
     store.releaseCommanderLease(owner);
   }
@@ -705,7 +712,7 @@ async function pullCommanderReport(body: JsonObject = {}): Promise<JsonObject> {
 
 function normalizeReportType(value: string): string {
   const type = value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
-  if (["sales", "batch", "fuel", "tank", "item", "department", "payment", "tax", "journal"].includes(type)) return type;
+  if (["sales", "batch", "fuel", "tank", "item", "plu", "department", "category", "payment", "network", "tax", "journal", "cashier", "payroll", "esafe", "carwash", "loyalty"].includes(type)) return type;
   return "sales";
 }
 
@@ -830,11 +837,19 @@ function xmlRootName(xml: string): string {
 
 function classifyConexxusReport(xml: string, requestedType: string, rootName: string): string {
   const haystack = `${rootName} ${xml.slice(0, 4000)}`.toLowerCase();
+  if (haystack.includes("movementreport") || haystack.includes("merchandisecodemovement") || haystack.includes("retailtransaction")) return "sales";
+  if (haystack.includes("plu") || haystack.includes("pricebook") || haystack.includes("pluconfig") || haystack.includes("plumaintenance")) return "plu";
+  if (haystack.includes("department") || haystack.includes("dept")) return "department";
+  if (haystack.includes("category")) return "category";
+  if (haystack.includes("tax")) return "tax";
+  if (haystack.includes("viper") || haystack.includes("payment") || haystack.includes("prepaid") || haystack.includes("cardtype")) return "payment";
+  if (haystack.includes("cashier") || haystack.includes("payroll")) return haystack.includes("payroll") ? "payroll" : "cashier";
+  if (haystack.includes("esafe") || haystack.includes("safecontent")) return "esafe";
+  if (haystack.includes("carwash") || haystack.includes("car wash")) return "carwash";
   if (haystack.includes("fueltankstock") || haystack.includes("tankstock") || haystack.includes("atg")) return "tank";
   if (haystack.includes("fuelgrademovement") || haystack.includes("fgmdetail") || haystack.includes("fuelgrade")) return "fuel";
   if (haystack.includes("batchsummary") || haystack.includes("batchmovement") || haystack.includes("batch")) return "batch";
   if (haystack.includes("journal")) return "journal";
-  if (haystack.includes("movementreport") || haystack.includes("merchandisecodemovement") || haystack.includes("retailtransaction")) return "sales";
   return requestedType;
 }
 
@@ -851,6 +866,48 @@ function normalizeConexxusXml(xml: string, reportType: string, businessDate: str
 }
 
 function normalizeConexxusTotals(xml: string, reportType: string): JsonObject {
+  if (reportType === "plu" || reportType === "item") {
+    return {
+      itemCount: countTags(xml, ["PLU", "Item", "PricebookItem", "MerchandiseCodeMovement"]),
+      salesAmount: matchXmlNumber(xml, ["SalesAmount", "ItemSalesAmount", "TotalSales", "NetSales"]) || 0,
+      salesQuantity: matchXmlNumber(xml, ["SalesQuantity", "Quantity", "ItemSalesQuantity"]) || 0,
+    };
+  }
+  if (reportType === "department" || reportType === "category") {
+    return {
+      recordCount: countTags(xml, ["Department", "DepartmentMovement", "DepartmentSummary", "Category", "CategoryMovement"]),
+      salesAmount: matchXmlNumber(xml, ["DepartmentSalesAmount", "CategorySalesAmount", "SalesAmount", "TotalSales"]) || 0,
+      salesQuantity: matchXmlNumber(xml, ["DepartmentSalesQuantity", "CategorySalesQuantity", "SalesQuantity", "Quantity"]) || 0,
+    };
+  }
+  if (reportType === "tax") {
+    return {
+      taxCount: countTags(xml, ["Tax", "TaxLevel", "TaxSummary", "TaxDetail"]),
+      taxableAmount: matchXmlNumber(xml, ["TaxableAmount", "TaxableSalesAmount", "SalesAmount"]) || 0,
+      taxAmount: matchXmlNumber(xml, ["TaxAmount", "CollectedTaxAmount"]) || 0,
+    };
+  }
+  if (reportType === "payment" || reportType === "network") {
+    return {
+      paymentCount: countTags(xml, ["Payment", "Tender", "Network", "Batch", "CardType"]),
+      paymentAmount: matchXmlNumber(xml, ["PaymentAmount", "TenderAmount", "NetworkAmount", "BatchTotalAmount", "TotalAmount"]) || 0,
+      transactionCount: matchXmlNumber(xml, ["TransactionCount", "PaymentCount", "TenderCount"]) || 0,
+    };
+  }
+  if (reportType === "cashier" || reportType === "payroll") {
+    return {
+      cashierCount: countTags(xml, ["Cashier", "CashierSummary", "Payroll", "Employee"]),
+      salesAmount: matchXmlNumber(xml, ["SalesAmount", "TotalSales", "CashierSalesAmount"]) || 0,
+      transactionCount: matchXmlNumber(xml, ["TransactionCount", "TicketCount"]) || 0,
+    };
+  }
+  if (reportType === "esafe" || reportType === "carwash" || reportType === "loyalty") {
+    return {
+      recordCount: countTags(xml, ["Detail", "Record", "Transaction", "CarWash", "Loyalty", "Safe"]),
+      totalAmount: matchXmlNumber(xml, ["TotalAmount", "Amount", "SalesAmount", "CollectedAmount"]) || 0,
+      transactionCount: matchXmlNumber(xml, ["TransactionCount", "Count"]) || 0,
+    };
+  }
   if (reportType === "tank") {
     return {
       tankCount: countTags(xml, ["TankID", "TankNumber"]),
@@ -886,7 +943,23 @@ function normalizeConexxusRecords(xml: string, reportType: string): JsonValue[] 
       ? ["FGMDetail", "FuelGradeMovement", "FuelGradeRecord"]
       : reportType === "batch"
         ? ["BatchDetail", "BatchSummary", "BatchRecord"]
-        : ["MCMDetail", "RetailTransaction", "SaleLine", "ItemLine"];
+        : reportType === "plu" || reportType === "item"
+          ? ["PLU", "PricebookItem", "Item", "MCMDetail", "ItemLine"]
+          : reportType === "department"
+            ? ["Department", "DepartmentMovement", "DepartmentSummary", "DeptDetail"]
+            : reportType === "category"
+              ? ["Category", "CategoryMovement", "CategorySummary"]
+              : reportType === "tax"
+                ? ["Tax", "TaxLevel", "TaxSummary", "TaxDetail"]
+                : reportType === "payment" || reportType === "network"
+                  ? ["Payment", "Tender", "Network", "BatchSummary", "CardType"]
+                  : reportType === "cashier" || reportType === "payroll"
+                    ? ["Cashier", "CashierSummary", "Payroll", "Employee"]
+                    : reportType === "esafe"
+                      ? ["Safe", "ESafe", "SafeContent", "SafeDetail"]
+                      : reportType === "carwash"
+                        ? ["CarWash", "CarWashDetail", "CarWashPaypoint"]
+                        : ["MCMDetail", "RetailTransaction", "SaleLine", "ItemLine"];
   return extractXmlRecords(xml, recordNames, 25);
 }
 
@@ -925,10 +998,11 @@ function extractXmlRecords(xml: string, names: string[], limit: number): JsonVal
     while ((match = pattern.exec(xml)) && records.length < limit) {
       records.push({
         recordType: name,
-        id: findXmlText(match[0], ["ID", "TankID", "FuelGradeID", "BatchID", "TransactionID", "ItemCode"]) || "",
-        name: findXmlText(match[0], ["Name", "Description", "FuelGradeName", "TankName", "ItemDescription"]) || "",
-        amount: matchXmlNumber(match[0], ["Amount", "SalesAmount", "TotalAmount", "NetSales"]) || 0,
-        quantity: matchXmlNumber(match[0], ["Quantity", "SalesQuantity", "Volume", "FuelGradeSalesVolume"]) || 0,
+        id: findXmlText(match[0], ["ID", "TankID", "FuelGradeID", "BatchID", "TransactionID", "ItemCode", "PLUCode", "DepartmentID", "CategoryID", "TenderID", "CashierID"]) || "",
+        name: findXmlText(match[0], ["Name", "Description", "FuelGradeName", "TankName", "ItemDescription", "DepartmentDescription", "CategoryDescription", "TenderName", "CashierName"]) || "",
+        amount: matchXmlNumber(match[0], ["Amount", "SalesAmount", "TotalAmount", "NetSales", "PaymentAmount", "TenderAmount", "TaxAmount"]) || 0,
+        quantity: matchXmlNumber(match[0], ["Quantity", "SalesQuantity", "Volume", "FuelGradeSalesVolume", "TransactionCount", "Count"]) || 0,
+        price: matchXmlNumber(match[0], ["Price", "RegularSellPrice", "UnitPrice", "CurrentPrice"]) || 0,
       });
     }
     if (records.length >= limit) break;
@@ -1057,13 +1131,14 @@ async function executePdkCommand(body: JsonObject): Promise<JsonObject> {
       statusCode: response.status,
     });
     if (!ok) {
-      recordErrorLog("warning", "verifone-pdk", definition.id, summarizeCommanderFault(text) || `PDK command failed with HTTP ${response.status}`, {
+      const errorLog = recordErrorLog("warning", "verifone-pdk", definition.id, summarizeCommanderFault(text) || `PDK command failed with HTTP ${response.status}`, {
         commandId: definition.id,
         cmd: definition.cmd,
         category: definition.category,
         statusCode: response.status,
         fault: isCommanderFault(text) ? summarizeCommanderFault(text) : null,
       }, "", definition.id);
+      savedReport = savedReport ? { ...savedReport, errorId: errorLog.id } : { errorId: errorLog.id };
     }
     return {
       ok,
@@ -1106,7 +1181,7 @@ async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
   const params = asObject(body.params || {});
   const entityType = typeof body.entityType === "string" && body.entityType.trim() ? body.entityType.trim() : "commander_xml";
   const entityId = typeof body.entityId === "string" && body.entityId.trim() ? body.entityId.trim() : createHash("sha256").update(xml).digest("hex").slice(0, 16);
-  const verification = asObject(body.verification || {});
+  const verification = withDefaultWriteVerification(commandId, asObject(body.verification || {}), xml, entityId);
   const transport = String(body.transport || "post_body");
   const payload: JsonObject = {
     commandId,
@@ -1141,7 +1216,7 @@ async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
     };
     const complete = writeResult.ok === true && verifyResult.ok === true;
     const finalStatus = complete ? "completed" : writeResult.ok ? "verification_failed" : "failed";
-    const finalPayload = {
+    const finalPayload: JsonObject = {
       ...payload,
       writeResult: summarizePdkExecution(writeResult),
       verificationResult: summarizePdkExecution(verifyResult),
@@ -1168,7 +1243,7 @@ async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
       verificationStatus: verifyResult.status,
     });
     if (!complete) {
-      recordErrorLog(
+      const errorLog = recordErrorLog(
         finalStatus === "failed" ? "critical" : "warning",
         "commander-writeback",
         commandId,
@@ -1177,6 +1252,7 @@ async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
         "",
         entityId,
       );
+      finalPayload.errorId = errorLog.id;
     }
     return {
       ok: complete,
@@ -1184,6 +1260,7 @@ async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
       queueItem: updated,
       write: writeResult,
       verification: verifyResult,
+      errorId: finalPayload.errorId || null,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1197,8 +1274,8 @@ async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
       error: message,
     });
     store.appendActivity("commander_writeback_failed", { queueId: queueItem.id, commandId, message });
-    recordErrorLog("critical", "commander-writeback", commandId, message, { queueId: queueItem.id, entityType, entityId }, "", entityId);
-    return { ok: false, status: "failed", queueItem: updated, message };
+    const errorLog = recordErrorLog("critical", "commander-writeback", commandId, message, { queueId: queueItem.id, entityType, entityId }, "", entityId);
+    return { ok: false, status: "failed", queueItem: updated, message, errorId: errorLog.id };
   }
 }
 
@@ -1283,13 +1360,31 @@ async function verifyCommanderWriteBack(verification: JsonObject, writeResult: J
   }
   const writeAccepted = writeResult.ok === true;
   return {
-    ok: writeAccepted,
-    status: writeAccepted ? "accepted_unverified" : "write_failed",
+    ok: false,
+    status: writeAccepted ? "verification_required" : "write_failed",
     message: writeAccepted
-      ? "Commander accepted the XML write. No read-back verification command was supplied."
+      ? "Commander accepted the XML write, but no read-back verification rule was available."
       : "Commander did not accept the XML write.",
     xmlSha256: createHash("sha256").update(xml).digest("hex"),
   };
+}
+
+function withDefaultWriteVerification(commandId: string, verification: JsonObject, xml: string, entityId: string): JsonObject {
+  if (verification.commandId || verification.expectedResponseContains || verification.expectedReadContains) return verification;
+  const expected = entityId || findXmlText(xml, ["ItemCode", "PLUCode", "FuelGradeID", "DepartmentID", "CategoryID", "ID"]) || "";
+  if (commandId === "uPLUs") {
+    return { commandId: "vPLUs", expectedReadContains: expected };
+  }
+  if (commandId === "ufuelprices" || commandId === "cfuelprices") {
+    return { commandId: "vfuelprices", expectedReadContains: expected };
+  }
+  if (/^u.+cfg$/i.test(commandId)) {
+    return { commandId: `v${commandId.slice(1)}`, expectedReadContains: expected };
+  }
+  if (/^u(.+)$/i.test(commandId)) {
+    return { commandId: `v${commandId.slice(1)}`, expectedReadContains: expected };
+  }
+  return verification;
 }
 
 function summarizePdkExecution(result: JsonObject): JsonObject {
@@ -2124,6 +2219,25 @@ function versionInfo(): JsonObject {
   };
 }
 
+function capabilitiesInfo(): JsonObject {
+  return {
+    app: "verifone-commander-shre-cstoresku",
+    version: appVersion,
+    buildChannel,
+    buildSha,
+    capabilities: {
+      errorLog: true,
+      commanderWriteBack: true,
+      verifiedWriteBack: true,
+      pdkCatalog: true,
+      pdkCommandTotal: pdkCommandCatalog.length,
+      localLoginApiGuard: true,
+      conexxusFamilies: ["sales", "batch", "fuel", "tank", "journal", "plu", "department", "category", "tax", "payment", "cashier", "payroll", "esafe", "carwash", "loyalty"],
+    },
+    timestamp: new Date().toISOString(),
+  };
+}
+
 function localBaseUrl(req: IncomingMessage): string {
   if (localBaseUrlOverride) return localBaseUrlOverride.replace(/\/$/, "");
   const requestHost = String(req.headers.host || `localhost:${port}`);
@@ -2257,6 +2371,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/version") {
     sendJson(res, 200, versionInfo());
+    return;
+  }
+
+  if (path === "/api/capabilities") {
+    sendJson(res, 200, capabilitiesInfo());
     return;
   }
 
@@ -2724,8 +2843,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       completed: items.filter((item) => asObject(item).status === "completed").length,
     });
     const failedItems = items.filter((item) => asObject(item).status === "failed").map((item) => asObject(item));
+    let errorId: JsonValue = null;
     if (failedItems.length > 0) {
-      recordErrorLog("critical", "offline-queue", "replay", "One or more queue items failed replay.", {
+      const errorLog = recordErrorLog("critical", "offline-queue", "replay", "One or more queue items failed replay.", {
         failedCount: failedItems.length,
         failedItems: failedItems.map((item) => ({
           id: item.id,
@@ -2736,8 +2856,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
           lastError: item.lastError,
         })),
       });
+      errorId = errorLog.id || null;
     }
-    sendJson(res, 200, result);
+    sendJson(res, 200, { ...result, errorId });
     return;
   }
 

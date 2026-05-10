@@ -47,8 +47,10 @@ The update fails if:
 
 - `GET /api/health` does not become healthy.
 - `GET /api/version` does not return the expected version when `-ExpectedVersion` is provided.
-- `GET /api/heartbeat/worker` fails.
+- `GET /api/capabilities` does not advertise `errorLog`, `commanderWriteBack`, and at least 200 PDK commands.
 - `POST /api/verifone/ping` returns `404`, which means the running process is stale or the build did not include the current API.
+
+The update smoke check intentionally verifies non-sensitive capability flags and the PDK catalog size so an old process left on port `5480` is detected instead of passing a generic health check. Sensitive endpoints such as diagnostics and error details remain protected by local login/session or `LOCAL_ADMIN_TOKEN`.
 
 `POST /api/verifone/ping` may return `503` when Commander is not configured or unreachable. That is acceptable for an update smoke check because it proves the current route exists. Operational Commander connectivity is handled by heartbeat/readiness alerts.
 

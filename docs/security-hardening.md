@@ -9,7 +9,7 @@
 - Runtime folders and secret files use restrictive file permissions where the operating system supports them.
 - Connector inbound requests use HMAC-SHA256 signing with timestamp, nonce, tenant ID, agent ID, and raw body.
 - Signed connector nonces are stored and rejected on replay.
-- Optional local admin token gates local sensitive APIs when `LOCAL_ADMIN_TOKEN` is set.
+- Local sensitive APIs require a valid local login session after first setup. `LOCAL_ADMIN_TOKEN` can also gate service/support automation when set.
 - The API binds to `127.0.0.1` by default.
 
 ## What Cannot Be Fully Prevented

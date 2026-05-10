@@ -82,7 +82,13 @@ Example:
 
 Default transport is `POST` with `application/xml`. If a site-specific Commander command requires the XML as a query parameter, set `"transport": "query_param"` and pass `"xmlParamName"` in `params`.
 
-If no verification block is supplied, the result is accepted only at the Commander response level. Production write flows should supply a read-back verification command before go-live.
+If no verification block is supplied, the backend tries an approved default mapping first:
+
+- `uPLUs` verifies with `vPLUs`.
+- `ufuelprices` and `cfuelprices` verify with `vfuelprices`.
+- common `u*cfg` updates verify with the matching `v*cfg` command.
+
+If no explicit or default verification rule exists, the write is not marked complete. It remains visible as a verification failure so support can add the correct read-back rule before go-live.
 
 ## Covered Command Groups
 
@@ -102,3 +108,5 @@ If no verification block is supplied, the result is accepted only at the Command
 ## Safety
 
 Commands beginning with `u`, `c`, `changepasswd`, or `send` are treated as mutating. They are blocked in `read_only` mode.
+
+Read XML normalization currently classifies and maps sales/movement, batch, fuel, tank, journal, PLU/item, department/category, tax, network/payment/VIPER, cashier/payroll, eSafe, car wash, and loyalty-style payloads into Conexxus/NAXML-aligned JSON while preserving raw XML as the source of record.

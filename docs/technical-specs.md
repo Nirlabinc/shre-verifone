@@ -154,7 +154,7 @@ POST /api/usage/replay
 POST /api/chat/local
 ```
 
-Local login works offline from an encrypted local hash. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. `POST /api/shre/signup-activate` is the preferred first-run cloud setup path: it uses Shre Auth signup/login details to create or find tenant/workspace/store records, activate the connector, store the returned signing secret locally, and avoid manual tenant/secret entry. Usage events are stored locally and queued to `shre-cost` for billing. `POST /api/usage/replay` backfills pending usage reports and marks local usage rows as `reported` when replay succeeds.
+Local login works offline from an encrypted local hash. Once configured, sensitive local APIs require either a valid local login session or `LOCAL_ADMIN_TOKEN`. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. `POST /api/shre/signup-activate` is the preferred first-run cloud setup path: it uses Shre Auth signup/login details to create or find tenant/workspace/store records, activate the connector, store the returned signing secret locally, and avoid manual tenant/secret entry. Usage events are stored locally and queued to `shre-cost` for billing. `POST /api/usage/replay` backfills pending usage reports and marks local usage rows as `reported` when replay succeeds.
 
 The first chat implementation uses local tools only. Sales questions use the local SQLite sales snapshot/query tool. Future model calls should be routed through the same usage metering path.
 
@@ -175,7 +175,7 @@ Supported modes:
 - `read_write`: allows both read capture and queued inventory/write commands.
 - `write_only`: blocks local sales/read queries and allows queued Commander/inventory writes.
 
-The default comes from `COMMANDER_ACCESS_MODE`, falling back to `SHRE_MODE`, then `read_only`. Inventory updates and Commander write commands must go through `outbound_queue` and the Commander lease. Direct writes to Commander are not allowed from chat or gateway handlers. CStoreSKU write mode sends XML to `/api/commander/writeback`; the local service submits it to Commander and should run a read-back verification command before the queue item is marked complete.
+The default comes from `COMMANDER_ACCESS_MODE`, falling back to `SHRE_MODE`, then `read_only`. Inventory updates and Commander write commands must go through `outbound_queue` and the Commander lease. Direct writes to Commander are not allowed from chat or gateway handlers. CStoreSKU write mode sends XML to `/api/commander/writeback`; the local service submits it to Commander and runs a read-back verification command before the queue item is marked complete. Default verification mappings cover `uPLUs -> vPLUs`, `ufuelprices/cfuelprices -> vfuelprices`, and common `u*cfg -> v*cfg` commands. Writes without an explicit or inferred verification rule stay visible as verification failures instead of success.
 
 ## Add-ons, Remote Access, And MCP Contract
 

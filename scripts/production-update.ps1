@@ -40,9 +40,21 @@ function Invoke-Smoke {
   }
 
   $version = Invoke-RestMethod -Uri "http://localhost:$Port/api/version" -Method Get -TimeoutSec 5
-  $worker = Invoke-RestMethod -Uri "http://localhost:$Port/api/heartbeat/worker" -Method Get -TimeoutSec 5
-  $ping = Invoke-WebRequest -Uri "http://localhost:$Port/api/verifone/ping" -Method Post -ContentType "application/json" -Body "{}" -TimeoutSec 8 -SkipHttpErrorCheck
-  if ($ping.StatusCode -eq 404) {
+  $capabilities = Invoke-RestMethod -Uri "http://localhost:$Port/api/capabilities" -Method Get -TimeoutSec 5
+  if ($capabilities.capabilities.errorLog -ne $true -or $capabilities.capabilities.commanderWriteBack -ne $true -or $capabilities.capabilities.pdkCommandTotal -lt 200) {
+    throw "Smoke failed: current capabilities do not match the expected build. The old process may still be active."
+  }
+  try {
+    $ping = Invoke-WebRequest -Uri "http://localhost:$Port/api/verifone/ping" -Method Post -ContentType "application/json" -Body "{}" -TimeoutSec 8
+    $pingStatusCode = [int]$ping.StatusCode
+  } catch {
+    if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+      $pingStatusCode = [int]$_.Exception.Response.StatusCode
+    } else {
+      throw
+    }
+  }
+  if ($pingStatusCode -eq 404) {
     throw "Smoke failed: /api/verifone/ping returned 404, which means the old API process is still running or the build is stale."
   }
 
@@ -51,8 +63,9 @@ function Invoke-Smoke {
     health = $health.ok
     version = $version.version
     cacheKey = $version.cacheKey
-    heartbeatWorkerEnabled = $worker.enabled
-    pingStatusCode = $ping.StatusCode
+    errorLog = $capabilities.capabilities.errorLog
+    pdkCommandTotal = $capabilities.capabilities.pdkCommandTotal
+    pingStatusCode = $pingStatusCode
     checkedAt = (Get-Date).ToUniversalTime().ToString("o")
   }
 }

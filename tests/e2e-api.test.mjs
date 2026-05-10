@@ -375,6 +375,13 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(pdkInfo.response.status, 200);
     assert.equal(pdkInfo.body.ok, true);
     assert.equal(pdkInfo.body.report.reportType, "information");
+
+    const pdkPlu = await json("/api/verifone/pdk/execute", {
+      method: "POST",
+      body: JSON.stringify({ commandId: "vPLUs", params: {} }),
+    });
+    assert.equal(pdkPlu.response.status, 200);
+    assert.equal(pdkPlu.body.report.reportType, "plu");
     assert.equal(commanderRequests.some((request) => request.url.includes("cmd=validate")), true);
     assert.equal(commanderRequests.some((request) => request.url.includes("cmd=vAppInfo") && request.url.includes("cookie=mock-cookie-001")), true);
 
@@ -491,6 +498,19 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(commanderWriteBack.body.queueItem.status, "completed");
     assert.equal(commanderRequests.some((item) => item.url.includes("cmd=uPLUs") && item.method === "POST" && item.body.includes("NAXML-PLUMaintenance")), true);
     assert.equal(commanderRequests.some((item) => item.url.includes("cmd=vPLUs") && item.url.includes("cookie=mock-cookie-001")), true);
+
+    const commanderWriteBackDefaultVerify = await json("/api/commander/writeback", {
+      method: "POST",
+      body: JSON.stringify({
+        commandId: "uPLUs",
+        entityType: "inventory",
+        entityId: "sku-001",
+        xml: `<?xml version="1.0"?><NAXML-PLUMaintenance><PLU><ItemCode>sku-001</ItemCode><Description>Coffee</Description></PLU></NAXML-PLUMaintenance>`,
+      }),
+    });
+    assert.equal(commanderWriteBackDefaultVerify.response.status, 200);
+    assert.equal(commanderWriteBackDefaultVerify.body.status, "completed");
+    assert.equal(commanderWriteBackDefaultVerify.body.verification.status, "readback_verified");
 
     const connector = await json("/api/connector/activate", {
       method: "POST",
