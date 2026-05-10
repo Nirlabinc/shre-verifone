@@ -410,6 +410,7 @@
               <label>Provider<input name="provider" value="cloudflare"></label>
               <label>Portal URL<input name="portalUrl" placeholder="https://store001-portal.example.com/portal"></label>
               <label>Dashboard URL<input name="dashboardUrl" placeholder="https://store001-dashboard.example.com"></label>
+              <label>Chat URL<input name="chatUrl" placeholder="https://store001-chat.example.com/chat"></label>
               <label>Verifone URL<input name="verifoneUrl" placeholder="https://store001-verifone.example.com"></label>
               <label>Verifone LAN URL<input name="verifoneLanUrl" placeholder="http://192.168.14.11/ConfigClient.html"></label>
               <label>Tunnel ID<input name="tunnelId" placeholder="cloudflare-tunnel-id"></label>
@@ -729,6 +730,7 @@
         document.querySelector('#remoteAccessForm input[name="publicUrl"]').value = remoteAccess.publicUrl || "";
         document.querySelector('#remoteAccessForm input[name="portalUrl"]').value = remoteAccess.portalUrl || "";
         document.querySelector('#remoteAccessForm input[name="dashboardUrl"]').value = remoteAccess.dashboardUrl || remoteAccess.publicUrl || "";
+        document.querySelector('#remoteAccessForm input[name="chatUrl"]').value = remoteAccess.chatUrl || "";
         document.querySelector('#remoteAccessForm input[name="verifoneUrl"]').value = remoteAccess.verifoneUrl || "";
         document.querySelector('#remoteAccessForm input[name="verifoneLanUrl"]').value = remoteAccess.verifoneLanUrl || "";
         document.querySelector('#remoteAccessForm input[name="tunnelId"]').value = remoteAccess.tunnelId || "";

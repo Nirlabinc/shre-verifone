@@ -3,6 +3,7 @@ param(
   [string]$TunnelToken = "",
   [string]$PortalHostname = "",
   [string]$DashboardHostname = "",
+  [string]$ChatHostname = "",
   [string]$VerifoneHostname = "",
   [string]$VerifoneIp = "",
   [string[]]$CandidateIps = @("192.168.14.11", "192.168.31.11", "192.168.1.11", "192.168.0.11"),
@@ -78,6 +79,7 @@ if ([string]::IsNullOrWhiteSpace($VerifoneIp)) {
 
 $dashboardUrl = "https://$DashboardHostname"
 $portalUrl = if ([string]::IsNullOrWhiteSpace($PortalHostname)) { "$dashboardUrl/portal" } else { "https://$PortalHostname/portal" }
+$chatUrl = if ([string]::IsNullOrWhiteSpace($ChatHostname)) { "$dashboardUrl/chat" } else { "https://$ChatHostname/chat" }
 $verifoneUrl = "https://$VerifoneHostname/ConfigClient.html"
 $verifoneLanUrl = "http://$VerifoneIp/ConfigClient.html"
 $configRoot = Join-Path $env:ProgramData "cloudflared"
@@ -89,6 +91,7 @@ tunnel: $TunnelName
 ingress:
 $(if (-not [string]::IsNullOrWhiteSpace($PortalHostname)) { "  - hostname: $PortalHostname`n    service: http://localhost:$DashboardPort`n" } else { "" })  - hostname: $DashboardHostname
     service: http://localhost:$DashboardPort
+$(if (-not [string]::IsNullOrWhiteSpace($ChatHostname)) { "  - hostname: $ChatHostname`n    service: http://localhost:$DashboardPort`n" } else { "" })
   - hostname: $VerifoneHostname
     service: http://$VerifoneIp
   - service: http_status:404
@@ -120,6 +123,7 @@ try {
     publicUrl = $dashboardUrl
     portalUrl = $portalUrl
     dashboardUrl = $dashboardUrl
+    chatUrl = $chatUrl
     verifoneUrl = $verifoneUrl
     verifoneLanUrl = $verifoneLanUrl
     verifoneDetectedIp = $VerifoneIp
@@ -140,6 +144,7 @@ try {
   dashboardUrl = $dashboardUrl
   portalUrl = $portalUrl
   verifoneUrl = $verifoneUrl
+  chatUrl = $chatUrl
   verifoneLanUrl = $verifoneLanUrl
   detectedVerifoneIp = $VerifoneIp
   probeResults = $probeResults
@@ -148,6 +153,7 @@ try {
   nextSteps = @(
     "Create DNS routes in Cloudflare Zero Trust for $DashboardHostname and $VerifoneHostname.",
     "Optional portal hostname route: $PortalHostname -> http://localhost:$DashboardPort.",
+    "Optional chat hostname route: $ChatHostname -> http://localhost:$DashboardPort.",
     "Apply Cloudflare Access policies and MFA to both hostnames.",
     "Run: cloudflared tunnel run $TunnelName, or install service with -InstallService -TunnelToken.",
     "Open $portalUrl, $dashboardUrl and $verifoneUrl through Cloudflare Access."

@@ -17,11 +17,12 @@ The installer script probes common candidates and also accepts an explicit `-Ver
 
 ## Recommended Hostnames
 
-Use two separate hostnames and two separate Cloudflare Access policies:
+Use separate hostnames and separate Cloudflare Access policies:
 
 ```text
 store001-portal.example.com    -> http://localhost:5480/portal
 store001-dashboard.example.com -> http://localhost:5480
+store001-chat.example.com      -> http://localhost:5480/chat
 store001-verifone.example.com  -> http://<detected-verifone-ip>
 ```
 
@@ -30,6 +31,7 @@ Users open:
 ```text
 https://store001-portal.example.com/portal
 https://store001-dashboard.example.com
+https://store001-chat.example.com/chat
 https://store001-verifone.example.com/ConfigClient.html
 ```
 
@@ -55,6 +57,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-cloudflare-remote-acces
   -TunnelName "store001-verifone-commander" `
   -PortalHostname "store001-portal.example.com" `
   -DashboardHostname "store001-dashboard.example.com" `
+  -ChatHostname "store001-chat.example.com" `
   -VerifoneHostname "store001-verifone.example.com" `
   -DryRun
 ```
@@ -67,6 +70,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-cloudflare-remote-acces
   -TunnelToken "<cloudflare-tunnel-token>" `
   -PortalHostname "store001-portal.example.com" `
   -DashboardHostname "store001-dashboard.example.com" `
+  -ChatHostname "store001-chat.example.com" `
   -VerifoneHostname "store001-verifone.example.com" `
   -LocalAdminToken "<optional-local-admin-token>" `
   -InstallService
@@ -80,6 +84,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-cloudflare-remote-acces
   -TunnelToken "<cloudflare-tunnel-token>" `
   -PortalHostname "store001-portal.example.com" `
   -DashboardHostname "store001-dashboard.example.com" `
+  -ChatHostname "store001-chat.example.com" `
   -VerifoneHostname "store001-verifone.example.com" `
   -VerifoneIp "192.168.31.11" `
   -InstallService
@@ -102,6 +107,8 @@ ingress:
     service: http://localhost:5480
   - hostname: store001-dashboard.example.com
     service: http://localhost:5480
+  - hostname: store001-chat.example.com
+    service: http://localhost:5480
   - hostname: store001-verifone.example.com
     service: http://192.168.14.11
   - service: http_status:404
@@ -118,6 +125,7 @@ POST /api/remote-access
 Stored fields:
 
 - dashboard public URL
+- chat public URL
 - Verifone public URL
 - Verifone LAN URL
 - detected Verifone IP

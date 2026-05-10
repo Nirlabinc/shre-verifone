@@ -71,6 +71,12 @@ jobs:
           test -s docs/pilot-installation-guide.md
           test -s docs/pilot-production-readiness.md
           test -s docs/cloudflare-remote-access.md
+          test -s docs/one-click-installer.md
           test -s marketplace/verifone-commander.connector.json
           test -s apps/product-landing/index.html
           test -s apps/access-portal/index.html
+          test -s apps/chat-ui/index.html
+          test -s scripts/install-oneclick.ps1
+          test -s scripts/install-oneclick.sh
+          test -s scripts/install-oneclick-aarch64.sh
+          test -s scripts/install-oneclick-android-termux.sh

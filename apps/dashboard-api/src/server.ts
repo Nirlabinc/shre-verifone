@@ -27,6 +27,7 @@ const buildSha = process.env.BUILD_SHA || "dev";
 const uiRoot = resolve("apps/dashboard-ui");
 const landingRoot = resolve("apps/product-landing");
 const portalRoot = resolve("apps/access-portal");
+const chatRoot = resolve("apps/chat-ui");
 let store: RuntimeStore;
 
 const retentionOptions = [7, 14, 30, 60, 90, 180, 365];
@@ -152,6 +153,7 @@ function localOrigins(req: IncomingMessage): Set<string> {
   const hostHeader = String(req.headers.host || `localhost:${port}`);
   return new Set([
     `http://${hostHeader}`,
+    `https://${hostHeader}`,
     `http://localhost:${port}`,
     `http://127.0.0.1:${port}`,
     `http://cstoresku:${port}`,
@@ -172,6 +174,7 @@ function enforceLocalOrigin(req: IncomingMessage, res: ServerResponse): boolean 
 function enforceLocalAdmin(req: IncomingMessage, res: ServerResponse, path: string): boolean {
   if (path.startsWith("/api/auth/")) return true;
   if (path === "/api/setup/first-run") return true;
+  if (path === "/api/leads/capture") return true;
   if (path === "/api/health" || path === "/api/version" || path === "/api/capabilities" || path === "/api/connector/manifest" || path === "/api/messages/inbound") return true;
   if (validSession(req)) return true;
   if (localAdminToken) {
@@ -1785,6 +1788,7 @@ function remoteAccessStatus(): JsonObject {
     publicUrl: "",
     portalUrl: "",
     dashboardUrl: "",
+    chatUrl: "",
     verifoneUrl: "",
     verifoneLanUrl: "",
     verifoneDetectedIp: "",
@@ -1792,11 +1796,13 @@ function remoteAccessStatus(): JsonObject {
   });
   const dashboardUrl = String(config.dashboardUrl || config.publicUrl || "");
   const portalUrl = String(config.portalUrl || (dashboardUrl ? `${dashboardUrl.replace(/\/$/, "")}/portal` : ""));
+  const chatUrl = String(config.chatUrl || (dashboardUrl ? `${dashboardUrl.replace(/\/$/, "")}/chat` : ""));
   const verifoneUrl = String(config.verifoneUrl || "");
   return {
     ...config,
     portalUrl,
     dashboardUrl,
+    chatUrl,
     verifoneUrl,
     ready: config.enabled === true && Boolean(dashboardUrl),
     verifoneReady: config.enabled === true && Boolean(verifoneUrl),
@@ -3041,6 +3047,31 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/leads/capture" && req.method === "POST") {
+    try {
+      const body = asObject(await requestBody(req));
+      const email = requireString(body, "email").toLowerCase();
+      const id = randomUUID();
+      const lead: JsonObject = {
+        id,
+        name: optionalString(body, "name"),
+        company: optionalString(body, "company"),
+        phone: optionalString(body, "phone"),
+        email,
+        storeCount: optionalString(body, "storeCount"),
+        interest: optionalString(body, "interest") || "pilot",
+        source: optionalString(body, "source") || "product-landing",
+        createdAt: new Date().toISOString(),
+      };
+      store.setJson("leads", id, lead);
+      store.appendActivity("lead_captured", { id, email, source: lead.source });
+      sendJson(res, 201, { ok: true, id, nextUrl: "/portal" });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
   if (path === "/api/auth/status") {
     const state = authState();
     sendJson(res, 200, {
@@ -3848,6 +3879,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         publicUrl: typeof body.publicUrl === "string" ? body.publicUrl : "",
         portalUrl: typeof body.portalUrl === "string" ? body.portalUrl : "",
         dashboardUrl: typeof body.dashboardUrl === "string" ? body.dashboardUrl : "",
+        chatUrl: typeof body.chatUrl === "string" ? body.chatUrl : "",
         verifoneUrl: typeof body.verifoneUrl === "string" ? body.verifoneUrl : "",
         verifoneLanUrl: typeof body.verifoneLanUrl === "string" ? body.verifoneLanUrl : "",
         verifoneDetectedIp: typeof body.verifoneDetectedIp === "string" ? body.verifoneDetectedIp : "",
@@ -4437,6 +4469,18 @@ async function servePortal(res: ServerResponse): Promise<void> {
   res.end(html);
 }
 
+async function serveChat(res: ServerResponse): Promise<void> {
+  const html = await readFile(join(chatRoot, "index.html"), "utf8");
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:;",
+  });
+  res.end(html);
+}
+
 async function main(): Promise<void> {
   await ensureRuntime();
   store = new RuntimeStore(runtimeRoot, { connectorRegistryUrl });
@@ -4485,6 +4529,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, path: st
   }
   if (path === "/portal" || path === "/portal/") {
     await servePortal(res);
+    return;
+  }
+  if (path === "/chat" || path === "/chat/") {
+    await serveChat(res);
     return;
   }
   await serveUi(res);

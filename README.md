@@ -28,6 +28,9 @@ This repo is the Phase 2 scaffold. It is intentionally separate from `Verifone-C
 ```text
 apps/dashboard-api      local HTTP API and static dashboard host
 apps/dashboard-ui       browser dashboard shell
+apps/chat-ui            standalone store operator messenger
+apps/access-portal      Cloudflare Access app chooser
+apps/product-landing    marketing page with lead capture
 services/shre-connector Shre SDK/event bridge
 services/queue-worker   offline queue/replay worker boundary
 services/diagnostics    diagnostics service boundary
@@ -77,6 +80,7 @@ Setup, onboarding, support, and specs:
 - [Pilot Installation Guide](docs/pilot-installation-guide.md)
 - [Pilot Production Readiness](docs/pilot-production-readiness.md)
 - [Cloudflare Remote Access](docs/cloudflare-remote-access.md)
+- [One-Click Installer](docs/one-click-installer.md)
 - [Verifone PDK Command Catalog](docs/verifone-pdk-command-catalog.md)
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)
@@ -127,6 +131,9 @@ Open:
 ```text
 http://cstoresku:5480
 http://localhost:5480
+http://localhost:5480/landing
+http://localhost:5480/portal
+http://localhost:5480/chat
 ```
 
 To enable the `cstoresku` loopback alias, see [docs/local-alias.md](docs/local-alias.md). The alias maps to the same local machine and does not expose the service to the LAN.
@@ -180,6 +187,35 @@ The E2E test starts the dashboard API against a temporary runtime folder and ver
 - Activity log events.
 
 ## Docker
+
+## One-Click Pilot Install
+
+Windows support-led install:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-oneclick.ps1 `
+  -TunnelName store001-verifone-commander `
+  -PortalHostname store001-portal.example.com `
+  -DashboardHostname store001-dashboard.example.com `
+  -ChatHostname store001-chat.example.com `
+  -VerifoneHostname store001-verifone.example.com `
+  -TunnelToken "<cloudflare-tunnel-token>" `
+  -InstallCloudflareService
+```
+
+Linux/macOS support-led install:
+
+```bash
+DASHBOARD_HOSTNAME=store001-dashboard.example.com \
+PORTAL_HOSTNAME=store001-portal.example.com \
+CHAT_HOSTNAME=store001-chat.example.com \
+VERIFONE_HOSTNAME=store001-verifone.example.com \
+TUNNEL_TOKEN='<cloudflare-tunnel-token>' \
+INSTALL_CLOUDFLARE_SERVICE=true \
+bash scripts/install-oneclick.sh
+```
+
+Use `scripts/install-oneclick-aarch64.sh` for ARM64 edge devices and `scripts/install-oneclick-android-termux.sh` for Android/Termux pilots. Details are in [docs/one-click-installer.md](docs/one-click-installer.md).
 
 ```powershell
 docker compose -f infra/docker-compose.yml up --build

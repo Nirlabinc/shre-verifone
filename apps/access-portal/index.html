@@ -44,7 +44,7 @@
       <div class="card">
         <h2>Messenger Chat</h2>
         <p>Ask local sales, item, fuel, tank, batch, and health questions using the local data router.</p>
-        <a id="chatLink" class="button primary" href="/#chat">Open Chat</a>
+        <a id="chatLink" class="button primary" href="/chat">Open Chat</a>
       </div>
       <div class="card">
         <h2>Verifone ConfigClient</h2>
@@ -83,7 +83,7 @@
     const verifoneUrl = explicitVerifone || `${location.protocol}//${inferredVerifoneHost}/ConfigClient.html`;
     const dashboardUrl = explicitDashboard || origin;
     document.getElementById("dashboardLink").href = dashboardUrl;
-    document.getElementById("chatLink").href = `${dashboardUrl.replace(/\/$/, "")}/#chat`;
+    document.getElementById("chatLink").href = `${dashboardUrl.replace(/\/$/, "")}/chat`;
     document.getElementById("verifoneLink").href = verifoneUrl;
     document.getElementById("currentHost").textContent = host;
     document.getElementById("verifoneTarget").textContent = verifoneUrl;

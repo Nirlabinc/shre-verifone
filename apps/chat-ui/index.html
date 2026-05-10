@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Store Chat</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --line:#d8dee6; --text:#172033; --muted:#667085; --blue:#175cd3; --green:#137a4b; --red:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:"Segoe UI", Arial, sans-serif; color:var(--text); background:var(--bg); display:grid; grid-template-rows:auto 1fr; }
+    header { height:64px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; background:var(--panel); border-bottom:1px solid var(--line); }
+    .brand { display:flex; flex-direction:column; gap:2px; min-width:0; }
+    h1 { margin:0; font-size:18px; line-height:1.1; }
+    .sub { color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .status { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
+    .dot { width:10px; height:10px; border-radius:50%; background:#98a2b3; }
+    .dot.ok { background:var(--green); }
+    .dot.bad { background:var(--red); }
+    main { display:grid; grid-template-columns:260px 1fr; min-height:0; }
+    aside { border-right:1px solid var(--line); background:#fbfcfe; padding:14px; display:grid; align-content:start; gap:10px; }
+    .quick { border:1px solid var(--line); background:var(--panel); border-radius:8px; padding:10px; text-align:left; color:var(--text); cursor:pointer; }
+    .quick:hover { border-color:#9eb8eb; }
+    .chat { min-height:0; display:grid; grid-template-rows:1fr auto; }
+    .messages { min-height:0; overflow:auto; padding:22px; display:flex; flex-direction:column; gap:14px; }
+    .bubble { max-width:min(760px, 88%); border:1px solid var(--line); border-radius:8px; padding:12px 14px; line-height:1.45; white-space:pre-wrap; background:var(--panel); }
+    .user { align-self:flex-end; background:#eaf1ff; border-color:#c7d7fe; }
+    .assistant { align-self:flex-start; }
+    .meta { color:var(--muted); font-size:12px; margin-top:6px; }
+    .composer { border-top:1px solid var(--line); background:var(--panel); padding:14px; display:grid; grid-template-columns:1fr auto; gap:10px; }
+    textarea { width:100%; min-height:48px; max-height:140px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:12px; font:inherit; }
+    button { border:0; border-radius:8px; padding:0 18px; background:var(--blue); color:#fff; font-weight:700; cursor:pointer; min-height:48px; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    dialog { border:1px solid var(--line); border-radius:8px; width:min(420px, 92vw); padding:0; }
+    .modal { padding:18px; display:grid; gap:12px; }
+    input { border:1px solid var(--line); border-radius:8px; min-height:42px; padding:10px; font:inherit; }
+    .error { color:var(--red); font-size:13px; min-height:18px; }
+    @media (max-width:800px) { main { grid-template-columns:1fr; } aside { display:none; } header { align-items:flex-start; height:auto; flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>Store Chat</h1>
+      <div class="sub">Local Verifone Commander data assistant</div>
+    </div>
+    <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Checking local service</span></div>
+  </header>
+  <main>
+    <aside>
+      <button class="quick" data-prompt="What were sales today?">What were sales today?</button>
+      <button class="quick" data-prompt="Show top selling items today.">Top selling items</button>
+      <button class="quick" data-prompt="Any Commander connection or queue issues?">Connection and queue health</button>
+      <button class="quick" data-prompt="Show recent batch, fuel, and tank data if available.">Batch, fuel, and tank data</button>
+      <button class="quick" data-prompt="What data is waiting to sync?">Pending sync</button>
+    </aside>
+    <section class="chat">
+      <div id="messages" class="messages"></div>
+      <form id="composer" class="composer">
+        <textarea id="message" placeholder="Ask about sales, inventory, fuel, tank, batch, sync, or Commander health"></textarea>
+        <button id="send" type="submit">Send</button>
+      </form>
+    </section>
+  </main>
+  <dialog id="loginDialog">
+    <form id="loginForm" class="modal" method="dialog">
+      <h2 style="margin:0;font-size:18px">Local Login</h2>
+      <div class="sub">Enter the local secret created during setup.</div>
+      <input id="loginSecret" type="password" autocomplete="current-password" placeholder="Local secret">
+      <div id="loginError" class="error"></div>
+      <button type="submit">Continue</button>
+    </form>
+  </dialog>
+  <script>
+    const sessionKey = "verifone.localSession";
+    const messages = document.getElementById("messages");
+    const form = document.getElementById("composer");
+    const input = document.getElementById("message");
+    const send = document.getElementById("send");
+    const dot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const loginDialog = document.getElementById("loginDialog");
+    const loginForm = document.getElementById("loginForm");
+    const loginSecret = document.getElementById("loginSecret");
+    const loginError = document.getElementById("loginError");
+
+    function session(){ return localStorage.getItem(sessionKey) || ""; }
+    function headers(){ const token = session(); return token ? { "content-type":"application/json", "x-local-session": token } : { "content-type":"application/json" }; }
+    function bubble(role, text, meta){
+      const node = document.createElement("div");
+      node.className = `bubble ${role}`;
+      node.textContent = text;
+      if (meta) {
+        const m = document.createElement("div");
+        m.className = "meta";
+        m.textContent = meta;
+        node.appendChild(m);
+      }
+      messages.appendChild(node);
+      messages.scrollTop = messages.scrollHeight;
+    }
+    function setStatus(ok, text){ dot.className = ok ? "dot ok" : "dot bad"; statusText.textContent = text; }
+    async function checkAuth(){
+      const res = await fetch("/api/auth/status", { headers: session() ? { "x-local-session": session() } : {} });
+      const data = await res.json();
+      setStatus(true, data.authenticated ? "Connected" : data.configured ? "Login required" : "Setup required");
+      if (data.configured && !data.authenticated) loginDialog.showModal();
+      if (!data.configured) bubble("assistant", "Local setup is not complete. Ask support to complete onboarding from the dashboard before using chat.");
+    }
+    async function sendMessage(text){
+      bubble("user", text);
+      send.disabled = true;
+      try {
+        const res = await fetch("/api/chat/local", { method:"POST", headers:headers(), body:JSON.stringify({ messageText:text, source:"operator-chat-ui" }) });
+        const data = await res.json();
+        if (res.status === 401) {
+          loginDialog.showModal();
+          bubble("assistant", "Login is required before I can access local store data.");
+          return;
+        }
+        if (!res.ok) throw new Error(data.error || `Request failed with HTTP ${res.status}`);
+        bubble("assistant", data.message || "Accepted.", `intent: ${data.intent || "unknown"}`);
+      } catch (error) {
+        setStatus(false, "Attention needed");
+        bubble("assistant", error.message || String(error));
+      } finally {
+        send.disabled = false;
+      }
+    }
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      sendMessage(text);
+    });
+    document.querySelectorAll(".quick").forEach((button) => button.addEventListener("click", () => sendMessage(button.dataset.prompt)));
+    loginForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      loginError.textContent = "";
+      try {
+        const res = await fetch("/api/auth/login", { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify({ loginSecret:loginSecret.value }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Login failed");
+        localStorage.setItem(sessionKey, data.session.token);
+        loginDialog.close();
+        setStatus(true, "Connected");
+      } catch (error) {
+        loginError.textContent = error.message || String(error);
+      }
+    });
+    bubble("assistant", "Ask a local store question. I can use Commander snapshots, XML-derived tables, queue state, activity, and health records available on this edge device.");
+    checkAuth().catch((error) => { setStatus(false, "Local service unavailable"); bubble("assistant", error.message || String(error)); });
+  </script>
+</body>
+</html>
