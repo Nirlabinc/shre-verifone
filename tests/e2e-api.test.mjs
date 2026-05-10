@@ -70,10 +70,23 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
   const signupRequests = [];
   const commanderRequests = [];
   const commanderServer = createServer(async (req, res) => {
-    commanderRequests.push({ url: req.url, authorization: req.headers.authorization });
+    const chunks = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const body = Buffer.concat(chunks).toString("utf8");
+    commanderRequests.push({ url: req.url, method: req.method, authorization: req.headers.authorization, body });
     if (req.url.includes("cmd=validate")) {
       res.writeHead(200, { "content-type": "application/xml" });
       res.end(`<?xml version="1.0"?><Response><cookie>mock-cookie-001</cookie></Response>`);
+      return;
+    }
+    if (req.url.includes("cmd=uPLUs")) {
+      res.writeHead(200, { "content-type": "application/xml" });
+      res.end(`<?xml version="1.0"?><Response><Status>Accepted</Status><Message>PLU update accepted</Message></Response>`);
+      return;
+    }
+    if (req.url.includes("cmd=vPLUs")) {
+      res.writeHead(200, { "content-type": "application/xml" });
+      res.end(`<?xml version="1.0"?><NAXML-PLUConfig><PLU><ItemCode>sku-001</ItemCode><Description>Coffee</Description></PLU></NAXML-PLUConfig>`);
       return;
     }
     if (req.url.includes("cmd=vAppInfo")) {
@@ -459,6 +472,25 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       body: JSON.stringify({ mode: "write_only" }),
     });
     assert.equal(writeOnlyMode.body.mode, "write_only");
+
+    const commanderWriteBack = await json("/api/commander/writeback", {
+      method: "POST",
+      body: JSON.stringify({
+        commandId: "uPLUs",
+        entityType: "inventory",
+        entityId: "sku-001",
+        xml: `<?xml version="1.0"?><NAXML-PLUMaintenance><PLU><ItemCode>sku-001</ItemCode><Description>Coffee</Description></PLU></NAXML-PLUMaintenance>`,
+        verification: {
+          commandId: "vPLUs",
+          expectedReadContains: "sku-001",
+        },
+      }),
+    });
+    assert.equal(commanderWriteBack.response.status, 200);
+    assert.equal(commanderWriteBack.body.status, "completed");
+    assert.equal(commanderWriteBack.body.queueItem.status, "completed");
+    assert.equal(commanderRequests.some((item) => item.url.includes("cmd=uPLUs") && item.method === "POST" && item.body.includes("NAXML-PLUMaintenance")), true);
+    assert.equal(commanderRequests.some((item) => item.url.includes("cmd=vPLUs") && item.url.includes("cookie=mock-cookie-001")), true);
 
     const connector = await json("/api/connector/activate", {
       method: "POST",

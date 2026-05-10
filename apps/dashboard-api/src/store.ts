@@ -283,6 +283,52 @@ export class RuntimeStore {
     return this.queueItem(id)!;
   }
 
+  getQueueItem(id: string): JsonObject | null {
+    return this.queueItem(id);
+  }
+
+  updateQueueItem(id: string, status: string, lastError: string | null, payload?: JsonObject): JsonObject | null {
+    const now = new Date().toISOString();
+    if (payload) {
+      this.db.prepare(`
+        update outbound_queue
+        set status = ?, attempt_count = attempt_count + 1, last_error = ?, payload_json = ?, updated_at = ?
+        where id = ?
+      `).run(status, lastError, this.stringifyJson(payload), now, id);
+    } else {
+      this.db.prepare(`
+        update outbound_queue
+        set status = ?, attempt_count = attempt_count + 1, last_error = ?, updated_at = ?
+        where id = ?
+      `).run(status, lastError, now, id);
+    }
+    return this.queueItem(id);
+  }
+
+  recordSyncAttempt(item: {
+    queueId?: string;
+    target: string;
+    startedAt: string;
+    finishedAt?: string;
+    status: string;
+    error?: string;
+  }): JsonObject {
+    const id = randomUUID();
+    this.db.prepare(`
+      insert into sync_attempts (id, queue_id, target, started_at, finished_at, status, error)
+      values (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, item.queueId || null, item.target, item.startedAt, item.finishedAt || null, item.status, item.error || null);
+    return {
+      id,
+      queueId: item.queueId || "",
+      target: item.target,
+      startedAt: item.startedAt,
+      finishedAt: item.finishedAt || null,
+      status: item.status,
+      error: item.error || null,
+    };
+  }
+
   queueSummary(): JsonObject {
     const items = this.queueItems();
     const replay = this.getJson<JsonObject>("queue", "status", {});

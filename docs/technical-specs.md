@@ -112,12 +112,13 @@ GET  /api/heartbeat/worker
 POST /api/heartbeat/worker
 GET  /api/verifone/pdk/commands
 POST /api/verifone/pdk/execute
+POST /api/commander/writeback
 GET  /api/sync/status
 ```
 
 `POST /api/verifone/ping` is an immediate reachability check and does not change the heartbeat schedule. Validation and heartbeat update the stored connection state. The heartbeat worker runs in the local dashboard API process by default and checks Commander only when the stored heartbeat `nextCheckAt` is due, so repeated failures back off instead of overloading Commander.
 
-The PDK executor is documented in [Verifone PDK Command Catalog](verifone-pdk-command-catalog.md).
+The PDK executor and CStoreSKU XML write-back lifecycle are documented in [Verifone PDK Command Catalog](verifone-pdk-command-catalog.md).
 
 Set `DISABLE_HEARTBEAT_WORKER=true` to disable automatic reconnect for controlled test runs. Set `HEARTBEAT_WORKER_INTERVAL_MS` to change how often the worker wakes up to check whether a heartbeat is due.
 
@@ -168,7 +169,7 @@ Supported modes:
 - `read_write`: allows both read capture and queued inventory/write commands.
 - `write_only`: blocks local sales/read queries and allows queued Commander/inventory writes.
 
-The default comes from `COMMANDER_ACCESS_MODE`, falling back to `SHRE_MODE`, then `read_only`. Inventory updates and Commander write commands must go through `outbound_queue` and the Commander lease. Direct writes to Commander are not allowed from chat or gateway handlers.
+The default comes from `COMMANDER_ACCESS_MODE`, falling back to `SHRE_MODE`, then `read_only`. Inventory updates and Commander write commands must go through `outbound_queue` and the Commander lease. Direct writes to Commander are not allowed from chat or gateway handlers. CStoreSKU write mode sends XML to `/api/commander/writeback`; the local service submits it to Commander and should run a read-back verification command before the queue item is marked complete.
 
 ## Add-ons, Remote Access, And MCP Contract
 

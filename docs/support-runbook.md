@@ -197,6 +197,8 @@ Check:
 
 Inventory writes require `read_write` or `write_only`. Keep stores in `read_only` until write-back has been approved and validated.
 
+For CStoreSKU write-back, check `/api/commander/writeback`, `/api/queue`, and `/api/activity`. A successful write should show `commander_writeback_verified` and a completed queue item. If the queue item is `verification_failed`, Commander accepted the request but the read-back command or expected response check did not prove the data was loaded.
+
 ### Add-on Not Available
 
 Check:

@@ -66,7 +66,7 @@ async function requestText(req: IncomingMessage): Promise<string> {
   let bytes = 0;
   for await (const chunk of req) chunks.push(Buffer.from(chunk));
   for (const chunk of chunks) bytes += chunk.byteLength;
-  if (bytes > 1_000_000) throw new Error("Request body too large");
+  if (bytes > 10_000_000) throw new Error("Request body too large");
   return Buffer.concat(chunks).toString("utf8").trim();
 }
 
@@ -739,18 +739,19 @@ function buildCommanderUrl(baseUrl: string, endpoint: string, businessDate: stri
   return url.toString();
 }
 
-async function fetchCommander(url: string, username: string, password: string, connection: JsonObject): Promise<Response> {
+async function fetchCommander(url: string, username: string, password: string, connection: JsonObject, init: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const headers: Record<string, string> = {
       accept: "application/json, application/xml, text/xml, text/plain;q=0.8, */*;q=0.5",
       authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+      ...Object.fromEntries(new Headers(init.headers || {}).entries()),
     };
     if (typeof connection.applicationKey === "string" && connection.applicationKey) {
       headers["x-application-key"] = decryptSecret(connection.applicationKey);
     }
-    return await fetch(url, { method: "GET", headers, signal: controller.signal });
+    return await fetch(url, { ...init, method: init.method || "GET", headers, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
@@ -1035,6 +1036,211 @@ async function executePdkCommand(body: JsonObject): Promise<JsonObject> {
   }
 }
 
+async function submitCommanderWriteBack(body: JsonObject): Promise<JsonObject> {
+  if (!commanderWritesAllowed()) {
+    return {
+      ok: false,
+      status: "blocked",
+      accessMode: accessMode(),
+      message: "Commander write-back requires access mode read_write or write_only.",
+    };
+  }
+  const commandId = requireString(body, "commandId");
+  const definition = pdkCommandById(commandId);
+  if (!definition) return { ok: false, status: "unknown_command", message: `PDK command not found: ${commandId}` };
+  if (!definition.mutating) {
+    return { ok: false, status: "not_a_write_command", commandId, message: "Write-back requires a mutating PDK command." };
+  }
+  const xml = requireString(body, "xml");
+  if (!xml.trim().startsWith("<")) throw new Error("xml must contain an XML document.");
+  const params = asObject(body.params || {});
+  const entityType = typeof body.entityType === "string" && body.entityType.trim() ? body.entityType.trim() : "commander_xml";
+  const entityId = typeof body.entityId === "string" && body.entityId.trim() ? body.entityId.trim() : createHash("sha256").update(xml).digest("hex").slice(0, 16);
+  const verification = asObject(body.verification || {});
+  const transport = String(body.transport || "post_body");
+  const payload: JsonObject = {
+    commandId,
+    params,
+    xml,
+    xmlSha256: createHash("sha256").update(xml).digest("hex"),
+    transport,
+    verification,
+    submittedAt: new Date().toISOString(),
+  };
+  const queueItem = store.enqueue({
+    target: "commander",
+    entityType,
+    entityId,
+    operation: "pdk_xml_writeback",
+    payload,
+  });
+  const startedAt = new Date().toISOString();
+  store.appendActivity("commander_writeback_queued", {
+    queueId: queueItem.id,
+    commandId,
+    entityType,
+    entityId,
+    xmlBytes: xml.length,
+  });
+  try {
+    const writeResult = await executePdkXmlWrite(definition, params, xml, transport);
+    const verifyResult = writeResult.ok ? await verifyCommanderWriteBack(verification, writeResult, xml) : {
+      ok: false,
+      status: "write_failed",
+      message: "Write command failed, verification was skipped.",
+    };
+    const complete = writeResult.ok === true && verifyResult.ok === true;
+    const finalStatus = complete ? "completed" : writeResult.ok ? "verification_failed" : "failed";
+    const finalPayload = {
+      ...payload,
+      writeResult: summarizePdkExecution(writeResult),
+      verificationResult: summarizePdkExecution(verifyResult),
+      completedAt: new Date().toISOString(),
+    };
+    const updated = store.updateQueueItem(
+      String(queueItem.id),
+      finalStatus,
+      complete ? null : String(verifyResult.message || writeResult.message || "Commander write-back did not verify."),
+      finalPayload,
+    );
+    store.recordSyncAttempt({
+      queueId: String(queueItem.id),
+      target: "commander",
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      status: finalStatus,
+      error: complete ? "" : String(verifyResult.message || writeResult.message || "verification failed"),
+    });
+    store.appendActivity(complete ? "commander_writeback_verified" : "commander_writeback_failed", {
+      queueId: queueItem.id,
+      commandId,
+      status: finalStatus,
+      verificationStatus: verifyResult.status,
+    });
+    return {
+      ok: complete,
+      status: finalStatus,
+      queueItem: updated,
+      write: writeResult,
+      verification: verifyResult,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const updated = store.updateQueueItem(String(queueItem.id), "failed", message, { ...payload, failedAt: new Date().toISOString() });
+    store.recordSyncAttempt({
+      queueId: String(queueItem.id),
+      target: "commander",
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      status: "failed",
+      error: message,
+    });
+    store.appendActivity("commander_writeback_failed", { queueId: queueItem.id, commandId, message });
+    return { ok: false, status: "failed", queueItem: updated, message };
+  }
+}
+
+async function executePdkXmlWrite(definition: PdkCommand, params: JsonObject, xml: string, transport: string): Promise<JsonObject> {
+  const connection = store.getJson<JsonObject>("connections", "verifone", {});
+  const commanderUrl = String(connection.commanderUrl || "").replace(/\/$/, "");
+  const username = String(connection.username || "");
+  const password = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
+  if (!commanderUrl || !username || !password) {
+    return { ok: false, status: "not_configured", message: "Verifone connection is not configured." };
+  }
+  const cookie = await pdkCookie(commanderUrl, username, password, connection);
+  const writeParams = { ...params };
+  if (transport === "query_param") {
+    const xmlParamName = String(params.xmlParamName || "xml");
+    writeParams[xmlParamName] = xml;
+  }
+  const url = buildPdkUrl(commanderUrl, definition, writeParams, cookie, username, password);
+  const owner = `pdk-write-${definition.cmd}`;
+  const lease = store.acquireCommanderLease(owner, 240);
+  if (lease.acquired !== true) {
+    return { ok: false, status: "lease_blocked", message: "Commander write is already running.", lease };
+  }
+  try {
+    const init: RequestInit = transport === "query_param"
+      ? {}
+      : { method: "POST", headers: { "content-type": "application/xml; charset=utf-8" }, body: xml };
+    const response = await fetchCommander(url, username, password, connection, init);
+    const text = await response.text();
+    const ok = response.ok && !isCommanderFault(text);
+    return {
+      ok,
+      status: ok ? "submitted" : "failed",
+      command: sanitizePdkCommand(definition),
+      request: {
+        method: transport === "query_param" ? "GET" : "POST",
+        url: redactCommanderUrl(url),
+        xmlSha256: createHash("sha256").update(xml).digest("hex"),
+        xmlBytes: xml.length,
+      },
+      response: {
+        statusCode: response.status,
+        contentType: response.headers.get("content-type") || "",
+        bytes: text.length,
+        fault: isCommanderFault(text) ? summarizeCommanderFault(text) : null,
+      },
+      bodyPreview: text.slice(0, 1000),
+    };
+  } finally {
+    store.releaseCommanderLease(owner);
+  }
+}
+
+async function verifyCommanderWriteBack(verification: JsonObject, writeResult: JsonObject, xml: string): Promise<JsonObject> {
+  if (typeof verification.expectedResponseContains === "string" && verification.expectedResponseContains) {
+    const preview = String(writeResult.bodyPreview || "");
+    const ok = preview.includes(verification.expectedResponseContains);
+    return {
+      ok,
+      status: ok ? "response_matched" : "response_mismatch",
+      message: ok ? "Write response matched expected text." : "Write response did not contain expected text.",
+    };
+  }
+  if (typeof verification.commandId === "string" && verification.commandId) {
+    const readResult = await executePdkCommand({
+      commandId: verification.commandId,
+      params: asObject(verification.params || {}),
+    });
+    const contains = typeof verification.expectedReadContains === "string" ? verification.expectedReadContains : "";
+    const bodyPreview = String(readResult.bodyPreview || "");
+    const containsOk = !contains || bodyPreview.includes(contains);
+    return {
+      ok: readResult.ok === true && containsOk,
+      status: readResult.ok === true && containsOk ? "readback_verified" : "readback_failed",
+      message: readResult.ok === true && containsOk
+        ? "Verification read completed."
+        : contains
+          ? "Verification read did not contain expected text."
+          : "Verification read failed.",
+      read: summarizePdkExecution(readResult),
+    };
+  }
+  const writeAccepted = writeResult.ok === true;
+  return {
+    ok: writeAccepted,
+    status: writeAccepted ? "accepted_unverified" : "write_failed",
+    message: writeAccepted
+      ? "Commander accepted the XML write. No read-back verification command was supplied."
+      : "Commander did not accept the XML write.",
+    xmlSha256: createHash("sha256").update(xml).digest("hex"),
+  };
+}
+
+function summarizePdkExecution(result: JsonObject): JsonObject {
+  const response = asObject(result.response || {});
+  return {
+    ok: result.ok === true,
+    status: String(result.status || ""),
+    commandId: String(asObject(result.command || {}).id || ""),
+    statusCode: typeof response.statusCode === "number" ? response.statusCode : null,
+    fault: response.fault || null,
+  };
+}
+
 async function pdkCookie(commanderUrl: string, username: string, password: string, connection: JsonObject): Promise<string> {
   const state = store.getJson<JsonObject>("connections", "pdk-session", {});
   const expiresAt = typeof state.expiresAt === "string" ? Date.parse(state.expiresAt) : 0;
@@ -1300,6 +1506,7 @@ function mcpTools(): JsonObject {
     tools: [
       { name: "verifone.sales.query", endpoint: "/api/sales/query", mutating: false, scopes: ["sales.read"] },
       { name: "verifone.queue.enqueue", endpoint: "/api/queue/enqueue", mutating: true, scopes: ["sync.write"] },
+      { name: "verifone.commander.writeback", endpoint: "/api/commander/writeback", mutating: true, scopes: ["sync.write", "commander.write"] },
       { name: "verifone.health.read", endpoint: "/api/diagnostics", mutating: false, scopes: ["diagnostics.read"] },
       { name: "verifone.fcc.status", endpoint: "/api/addons/fcc/status", mutating: false, scopes: ["fcc.status.read"], optionalAddOn: true },
       { name: "verifone.loyalty.status", endpoint: "/api/addons/loyalty/status", mutating: false, scopes: ["loyalty.status.read"], optionalAddOn: true },
@@ -2330,6 +2537,16 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/commander/writeback" && req.method === "POST") {
+    try {
+      const result = await submitCommanderWriteBack(asObject(await requestBody(req)));
+      sendJson(res, result.ok === true ? 200 : result.status === "blocked" ? 403 : result.status === "lease_blocked" ? 423 : 502, result);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
   if (path === "/api/sync/status") {
     updateCommanderWriteBackState();
     sendJson(res, 200, syncState());
@@ -2499,6 +2716,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       storageBackup: "/api/storage/backup",
       storageRetentionApply: "/api/storage/retention/apply",
       shreSignupActivate: "/api/shre/signup-activate",
+      commanderWriteBack: "/api/commander/writeback",
       activitySummary: store.activitySummary(),
     });
     return;
