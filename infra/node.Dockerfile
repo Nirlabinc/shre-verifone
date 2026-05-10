@@ -14,3 +14,4 @@ RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
 COPY apps/dashboard-ui ./apps/dashboard-ui
 COPY apps/product-landing ./apps/product-landing
+COPY apps/access-portal ./apps/access-portal

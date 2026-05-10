@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Store Access Portal</title>
+  <style>
+    :root { --bg:#f4f6f8; --panel:#fff; --line:#d9e0e8; --text:#18212f; --muted:#667085; --blue:#175cd3; --green:#137a4b; --red:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Segoe UI", Arial, sans-serif; color:var(--text); background:var(--bg); }
+    header { min-height:72px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 6vw; background:var(--panel); border-bottom:1px solid var(--line); }
+    h1 { margin:0; font-size:22px; }
+    main { max-width:1120px; margin:0 auto; padding:34px 6vw 54px; }
+    .hint { color:var(--muted); line-height:1.45; }
+    .badge { display:inline-flex; border-radius:999px; padding:4px 9px; background:#eaf1ff; color:var(--blue); font-size:12px; font-weight:650; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-top:22px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; display:grid; gap:12px; min-height:190px; }
+    .card h2 { margin:0; font-size:18px; }
+    .card p { margin:0; color:var(--muted); line-height:1.45; }
+    .button { justify-self:start; align-self:end; border:1px solid transparent; border-radius:6px; padding:10px 13px; text-decoration:none; font-weight:650; }
+    .primary { background:var(--blue); color:#fff; }
+    .secondary { background:#fff; border-color:#cfd7df; color:var(--text); }
+    .danger { background:#fee4e2; color:var(--red); }
+    .status { margin-top:20px; background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; display:grid; gap:8px; }
+    code { background:#eef2f6; padding:2px 5px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Store Access Portal</h1>
+      <div class="hint">Choose the local app you want to access.</div>
+    </div>
+    <span class="badge">Protected by Cloudflare Access</span>
+  </header>
+  <main>
+    <p class="hint">This portal is designed to sit behind Cloudflare Access authentication. After login, support or approved users can route to the dashboard, Verifone ConfigClient, messenger, health, or diagnostics.</p>
+    <div class="grid">
+      <div class="card">
+        <h2>Commander Dashboard</h2>
+        <p>Setup, health, Verifone connection, CStoreSKU XML runtime, logs, and queue visibility.</p>
+        <a id="dashboardLink" class="button primary" href="/">Open Dashboard</a>
+      </div>
+      <div class="card">
+        <h2>Messenger Chat</h2>
+        <p>Ask local sales, item, fuel, tank, batch, and health questions using the local data router.</p>
+        <a id="chatLink" class="button primary" href="/#chat">Open Chat</a>
+      </div>
+      <div class="card">
+        <h2>Verifone ConfigClient</h2>
+        <p>Remote access to the Verifone Commander configuration page through the store tunnel.</p>
+        <a id="verifoneLink" class="button secondary" href="#">Open Verifone</a>
+      </div>
+      <div class="card">
+        <h2>Health</h2>
+        <p>Fast local API health check for support.</p>
+        <a class="button secondary" href="/api/health">Open Health</a>
+      </div>
+      <div class="card">
+        <h2>Landing Page</h2>
+        <p>Customer-facing product overview for the local connector.</p>
+        <a class="button secondary" href="/landing">Open Landing</a>
+      </div>
+      <div class="card">
+        <h2>Diagnostics</h2>
+        <p>Protected diagnostics endpoint. Requires local login session or admin token after first setup.</p>
+        <a class="button danger" href="/api/diagnostics">Open Diagnostics</a>
+      </div>
+    </div>
+    <div class="status">
+      <div><strong>Current host:</strong> <code id="currentHost"></code></div>
+      <div><strong>Verifone target:</strong> <code id="verifoneTarget"></code></div>
+      <div class="hint">If the Verifone link is wrong, pass <code>?verifone=https://store001-verifone.example.com/ConfigClient.html</code> or configure the tunnel with a Verifone hostname.</div>
+    </div>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const origin = location.origin;
+    const host = location.hostname;
+    const explicitDashboard = params.get("dashboard");
+    const explicitVerifone = params.get("verifone");
+    const inferredVerifoneHost = host.includes("dashboard") ? host.replace("dashboard", "verifone") : `verifone.${host}`;
+    const verifoneUrl = explicitVerifone || `${location.protocol}//${inferredVerifoneHost}/ConfigClient.html`;
+    const dashboardUrl = explicitDashboard || origin;
+    document.getElementById("dashboardLink").href = dashboardUrl;
+    document.getElementById("chatLink").href = `${dashboardUrl.replace(/\/$/, "")}/#chat`;
+    document.getElementById("verifoneLink").href = verifoneUrl;
+    document.getElementById("currentHost").textContent = host;
+    document.getElementById("verifoneTarget").textContent = verifoneUrl;
+  </script>
+</body>
+</html>

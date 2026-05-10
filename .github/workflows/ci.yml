@@ -73,3 +73,4 @@ jobs:
           test -s docs/cloudflare-remote-access.md
           test -s marketplace/verifone-commander.connector.json
           test -s apps/product-landing/index.html
+          test -s apps/access-portal/index.html

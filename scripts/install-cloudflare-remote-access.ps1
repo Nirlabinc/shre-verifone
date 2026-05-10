@@ -1,6 +1,7 @@
 param(
   [string]$TunnelName = "verifone-commander-store",
   [string]$TunnelToken = "",
+  [string]$PortalHostname = "",
   [string]$DashboardHostname = "",
   [string]$VerifoneHostname = "",
   [string]$VerifoneIp = "",
@@ -76,6 +77,7 @@ if ([string]::IsNullOrWhiteSpace($VerifoneIp)) {
 }
 
 $dashboardUrl = "https://$DashboardHostname"
+$portalUrl = if ([string]::IsNullOrWhiteSpace($PortalHostname)) { "$dashboardUrl/portal" } else { "https://$PortalHostname/portal" }
 $verifoneUrl = "https://$VerifoneHostname/ConfigClient.html"
 $verifoneLanUrl = "http://$VerifoneIp/ConfigClient.html"
 $configRoot = Join-Path $env:ProgramData "cloudflared"
@@ -85,7 +87,7 @@ if (-not $DryRun) { New-Item -ItemType Directory -Path $configRoot -Force | Out-
 $config = @"
 tunnel: $TunnelName
 ingress:
-  - hostname: $DashboardHostname
+$(if (-not [string]::IsNullOrWhiteSpace($PortalHostname)) { "  - hostname: $PortalHostname`n    service: http://localhost:$DashboardPort`n" } else { "" })  - hostname: $DashboardHostname
     service: http://localhost:$DashboardPort
   - hostname: $VerifoneHostname
     service: http://$VerifoneIp
@@ -116,6 +118,7 @@ try {
     enabled = $true
     tunnelId = $TunnelName
     publicUrl = $dashboardUrl
+    portalUrl = $portalUrl
     dashboardUrl = $dashboardUrl
     verifoneUrl = $verifoneUrl
     verifoneLanUrl = $verifoneLanUrl
@@ -135,6 +138,7 @@ try {
   tunnelName = $TunnelName
   configPath = $configPath
   dashboardUrl = $dashboardUrl
+  portalUrl = $portalUrl
   verifoneUrl = $verifoneUrl
   verifoneLanUrl = $verifoneLanUrl
   detectedVerifoneIp = $VerifoneIp
@@ -143,8 +147,9 @@ try {
   apiUpdate = $apiUpdate
   nextSteps = @(
     "Create DNS routes in Cloudflare Zero Trust for $DashboardHostname and $VerifoneHostname.",
+    "Optional portal hostname route: $PortalHostname -> http://localhost:$DashboardPort.",
     "Apply Cloudflare Access policies and MFA to both hostnames.",
     "Run: cloudflared tunnel run $TunnelName, or install service with -InstallService -TunnelToken.",
-    "Open $dashboardUrl and $verifoneUrl through Cloudflare Access."
+    "Open $portalUrl, $dashboardUrl and $verifoneUrl through Cloudflare Access."
   )
 } | ConvertTo-Json -Depth 8

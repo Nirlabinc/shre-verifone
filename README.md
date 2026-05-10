@@ -191,6 +191,12 @@ Product landing page:
 http://localhost:5480/landing
 ```
 
+Remote access portal:
+
+```text
+http://localhost:5480/portal
+```
+
 Run with the legacy CStoreSKU/Varifone sidecar:
 
 ```powershell

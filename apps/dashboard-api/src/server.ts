@@ -26,6 +26,7 @@ const buildChannel = process.env.BUILD_CHANNEL || process.env.SHRE_ENV || "local
 const buildSha = process.env.BUILD_SHA || "dev";
 const uiRoot = resolve("apps/dashboard-ui");
 const landingRoot = resolve("apps/product-landing");
+const portalRoot = resolve("apps/access-portal");
 let store: RuntimeStore;
 
 const retentionOptions = [7, 14, 30, 60, 90, 180, 365];
@@ -1782,6 +1783,7 @@ function remoteAccessStatus(): JsonObject {
     enabled: false,
     tunnelId: "",
     publicUrl: "",
+    portalUrl: "",
     dashboardUrl: "",
     verifoneUrl: "",
     verifoneLanUrl: "",
@@ -1789,9 +1791,11 @@ function remoteAccessStatus(): JsonObject {
     updatedAt: null,
   });
   const dashboardUrl = String(config.dashboardUrl || config.publicUrl || "");
+  const portalUrl = String(config.portalUrl || (dashboardUrl ? `${dashboardUrl.replace(/\/$/, "")}/portal` : ""));
   const verifoneUrl = String(config.verifoneUrl || "");
   return {
     ...config,
+    portalUrl,
     dashboardUrl,
     verifoneUrl,
     ready: config.enabled === true && Boolean(dashboardUrl),
@@ -3842,6 +3846,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         enabled: body.enabled === true,
         tunnelId: typeof body.tunnelId === "string" ? body.tunnelId : "",
         publicUrl: typeof body.publicUrl === "string" ? body.publicUrl : "",
+        portalUrl: typeof body.portalUrl === "string" ? body.portalUrl : "",
         dashboardUrl: typeof body.dashboardUrl === "string" ? body.dashboardUrl : "",
         verifoneUrl: typeof body.verifoneUrl === "string" ? body.verifoneUrl : "",
         verifoneLanUrl: typeof body.verifoneLanUrl === "string" ? body.verifoneLanUrl : "",
@@ -4420,6 +4425,18 @@ async function serveLanding(res: ServerResponse): Promise<void> {
   res.end(html);
 }
 
+async function servePortal(res: ServerResponse): Promise<void> {
+  const html = await readFile(join(portalRoot, "index.html"), "utf8");
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:;",
+  });
+  res.end(html);
+}
+
 async function main(): Promise<void> {
   await ensureRuntime();
   store = new RuntimeStore(runtimeRoot, { connectorRegistryUrl });
@@ -4464,6 +4481,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, path: st
   }
   if (path === "/landing" || path === "/landing/") {
     await serveLanding(res);
+    return;
+  }
+  if (path === "/portal" || path === "/portal/") {
+    await servePortal(res);
     return;
   }
   await serveUi(res);

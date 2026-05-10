@@ -20,6 +20,7 @@ The installer script probes common candidates and also accepts an explicit `-Ver
 Use two separate hostnames and two separate Cloudflare Access policies:
 
 ```text
+store001-portal.example.com    -> http://localhost:5480/portal
 store001-dashboard.example.com -> http://localhost:5480
 store001-verifone.example.com  -> http://<detected-verifone-ip>
 ```
@@ -27,9 +28,12 @@ store001-verifone.example.com  -> http://<detected-verifone-ip>
 Users open:
 
 ```text
+https://store001-portal.example.com/portal
 https://store001-dashboard.example.com
 https://store001-verifone.example.com/ConfigClient.html
 ```
+
+The portal is an app chooser. Cloudflare Access authenticates the user first, then the user chooses Dashboard, Messenger Chat, Verifone ConfigClient, Health, or Diagnostics.
 
 ## Cloudflare Prerequisites
 
@@ -49,6 +53,7 @@ Dry run:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install-cloudflare-remote-access.ps1 `
   -TunnelName "store001-verifone-commander" `
+  -PortalHostname "store001-portal.example.com" `
   -DashboardHostname "store001-dashboard.example.com" `
   -VerifoneHostname "store001-verifone.example.com" `
   -DryRun
@@ -60,6 +65,7 @@ Install with auto-detected Verifone IP:
 powershell -ExecutionPolicy Bypass -File scripts\install-cloudflare-remote-access.ps1 `
   -TunnelName "store001-verifone-commander" `
   -TunnelToken "<cloudflare-tunnel-token>" `
+  -PortalHostname "store001-portal.example.com" `
   -DashboardHostname "store001-dashboard.example.com" `
   -VerifoneHostname "store001-verifone.example.com" `
   -LocalAdminToken "<optional-local-admin-token>" `
@@ -72,6 +78,7 @@ Install with explicit Verifone IP:
 powershell -ExecutionPolicy Bypass -File scripts\install-cloudflare-remote-access.ps1 `
   -TunnelName "store001-verifone-commander" `
   -TunnelToken "<cloudflare-tunnel-token>" `
+  -PortalHostname "store001-portal.example.com" `
   -DashboardHostname "store001-dashboard.example.com" `
   -VerifoneHostname "store001-verifone.example.com" `
   -VerifoneIp "192.168.31.11" `
@@ -91,6 +98,8 @@ Shape:
 ```yaml
 tunnel: store001-verifone-commander
 ingress:
+  - hostname: store001-portal.example.com
+    service: http://localhost:5480
   - hostname: store001-dashboard.example.com
     service: http://localhost:5480
   - hostname: store001-verifone.example.com
