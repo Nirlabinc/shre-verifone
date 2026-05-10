@@ -16,6 +16,7 @@ services:
       SHRE_MODE: ${SHRE_MODE:-read_only}
       CONNECTOR_REGISTRY_URL: ${CONNECTOR_REGISTRY_URL:-https://connector.aros.live}
       CONNECTOR_SHARED_SECRET: ${CONNECTOR_SHARED_SECRET:-}
+      LOCAL_ADMIN_TOKEN: ${LOCAL_ADMIN_TOKEN:-}
       LOCAL_BASE_URL: ${LOCAL_BASE_URL:-http://cstoresku:5480}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       BUILD_CHANNEL: ${BUILD_CHANNEL:-local}
@@ -23,7 +24,7 @@ services:
     volumes:
       - verifone-shre-runtime:/runtime
     ports:
-      - "127.0.0.1:5480:5480"
+      - "127.0.0.1:${HOST_PORT:-5480}:5480"
     restart: unless-stopped
 
   cstoresku-runtime-init:

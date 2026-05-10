@@ -139,6 +139,7 @@ docker compose -f infra/docker-compose.yml --profile cstoresku up --build
 ```
 
 This profile requires Docker Compose v2 with named-volume `subpath` support because the legacy image expects three separate mount targets while the platform keeps one protected runtime volume.
+For local verification beside a native dashboard already bound to `5480`, set `HOST_PORT=5594`; the container still listens on `5480` internally.
 
 The `dashboard-api` container uses `CSTORESKU_RUNTIME_ROOT=/runtime/cstoresku-runtime`. The sidecar mounts the same volume subfolders to the paths the original image expects:
 

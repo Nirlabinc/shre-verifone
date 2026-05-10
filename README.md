@@ -185,6 +185,7 @@ docker compose -f infra/docker-compose.yml --profile cstoresku up --build
 ```
 
 This sidecar profile requires Docker Compose v2 with named-volume `subpath` support.
+Use `HOST_PORT=5594` when testing beside an already-running local dashboard on port `5480`.
 
 The sidecar shares the protected runtime volume and receives the original CStoreSKU mount shape:
 

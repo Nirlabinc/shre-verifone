@@ -135,6 +135,8 @@ docker compose -f infra/docker-compose.yml --profile cstoresku up --build
 
 The dashboard writes the legacy encrypted `DataSource/DatabaseServers.xml` and staged XML under `/runtime/cstoresku-runtime`. The sidecar mounts those folders into `/app/DataSource`, `/app/xml`, and `/app/logs`.
 
+For side-by-side testing with a native API already running on port `5480`, set `HOST_PORT=5594` before starting compose.
+
 Installer/onboarding field ownership is tracked in [Installation Data Map](installation-data-map.md). Use that document when adding installer prompts, first-run setup fields, activation-token exchange, or support scripts.
 
 ## Development Rules
