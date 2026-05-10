@@ -40,8 +40,13 @@ jobs:
         run: |
           bash -n scripts/production-update.sh
           bash -n scripts/pilot-preflight.sh
+          bash -n scripts/install-oneclick.sh
+          bash -n scripts/install-oneclick-aarch64.sh
+          bash -n scripts/install-oneclick-android-termux.sh
           test -s scripts/production-update.ps1
           test -s scripts/pilot-preflight.ps1
+          test -s scripts/install-windows-dashboard-service.ps1
+          test -s scripts/configure-cloudflare-access.ps1
 
       - name: Check required docs
         run: |
@@ -80,3 +85,4 @@ jobs:
           test -s scripts/install-oneclick.sh
           test -s scripts/install-oneclick-aarch64.sh
           test -s scripts/install-oneclick-android-termux.sh
+          test -s scripts/start-dashboard.ps1

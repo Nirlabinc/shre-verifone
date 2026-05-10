@@ -17,6 +17,7 @@ const localAdminToken = process.env.LOCAL_ADMIN_TOKEN || "";
 const shreAuthValidateUrl = process.env.SHRE_AUTH_VALIDATE_URL || "";
 const shreAuthSignupUrl = process.env.SHRE_AUTH_SIGNUP_URL || "";
 const shreSetupCaptureUrl = process.env.SHRE_SETUP_CAPTURE_URL || "";
+const shreLeadCaptureUrl = process.env.SHRE_LEAD_CAPTURE_URL || "";
 const shreCostEndpoint = process.env.SHRE_COST_ENDPOINT || "";
 const emailVerificationRequired = process.env.SHRE_EMAIL_VERIFICATION_REQUIRED === "true";
 const commanderAccessMode = process.env.COMMANDER_ACCESS_MODE || process.env.SHRE_MODE || "read_only";
@@ -389,6 +390,36 @@ function saveLearningPolicy(policy: JsonObject): JsonObject {
   };
   store.setJson("shre-learning", "policy", normalized);
   return normalized;
+}
+
+async function forwardLeadCapture(lead: JsonObject): Promise<JsonObject> {
+  if (!shreLeadCaptureUrl) {
+    return { forwarded: false, state: "not_configured", message: "SHRE_LEAD_CAPTURE_URL is not configured." };
+  }
+  try {
+    const response = await fetch(shreLeadCaptureUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        app: "verifone_commander_shre_cstoresku",
+        lead,
+        host: { hostname: hostname(), platform: platform(), arch: arch() },
+      }),
+    });
+    const payload = asObject(await response.json().catch(() => ({})));
+    return {
+      forwarded: response.ok,
+      state: response.ok ? "forwarded" : "failed",
+      statusCode: response.status,
+      message: String(payload.message || payload.error || (response.ok ? "Lead forwarded." : "Lead forward failed.")),
+    };
+  } catch (error) {
+    return {
+      forwarded: false,
+      state: "offline_pending",
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function exportApprovedLearningExamples(markExported = true): JsonObject {
@@ -3064,8 +3095,22 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         createdAt: new Date().toISOString(),
       };
       store.setJson("leads", id, lead);
-      store.appendActivity("lead_captured", { id, email, source: lead.source });
-      sendJson(res, 201, { ok: true, id, nextUrl: "/portal" });
+      const forward = await forwardLeadCapture(lead);
+      if (forward.forwarded !== true) {
+        store.enqueue({
+          target: "shre-leads",
+          entityType: "lead",
+          entityId: id,
+          operation: "capture_lead",
+          payload: {
+            endpoint: shreLeadCaptureUrl || "not_configured",
+            lead,
+            lastForwardState: forward,
+          },
+        });
+      }
+      store.appendActivity("lead_captured", { id, email, source: lead.source, forwardState: forward.state });
+      sendJson(res, 201, { ok: true, id, nextUrl: "/portal", forward });
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : String(error));
     }

@@ -14,6 +14,7 @@ VERIFONE_IP="${VERIFONE_IP:-}"
 TUNNEL_TOKEN="${TUNNEL_TOKEN:-}"
 LOCAL_ADMIN_TOKEN="${LOCAL_ADMIN_TOKEN:-}"
 INSTALL_CLOUDFLARE_SERVICE="${INSTALL_CLOUDFLARE_SERVICE:-false}"
+INSTALL_DASHBOARD_SERVICE="${INSTALL_DASHBOARD_SERVICE:-true}"
 
 if [[ -z "$DASHBOARD_HOSTNAME" || -z "$VERIFONE_HOSTNAME" ]]; then
   echo "DASHBOARD_HOSTNAME and VERIFONE_HOSTNAME are required." >&2
@@ -74,6 +75,60 @@ HOST=127.0.0.1 PORT="$DASHBOARD_PORT" LOCAL_ADMIN_TOKEN="$LOCAL_ADMIN_TOKEN" noh
 API_PID="$!"
 sleep 3
 
+install_dashboard_service() {
+  if [[ "$INSTALL_DASHBOARD_SERVICE" != "true" ]]; then
+    return
+  fi
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    PLIST="$HOME/Library/LaunchAgents/com.rapidinfosoft.verifone-commander-shre.plist"
+    mkdir -p "$HOME/Library/LaunchAgents"
+    cat > "$PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.rapidinfosoft.verifone-commander-shre</string>
+  <key>WorkingDirectory</key><string>${INSTALL_ROOT}</string>
+  <key>ProgramArguments</key><array><string>node</string><string>dist/apps/dashboard-api/src/server.js</string></array>
+  <key>EnvironmentVariables</key><dict><key>HOST</key><string>127.0.0.1</string><key>PORT</key><string>${DASHBOARD_PORT}</string><key>LOCAL_ADMIN_TOKEN</key><string>${LOCAL_ADMIN_TOKEN}</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>${INSTALL_ROOT}/dashboard-api.log</string>
+  <key>StandardErrorPath</key><string>${INSTALL_ROOT}/dashboard-api.err.log</string>
+</dict></plist>
+PLIST
+    launchctl unload "$PLIST" >/dev/null 2>&1 || true
+    launchctl load "$PLIST"
+    return
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    SERVICE="/etc/systemd/system/verifone-commander-shre.service"
+    sudo tee "$SERVICE" >/dev/null <<SERVICE
+[Unit]
+Description=Verifone Commander Shre CStoreSKU Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=${INSTALL_ROOT}
+Environment=HOST=127.0.0.1
+Environment=PORT=${DASHBOARD_PORT}
+Environment=LOCAL_ADMIN_TOKEN=${LOCAL_ADMIN_TOKEN}
+ExecStart=$(command -v node) dist/apps/dashboard-api/src/server.js
+Restart=always
+RestartSec=5
+User=$(id -un)
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now verifone-commander-shre.service
+  fi
+}
+
+install_dashboard_service
+
 if [[ -z "$VERIFONE_IP" ]]; then
   for candidate in 192.168.14.11 192.168.31.11 192.168.1.11 192.168.0.11; do
     if curl -fsS --max-time 3 "http://${candidate}/ConfigClient.html" >/dev/null 2>&1 || curl -fsS --max-time 3 "http://${candidate}/" >/dev/null 2>&1; then
@@ -133,6 +188,7 @@ cat <<JSON
   "ok": true,
   "installRoot": "$INSTALL_ROOT",
   "apiProcessId": "$API_PID",
+  "dashboardService": "$INSTALL_DASHBOARD_SERVICE",
   "localDashboard": "http://127.0.0.1:$DASHBOARD_PORT",
   "localPortal": "http://127.0.0.1:$DASHBOARD_PORT/portal",
   "localChat": "http://127.0.0.1:$DASHBOARD_PORT/chat",

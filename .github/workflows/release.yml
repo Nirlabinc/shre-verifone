@@ -1,7 +1,6 @@
-name: Release Candidate
+name: Release Artifacts
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -10,8 +9,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  build-release:
+  package:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,45 +22,25 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install
-        run: npm install
-
-      - name: Validate
-        run: npm run check
-
-      - name: Preflight syntax
+      - name: Install and validate
         run: |
-          bash -n scripts/pilot-preflight.sh
-          bash -n scripts/production-update.sh
-          test -s scripts/pilot-preflight.ps1
-          test -s scripts/production-update.ps1
+          npm install
+          npm run check
+          bash -n scripts/install-oneclick.sh
+          bash -n scripts/install-oneclick-aarch64.sh
+          bash -n scripts/install-oneclick-android-termux.sh
 
-      - name: Compose config
-        run: |
-          docker compose -f infra/docker-compose.yml config >/tmp/base-compose.yml
-          CSTORESKU_LEGACY_IMAGE=varifone-service:latest \
-          CSTORESKU_LEGACY_PLATFORM=linux/amd64 \
-          docker compose -f infra/docker-compose.yml --profile cstoresku config >/tmp/cstoresku-compose.yml
-
-      - name: Package release bundle
+      - name: Build release bundle
         run: |
           mkdir -p release
-          tar -czf release/verifone-commander-shre-cstoresku-source.tgz \
-            README.md package.json package-lock.json tsconfig.json \
-            apps services scripts docs infra marketplace .env.example .env.prod.example
-          cp /tmp/base-compose.yml release/docker-compose.rendered.yml
-          cp /tmp/cstoresku-compose.yml release/docker-compose.cstoresku.rendered.yml
-          sha256sum release/* > release/SHA256SUMS.txt
+          tar --exclude=.git --exclude=node_modules --exclude=release -czf release/verifone-commander-shre-cstoresku-${GITHUB_REF_NAME}.tar.gz .
+          zip -r release/verifone-commander-shre-cstoresku-${GITHUB_REF_NAME}.zip . -x ".git/*" "node_modules/*" "release/*"
+          (cd release && sha256sum * > SHA256SUMS.txt)
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: verifone-commander-shre-cstoresku-release
-          path: release/
-
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*
-          generate_release_notes: true
+          files: |
+            release/verifone-commander-shre-cstoresku-${{ github.ref_name }}.tar.gz
+            release/verifone-commander-shre-cstoresku-${{ github.ref_name }}.zip
+            release/SHA256SUMS.txt

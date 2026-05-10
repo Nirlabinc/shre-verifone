@@ -46,7 +46,7 @@ Create these in Cloudflare Zero Trust before unattended install:
 3. DNS routes for dashboard and Verifone hostnames.
 4. Cloudflare Access policies requiring approved users and MFA.
 
-The local installer can install and run `cloudflared`, but it should not create broad Access policy rules without a Cloudflare API token and account-specific approval.
+The local installer can install and run `cloudflared`. It can also create Access apps/policies when given a Cloudflare account ID, API token, and approved support/operator email lists.
 
 ## Install Script
 
@@ -74,6 +74,20 @@ powershell -ExecutionPolicy Bypass -File scripts\install-cloudflare-remote-acces
   -VerifoneHostname "store001-verifone.example.com" `
   -LocalAdminToken "<optional-local-admin-token>" `
   -InstallService
+```
+
+Create Access apps/policies:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\configure-cloudflare-access.ps1 `
+  -AccountId "$env:CLOUDFLARE_ACCOUNT_ID" `
+  -ApiToken "$env:CLOUDFLARE_API_TOKEN" `
+  -PortalHostname "store001-portal.example.com" `
+  -DashboardHostname "store001-dashboard.example.com" `
+  -ChatHostname "store001-chat.example.com" `
+  -VerifoneHostname "store001-verifone.example.com" `
+  -SupportEmails "support@example.com" `
+  -OperatorEmails "operator@example.com"
 ```
 
 Install with explicit Verifone IP:

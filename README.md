@@ -200,6 +200,8 @@ powershell -ExecutionPolicy Bypass -File scripts\install-oneclick.ps1 `
   -ChatHostname store001-chat.example.com `
   -VerifoneHostname store001-verifone.example.com `
   -TunnelToken "<cloudflare-tunnel-token>" `
+  -ConfigureCloudflareAccess `
+  -InstallDashboardService `
   -InstallCloudflareService
 ```
 
@@ -212,6 +214,7 @@ CHAT_HOSTNAME=store001-chat.example.com \
 VERIFONE_HOSTNAME=store001-verifone.example.com \
 TUNNEL_TOKEN='<cloudflare-tunnel-token>' \
 INSTALL_CLOUDFLARE_SERVICE=true \
+INSTALL_DASHBOARD_SERVICE=true \
 bash scripts/install-oneclick.sh
 ```
 

@@ -11,6 +11,12 @@ param(
   [string]$VerifoneIp = "",
   [int]$DashboardPort = 5480,
   [string]$LocalAdminToken = "",
+  [string]$CloudflareAccountId = $env:CLOUDFLARE_ACCOUNT_ID,
+  [string]$CloudflareApiToken = $env:CLOUDFLARE_API_TOKEN,
+  [string[]]$SupportEmails = @(),
+  [string[]]$OperatorEmails = @(),
+  [switch]$ConfigureCloudflareAccess,
+  [switch]$InstallDashboardService,
   [switch]$InstallCloudflareService,
   [switch]$DryRun
 )
@@ -86,6 +92,37 @@ if ($DryRun) { $cloudflareArgs += "-DryRun" }
 
 $cloudflare = & powershell @cloudflareArgs | ConvertFrom-Json
 
+$dashboardService = $null
+if ($InstallDashboardService -or $InstallCloudflareService) {
+  $serviceArgs = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", (Join-Path $InstallRoot "scripts\install-windows-dashboard-service.ps1"),
+    "-InstallRoot", $InstallRoot,
+    "-Port", $DashboardPort
+  )
+  if (-not [string]::IsNullOrWhiteSpace($LocalAdminToken)) { $serviceArgs += @("-LocalAdminToken", $LocalAdminToken) }
+  if ($DryRun) { $serviceArgs += "-DryRun" }
+  $dashboardService = & powershell @serviceArgs | ConvertFrom-Json
+}
+
+$access = $null
+if ($ConfigureCloudflareAccess) {
+  $accessArgs = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", (Join-Path $InstallRoot "scripts\configure-cloudflare-access.ps1"),
+    "-AccountId", $CloudflareAccountId,
+    "-ApiToken", $CloudflareApiToken,
+    "-DashboardHostname", $DashboardHostname,
+    "-VerifoneHostname", $VerifoneHostname
+  )
+  if (-not [string]::IsNullOrWhiteSpace($PortalHostname)) { $accessArgs += @("-PortalHostname", $PortalHostname) }
+  if (-not [string]::IsNullOrWhiteSpace($ChatHostname)) { $accessArgs += @("-ChatHostname", $ChatHostname) }
+  foreach ($email in $SupportEmails) { $accessArgs += @("-SupportEmails", $email) }
+  foreach ($email in $OperatorEmails) { $accessArgs += @("-OperatorEmails", $email) }
+  if ($DryRun) { $accessArgs += "-DryRun" }
+  $access = & powershell @accessArgs | ConvertFrom-Json
+}
+
 $chatUrl = if ([string]::IsNullOrWhiteSpace($ChatHostname)) {
   "$($cloudflare.dashboardUrl.TrimEnd('/'))/chat"
 } else {
@@ -105,8 +142,10 @@ $result = [pscustomobject]@{
   chatUrl = $chatUrl
   verifoneUrl = $cloudflare.verifoneUrl
   verifoneLanUrl = $cloudflare.verifoneLanUrl
+  dashboardService = $dashboardService
+  cloudflareAccess = $access
   nextSteps = @(
-    "Apply Cloudflare Access auth policy to portal/dashboard/chat/verifone hostnames.",
+    "Confirm Cloudflare Access auth policy is applied to portal/dashboard/chat/verifone hostnames.",
     "Support opens portalUrl, logs in through Cloudflare Access, and completes store setup.",
     "Store operator receives chatUrl for day-to-day questions."
   )
