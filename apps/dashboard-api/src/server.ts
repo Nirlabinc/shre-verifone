@@ -543,6 +543,10 @@ function pingVerifoneConnection(body: JsonObject = {}): JsonObject {
 }
 
 async function pullCommanderSales(body: JsonObject = {}): Promise<JsonObject> {
+  return pullCommanderReport({ ...body, reportType: "sales" });
+}
+
+async function pullCommanderReport(body: JsonObject = {}): Promise<JsonObject> {
   if (!commanderReadsAllowed()) {
     return {
       ok: false,
@@ -551,7 +555,8 @@ async function pullCommanderSales(body: JsonObject = {}): Promise<JsonObject> {
       accessMode: accessMode(),
     };
   }
-  const owner = typeof body.owner === "string" && body.owner.trim() ? body.owner.trim() : "sales-ingest";
+  const reportType = normalizeReportType(typeof body.reportType === "string" ? body.reportType : "sales");
+  const owner = typeof body.owner === "string" && body.owner.trim() ? body.owner.trim() : `${reportType}-ingest`;
   const lease = store.acquireCommanderLease(owner, 120);
   if (lease.acquired !== true) {
     return {
@@ -573,9 +578,111 @@ async function pullCommanderSales(body: JsonObject = {}): Promise<JsonObject> {
     const businessDate = typeof body.businessDate === "string" && body.businessDate.trim()
       ? body.businessDate.trim()
       : new Date().toISOString().slice(0, 10);
-    const configuredEndpoint = typeof connection.salesEndpoint === "string" ? connection.salesEndpoint : "";
+    const configuredEndpoint = configuredReportEndpoint(connection, reportType);
     const requestedEndpoint = typeof body.endpoint === "string" ? body.endpoint : "";
-    const endpoints = uniqueStrings([
+    const endpoints = reportEndpointCandidates(reportType, requestedEndpoint, configuredEndpoint);
+    const attempts: JsonObject[] = [];
+    for (const endpoint of endpoints) {
+      const url = buildCommanderUrl(commanderUrl, endpoint, businessDate, username, password);
+      try {
+        const response = await fetchCommander(url, username, password, connection);
+        const text = await response.text();
+        attempts.push({
+          endpoint,
+          url: redactCommanderUrl(url),
+          status: response.status,
+          contentType: response.headers.get("content-type") || "",
+          bytes: text.length,
+        });
+        if (!response.ok || !text.trim()) continue;
+        const normalizedReport = normalizeCommanderXmlReport(text, response.headers.get("content-type") || "", reportType, businessDate);
+        if (!normalizedReport) continue;
+        const report = store.saveCommanderReport({
+          reportType: String(normalizedReport.reportType || reportType),
+          businessDate,
+          source: "verifone-commander-live",
+          rootName: String(normalizedReport.rootName || ""),
+          xml: text,
+          normalized: asObject(normalizedReport.normalized || {}),
+        });
+        const snapshotInput = reportType === "sales" ? salesSnapshotFromConexxus(asObject(normalizedReport.normalized || {}), businessDate) : null;
+        const snapshot = snapshotInput ? store.saveSalesSnapshot({
+          ...snapshotInput,
+          businessDate,
+          source: "verifone-commander-live",
+        }) : null;
+        const finishedAt = new Date();
+        markLocalPullResult("completed", {
+          enabled: true,
+          lastPullAt: finishedAt.toISOString(),
+          nextPullAt: new Date(finishedAt.getTime() + 300_000).toISOString(),
+          intervalSeconds: 300,
+          source: "verifone-commander",
+          lastError: null,
+          lastEndpoint: endpoint,
+          lastReportType: report.reportType,
+        });
+        store.appendActivity("commander_report_pull_completed", {
+          businessDate,
+          endpoint,
+          reportType: report.reportType,
+          durationMs: finishedAt.getTime() - startedAt.getTime(),
+        });
+        return {
+          ok: true,
+          status: "completed",
+          businessDate,
+          endpoint,
+          report,
+          snapshot,
+          attempts,
+        };
+      } catch (error) {
+        attempts.push({
+          endpoint,
+          url: redactCommanderUrl(url),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const message = `No Commander ${reportType} endpoint returned a recognizable Conexxus/NAXML XML payload. Configure the correct Commander report path or CGILink command.`;
+    markLocalPullResult("failed", {
+      enabled: true,
+      lastError: message,
+      lastAttemptAt: new Date().toISOString(),
+      nextPullAt: new Date(Date.now() + 300_000).toISOString(),
+      source: "verifone-commander",
+      lastReportType: reportType,
+    });
+    store.appendActivity("commander_report_pull_failed", { businessDate, reportType, attempts: attempts.length, message });
+    return { ok: false, status: "failed", reportType, businessDate, message, attempts };
+  } finally {
+    store.releaseCommanderLease(owner);
+  }
+}
+
+function normalizeReportType(value: string): string {
+  const type = value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  if (["sales", "batch", "fuel", "tank", "item", "department", "payment", "tax", "journal"].includes(type)) return type;
+  return "sales";
+}
+
+function configuredReportEndpoint(connection: JsonObject, reportType: string): string {
+  const specificKey = `${reportType}Endpoint`;
+  if (typeof connection[specificKey] === "string") return String(connection[specificKey]);
+  if (reportType === "sales" && typeof connection.salesEndpoint === "string") return connection.salesEndpoint;
+  return "";
+}
+
+function reportEndpointCandidates(reportType: string, requestedEndpoint: string, configuredEndpoint: string): string[] {
+  const commonCgi = [
+    `/cgi-bin/CGILink?cmd=${reportType}`,
+    `/cgi-bin/CGILink?cmd=get${capitalize(reportType)}`,
+    "/cgi-bin/CGILink?cmd=report",
+    "/cgi-bin/CGILink?cmd=getReport",
+  ];
+  const byType: Record<string, string[]> = {
+    sales: [
       requestedEndpoint,
       configuredEndpoint,
       ...commanderSalesEndpointCandidates,
@@ -591,74 +698,17 @@ async function pullCommanderSales(body: JsonObject = {}): Promise<JsonObject> {
       "/cgi-bin/CGILink?cmd=getReport",
       "/cgi-bin/CGILink?cmd=sales",
       "/cgi-bin/CGILink?cmd=getSales",
-    ]);
-    const attempts: JsonObject[] = [];
-    for (const endpoint of endpoints) {
-      const url = buildCommanderUrl(commanderUrl, endpoint, businessDate, username, password);
-      try {
-        const response = await fetchCommander(url, username, password, connection);
-        const text = await response.text();
-        attempts.push({
-          endpoint,
-          url: redactCommanderUrl(url),
-          status: response.status,
-          contentType: response.headers.get("content-type") || "",
-          bytes: text.length,
-        });
-        if (!response.ok) continue;
-        const snapshotInput = normalizeCommanderSalesPayload(text, response.headers.get("content-type") || "", businessDate);
-        if (!snapshotInput) continue;
-        const snapshot = store.saveSalesSnapshot({
-          ...snapshotInput,
-          businessDate,
-          source: "verifone-commander-live",
-        });
-        const finishedAt = new Date();
-        markLocalPullResult("completed", {
-          enabled: true,
-          lastPullAt: finishedAt.toISOString(),
-          nextPullAt: new Date(finishedAt.getTime() + 300_000).toISOString(),
-          intervalSeconds: 300,
-          source: "verifone-commander",
-          lastError: null,
-          lastEndpoint: endpoint,
-        });
-        store.appendActivity("commander_sales_pull_completed", {
-          businessDate,
-          endpoint,
-          totalSales: snapshot.totalSales,
-          transactionCount: snapshot.transactionCount,
-          durationMs: finishedAt.getTime() - startedAt.getTime(),
-        });
-        return {
-          ok: true,
-          status: "completed",
-          businessDate,
-          endpoint,
-          snapshot,
-          attempts,
-        };
-      } catch (error) {
-        attempts.push({
-          endpoint,
-          url: redactCommanderUrl(url),
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-    const message = "No Commander sales endpoint returned a recognizable sales payload. Configure the correct sales endpoint path from Commander specs.";
-    markLocalPullResult("failed", {
-      enabled: true,
-      lastError: message,
-      lastAttemptAt: new Date().toISOString(),
-      nextPullAt: new Date(Date.now() + 300_000).toISOString(),
-      source: "verifone-commander",
-    });
-    store.appendActivity("commander_sales_pull_failed", { businessDate, attempts: attempts.length, message });
-    return { ok: false, status: "failed", businessDate, message, attempts };
-  } finally {
-    store.releaseCommanderLease(owner);
-  }
+    ],
+    batch: [requestedEndpoint, configuredEndpoint, "/api/reports/batch", "/reports/batch", "/batch", ...commonCgi],
+    fuel: [requestedEndpoint, configuredEndpoint, "/api/reports/fuel", "/reports/fuel", "/fuel", "/cgi-bin/CGILink?cmd=fuelGradeMovement", ...commonCgi],
+    tank: [requestedEndpoint, configuredEndpoint, "/api/reports/tank", "/reports/tank", "/tank", "/cgi-bin/CGILink?cmd=fuelTankStock", ...commonCgi],
+    journal: [requestedEndpoint, configuredEndpoint, "/cgi-bin/CGILink?cmd=journal", "/cgi-bin/CGILink?cmd=getJournal", ...commonCgi],
+  };
+  return uniqueStrings(byType[reportType] || [requestedEndpoint, configuredEndpoint, ...commonCgi]);
+}
+
+function capitalize(value: string): string {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 }
 
 function redactCommanderUrl(value: string): string {
@@ -705,17 +755,142 @@ async function fetchCommander(url: string, username: string, password: string, c
   }
 }
 
-function normalizeCommanderSalesPayload(text: string, contentType: string, businessDate: string): JsonObject | null {
+function normalizeCommanderXmlReport(text: string, contentType: string, requestedType: string, businessDate: string): JsonObject | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
+  if (/<\s*(?:[^:>]+:)?Fault\b/i.test(trimmed) || /<faultCode>/i.test(trimmed)) return null;
+  if (trimmed.startsWith("<")) {
+    const rootName = xmlRootName(trimmed);
+    const reportType = classifyConexxusReport(trimmed, requestedType, rootName);
+    return {
+      reportType,
+      rootName,
+      normalized: normalizeConexxusXml(trimmed, reportType, businessDate),
+    };
+  }
   if (contentType.includes("json") || trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
-      return normalizeSalesJson(JSON.parse(trimmed) as JsonValue, businessDate);
+      const normalized = normalizeSalesJson(JSON.parse(trimmed) as JsonValue, businessDate);
+      return normalized ? { reportType: requestedType, rootName: "json", normalized } : null;
     } catch {
       return null;
     }
   }
-  return normalizeSalesText(trimmed, businessDate);
+  const normalized = normalizeSalesText(trimmed, businessDate);
+  return normalized ? { reportType: requestedType, rootName: "text", normalized } : null;
+}
+
+function xmlRootName(xml: string): string {
+  const match = xml.match(/<\s*([A-Za-z0-9_:-]+)/);
+  return match ? match[1].replace(/^.*:/, "") : "unknown";
+}
+
+function classifyConexxusReport(xml: string, requestedType: string, rootName: string): string {
+  const haystack = `${rootName} ${xml.slice(0, 4000)}`.toLowerCase();
+  if (haystack.includes("fueltankstock") || haystack.includes("tankstock") || haystack.includes("atg")) return "tank";
+  if (haystack.includes("fuelgrademovement") || haystack.includes("fgmdetail") || haystack.includes("fuelgrade")) return "fuel";
+  if (haystack.includes("batchsummary") || haystack.includes("batchmovement") || haystack.includes("batch")) return "batch";
+  if (haystack.includes("journal")) return "journal";
+  if (haystack.includes("movementreport") || haystack.includes("merchandisecodemovement") || haystack.includes("retailtransaction")) return "sales";
+  return requestedType;
+}
+
+function normalizeConexxusXml(xml: string, reportType: string, businessDate: string): JsonObject {
+  return {
+    standard: "conexxus-naxml",
+    schemaValidation: "not_configured",
+    reportType,
+    businessDate: findXmlText(xml, ["BusinessDate", "ReportDate", "PeriodBusinessDate", "MovementDate"]) || businessDate,
+    totals: normalizeConexxusTotals(xml, reportType),
+    records: normalizeConexxusRecords(xml, reportType),
+    sourceRoot: xmlRootName(xml),
+  };
+}
+
+function normalizeConexxusTotals(xml: string, reportType: string): JsonObject {
+  if (reportType === "tank") {
+    return {
+      tankCount: countTags(xml, ["TankID", "TankNumber"]),
+      grossVolume: matchXmlNumber(xml, ["GrossVolume", "TankVolume", "FuelVolume", "ProductVolume"]) || 0,
+      waterVolume: matchXmlNumber(xml, ["WaterVolume"]) || 0,
+    };
+  }
+  if (reportType === "fuel") {
+    return {
+      fuelGradeSalesVolume: matchXmlNumber(xml, ["FuelGradeSalesVolume", "SalesVolume", "FuelSalesVolume"]) || 0,
+      fuelGradeSalesAmount: matchXmlNumber(xml, ["FuelGradeSalesAmount", "SalesAmount", "FuelSalesAmount"]) || 0,
+    };
+  }
+  if (reportType === "batch") {
+    return {
+      batchCount: countTags(xml, ["BatchID", "BatchNumber"]),
+      batchTotalAmount: matchXmlNumber(xml, ["BatchTotalAmount", "SettlementAmount", "TotalAmount"]) || 0,
+      transactionCount: matchXmlNumber(xml, ["TransactionCount", "BatchTransactionCount"]) || 0,
+    };
+  }
+  return {
+    totalSales: matchXmlNumber(xml, ["TotalSales", "NetSales", "GrossSales", "SalesAmount", "transactionTotalAmt"]) || 0,
+    transactionCount: matchXmlNumber(xml, ["TransactionCount", "TicketCount", "SalesCount"]) || 0,
+    merchandiseSales: matchXmlNumber(xml, ["MerchandiseSalesAmount", "MCMSalesAmount", "SalesAmount"]) || 0,
+    fuelSales: matchXmlNumber(xml, ["FuelGradeSalesAmount", "FuelSalesAmount"]) || 0,
+  };
+}
+
+function normalizeConexxusRecords(xml: string, reportType: string): JsonValue[] {
+  const recordNames = reportType === "tank"
+    ? ["TankStockDetail", "Tank", "TankRecord"]
+    : reportType === "fuel"
+      ? ["FGMDetail", "FuelGradeMovement", "FuelGradeRecord"]
+      : reportType === "batch"
+        ? ["BatchDetail", "BatchSummary", "BatchRecord"]
+        : ["MCMDetail", "RetailTransaction", "SaleLine", "ItemLine"];
+  return extractXmlRecords(xml, recordNames, 25);
+}
+
+function salesSnapshotFromConexxus(normalized: JsonObject, businessDate: string): JsonObject | null {
+  const totals = asObject(normalized.totals || {});
+  const totalSales = numberFrom(totals.totalSales, totals.merchandiseSales, totals.fuelSales);
+  const fuelSales = numberFrom(totals.fuelSales);
+  const transactionCount = numberFrom(totals.transactionCount);
+  if (totalSales === null && fuelSales === null && transactionCount === null) return null;
+  return {
+    businessDate: String(normalized.businessDate || businessDate),
+    totalSales: (totalSales || 0) + (totalSales === null ? (fuelSales || 0) : 0),
+    transactionCount: transactionCount || 0,
+    topItems: [],
+  };
+}
+
+function findXmlText(xml: string, names: string[]): string | null {
+  for (const name of names) {
+    const pattern = new RegExp(`<(?:[^:>]+:)?${name}[^>]*>\\s*([^<]+)\\s*</(?:[^:>]+:)?${name}>`, "i");
+    const match = xml.match(pattern);
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+
+function countTags(xml: string, names: string[]): number {
+  return names.reduce((sum, name) => sum + (xml.match(new RegExp(`<(?:[^:>]+:)?${name}\\b`, "gi")) || []).length, 0);
+}
+
+function extractXmlRecords(xml: string, names: string[], limit: number): JsonValue[] {
+  const records: JsonValue[] = [];
+  for (const name of names) {
+    const pattern = new RegExp(`<((?:[^:>]+:)?${name})\\b[^>]*>([\\s\\S]*?)</\\1>`, "gi");
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(xml)) && records.length < limit) {
+      records.push({
+        recordType: name,
+        id: findXmlText(match[0], ["ID", "TankID", "FuelGradeID", "BatchID", "TransactionID", "ItemCode"]) || "",
+        name: findXmlText(match[0], ["Name", "Description", "FuelGradeName", "TankName", "ItemDescription"]) || "",
+        amount: matchXmlNumber(match[0], ["Amount", "SalesAmount", "TotalAmount", "NetSales"]) || 0,
+        quantity: matchXmlNumber(match[0], ["Quantity", "SalesQuantity", "Volume", "FuelGradeSalesVolume"]) || 0,
+      });
+    }
+    if (records.length >= limit) break;
+  }
+  return records;
 }
 
 function normalizeSalesJson(value: JsonValue, businessDate: string): JsonObject | null {
@@ -1964,6 +2139,22 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/verifone/pull-report" && req.method === "POST") {
+    const result = await pullCommanderReport(asObject(await requestBody(req)));
+    sendJson(res, result.ok === true ? 200 : result.status === "lease_blocked" ? 423 : 502, result);
+    return;
+  }
+
+  if (path === "/api/verifone/reports") {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const reportType = url.searchParams.get("type") || "";
+    sendJson(res, 200, {
+      summary: store.commanderReportSummary(),
+      reports: store.commanderReports(50, reportType),
+    });
+    return;
+  }
+
   if (path === "/api/sync/status") {
     updateCommanderWriteBackState();
     sendJson(res, 200, syncState());
@@ -2335,7 +2526,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   }
 
   if (path === "/api/activity") {
-    sendJson(res, 200, { events: store.activity(100) });
+    sendJson(res, 200, { events: store.activity(250) });
     return;
   }
 

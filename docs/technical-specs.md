@@ -30,6 +30,7 @@ Tables:
 - `chat_audit_log`
 - `commander_locks`
 - `sales_snapshots`
+- `commander_reports`
 - `connector_nonces`
 - `usage_events`
 - storage policy and backup status in encrypted app state
@@ -90,7 +91,9 @@ POST /api/messages/inbound
 GET  /api/messages/contract
 ```
 
-`POST /api/verifone/pull-sales` is the live Commander ingest adapter. It uses the stored Commander URL, username, and password, acquires the Commander lease, tries the configured sales endpoint first, then fallback candidates, and stores a normalized snapshot in SQLite when a recognizable JSON/XML/text sales payload is returned.
+`POST /api/verifone/pull-sales` is a compatibility wrapper around the live Commander ingest adapter. `POST /api/verifone/pull-report` is the general XML ingest path for `sales`, `batch`, `fuel`, `tank`, and `journal`. It uses the stored Commander URL, username, and password, acquires the Commander lease, tries the configured endpoint first, then fallback candidates, and stores encrypted raw XML plus normalized JSON in SQLite.
+
+The local mapping is Conexxus/NAXML-aligned: raw Commander XML remains the source of record, then the adapter classifies report family from NAXML roots/elements and maps totals/records into normalized JSON. Exact XSD validation remains pluggable because full Conexxus schemas are licensed/member-controlled.
 
 Set `COMMANDER_SALES_ENDPOINTS` to a comma-separated list of endpoint paths when a site-specific Commander report/API path is known. The dashboard also exposes `Sales Pull Path` in Verifone setup. Pending writes are not involved; this is read-only ingest and obeys Commander access mode.
 

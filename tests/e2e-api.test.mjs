@@ -71,13 +71,12 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
   const commanderRequests = [];
   const commanderServer = createServer(async (req, res) => {
     commanderRequests.push({ url: req.url, authorization: req.headers.authorization });
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({
-      businessDate: "2026-05-09",
-      totalSales: 1842.55,
-      transactionCount: 74,
-      topItems: [{ name: "Coffee", quantity: 31, sales: 77.5 }],
-    }));
+    res.writeHead(200, { "content-type": "application/xml" });
+    if (req.url.includes("tank")) {
+      res.end(`<?xml version="1.0"?><NAXML-FuelTankStockReport><BusinessDate>2026-05-09</BusinessDate><TankStockDetail><TankID>1</TankID><TankName>Regular</TankName><GrossVolume>1200.5</GrossVolume><WaterVolume>0.5</WaterVolume></TankStockDetail></NAXML-FuelTankStockReport>`);
+      return;
+    }
+    res.end(`<?xml version="1.0"?><NAXML-MovementReport><BusinessDate>2026-05-09</BusinessDate><MerchandiseCodeMovement><MCMDetail><ItemCode>100</ItemCode><ItemDescription>Coffee</ItemDescription><SalesAmount>77.50</SalesAmount><SalesQuantity>31</SalesQuantity></MCMDetail></MerchandiseCodeMovement><TotalSales>1842.55</TotalSales><TransactionCount>74</TransactionCount></NAXML-MovementReport>`);
   });
   const shreAuthServer = createServer(async (req, res) => {
     const chunks = [];
@@ -326,8 +325,20 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     });
     assert.equal(livePull.response.status, 200);
     assert.equal(livePull.body.status, "completed");
+    assert.equal(livePull.body.report.reportType, "sales");
     assert.equal(livePull.body.snapshot.totalSales, 1842.55);
     assert.equal(commanderRequests.some((request) => request.url.startsWith("/reports/sales")), true);
+
+    const tankPull = await json("/api/verifone/pull-report", {
+      method: "POST",
+      body: JSON.stringify({ reportType: "tank", endpoint: "/reports/tank", businessDate: "2026-05-09" }),
+    });
+    assert.equal(tankPull.response.status, 200);
+    assert.equal(tankPull.body.report.reportType, "tank");
+
+    const commanderReports = await json("/api/verifone/reports");
+    assert.equal(commanderReports.response.status, 200);
+    assert.equal(commanderReports.body.summary.total >= 2, true);
 
     const syncStatus = await json("/api/sync/status");
     assert.equal(syncStatus.response.status, 200);
@@ -638,6 +649,9 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       assert.match(authRow.value_json, /^encjson:v1:/);
       const usageRow = db.prepare("select metadata_json from usage_events limit 1").get();
       assert.match(usageRow.metadata_json, /^encjson:v1:/);
+      const commanderReport = db.prepare("select xml_json, normalized_json from commander_reports limit 1").get();
+      assert.match(commanderReport.xml_json, /^encjson:v1:/);
+      assert.match(commanderReport.normalized_json, /^encjson:v1:/);
     } finally {
       db.close();
     }
@@ -686,7 +700,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(names.includes("verifone_connection_pinged"));
     assert.ok(names.includes("heartbeat_worker_checked"));
     assert.ok(names.includes("verifone_connection_validated"));
-    assert.ok(names.includes("commander_sales_pull_completed"));
+    assert.ok(names.includes("commander_report_pull_completed"));
     assert.ok(names.includes("sales_snapshot_saved"));
     assert.ok(names.includes("sales_query_answered"));
     assert.ok(names.includes("inbound_message_queued"));

@@ -166,9 +166,11 @@ Run a live pull:
 
 ```http
 POST /api/verifone/pull-sales
+POST /api/verifone/pull-report
+GET /api/verifone/reports
 ```
 
-If it fails with “No Commander sales endpoint returned a recognizable sales payload,” set the correct Commander sales report/API path in Verifone setup as `Sales Pull Path`, or configure `COMMANDER_SALES_ENDPOINTS` with known endpoint candidates.
+Use `pull-report` with `reportType` of `sales`, `batch`, `fuel`, `tank`, or `journal`. If it fails with “No Commander report endpoint returned a recognizable Conexxus/NAXML XML payload,” set the correct Commander report/API path in Verifone setup as `Sales Pull Path`, or configure `COMMANDER_SALES_ENDPOINTS` with known endpoint candidates.
 
 ### Usage Billing Backfill
 

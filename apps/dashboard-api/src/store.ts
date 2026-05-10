@@ -61,6 +61,17 @@ interface SalesSnapshotRow {
   created_at: string;
 }
 
+interface CommanderReportRow {
+  id: string;
+  report_type: string;
+  business_date: string | null;
+  source: string;
+  root_name: string | null;
+  xml_json: string;
+  normalized_json: string;
+  created_at: string;
+}
+
 interface NonceRow {
   nonce: string;
   expires_at: string;
@@ -683,6 +694,84 @@ export class RuntimeStore {
     };
   }
 
+  saveCommanderReport(report: {
+    reportType: string;
+    businessDate?: string;
+    source: string;
+    rootName?: string;
+    xml: string;
+    normalized: JsonObject;
+  }): JsonObject {
+    const now = new Date().toISOString();
+    const id = randomUUID();
+    const businessDate = report.businessDate || now.slice(0, 10);
+    this.db.prepare(`
+      insert into commander_reports (
+        id, report_type, business_date, source, root_name,
+        xml_json, normalized_json, created_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      report.reportType,
+      businessDate,
+      report.source,
+      report.rootName || null,
+      this.stringifyJson(report.xml),
+      this.stringifyJson(report.normalized),
+      now,
+    );
+    return {
+      id,
+      reportType: report.reportType,
+      businessDate,
+      source: report.source,
+      rootName: report.rootName || null,
+      normalized: report.normalized,
+      createdAt: now,
+    };
+  }
+
+  commanderReports(limit = 50, reportType = ""): JsonValue[] {
+    const rows = reportType
+      ? this.db.prepare(`
+          select id, report_type, business_date, source, root_name, xml_json, normalized_json, created_at
+          from commander_reports
+          where report_type = ?
+          order by created_at desc, rowid desc
+          limit ?
+        `).all(reportType, limit) as CommanderReportRow[]
+      : this.db.prepare(`
+          select id, report_type, business_date, source, root_name, xml_json, normalized_json, created_at
+          from commander_reports
+          order by created_at desc, rowid desc
+          limit ?
+        `).all(limit) as CommanderReportRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      reportType: row.report_type,
+      businessDate: row.business_date,
+      source: row.source,
+      rootName: row.root_name,
+      normalized: this.parseJson(row.normalized_json) as JsonObject,
+      createdAt: row.created_at,
+      xmlStored: Boolean(row.xml_json),
+    }));
+  }
+
+  commanderReportSummary(): JsonObject {
+    const rows = this.db.prepare(`
+      select report_type, count(*) as count, max(created_at) as newest
+      from commander_reports
+      group by report_type
+      order by report_type asc
+    `).all() as Array<{ report_type: string; count: number; newest: string }>;
+    return {
+      total: rows.reduce((sum, row) => sum + row.count, 0),
+      byType: rows.map((row) => ({ reportType: row.report_type, count: row.count, newestAt: row.newest })),
+    };
+  }
+
   latestSalesSnapshot(businessDate?: string): JsonObject | null {
     const row = businessDate
       ? this.db.prepare(`
@@ -1083,6 +1172,20 @@ export class RuntimeStore {
 
       create index if not exists idx_sales_snapshots_business_date
       on sales_snapshots (business_date, created_at);
+
+      create table if not exists commander_reports (
+        id text primary key,
+        report_type text not null,
+        business_date text,
+        source text not null,
+        root_name text,
+        xml_json text not null,
+        normalized_json text not null,
+        created_at text not null
+      );
+
+      create index if not exists idx_commander_reports_type_date
+      on commander_reports (report_type, business_date, created_at);
 
       create table if not exists connector_nonces (
         nonce text primary key,

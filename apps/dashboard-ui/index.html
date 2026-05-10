@@ -296,7 +296,13 @@
           <div class="mini"><span class="label">Write Back</span><strong id="hbWrite">Blocked</strong></div>
           <div class="mini"><span class="label">Auto Reconnect</span><strong id="hbWorker">Unknown</strong></div>
         </div>
-        <div class="toolbar" style="margin-bottom:12px"><button id="pingCommander" class="secondary" type="button">Ping Commander</button><button id="pullSales" class="primary" type="button">Pull Sales Now</button><button id="runHeartbeat" class="secondary" type="button">Run Heartbeat</button><button id="refreshHeartbeat" class="secondary" type="button">Refresh</button></div>
+        <div class="toolbar" style="margin-bottom:12px">
+          <button id="pingCommander" class="secondary" type="button">Ping Commander</button>
+          <select id="pullReportType"><option value="sales">Sales</option><option value="batch">Batch</option><option value="fuel">Fuel</option><option value="tank">Tank</option><option value="journal">Journal</option></select>
+          <button id="pullSales" class="primary" type="button">Pull Report Now</button>
+          <button id="runHeartbeat" class="secondary" type="button">Run Heartbeat</button>
+          <button id="refreshHeartbeat" class="secondary" type="button">Refresh</button>
+        </div>
         <div id="pingResult" class="hint">Ping checks current reachability without changing heartbeat schedule.</div>
         <div class="card">
           <h2>Sync Flow</h2>
@@ -572,7 +578,7 @@
           return;
         }
         $("loginPanel").classList.remove("open");
-        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage, heartbeatWorker] = await Promise.all([
+        const [health, verifone, password, queue, connector, onboarding, manifest, diagnostics, activity, messageAudit, notifications, usage, accessMode, addons, adapters, remoteAccess, mcpTools, sync, storage, heartbeatWorker, commanderReports] = await Promise.all([
           api("/api/health"),
           api("/api/verifone/status"),
           api("/api/password/status"),
@@ -592,7 +598,8 @@
           api("/api/mcp/tools"),
           api("/api/sync/status"),
           api("/api/storage/analysis"),
-          api("/api/heartbeat/worker")
+          api("/api/heartbeat/worker"),
+          api("/api/verifone/reports")
         ]);
         setStatus("API running", "ok");
         $("mHealth").textContent = health.ok ? "Running" : "Failed";
@@ -679,7 +686,7 @@
       $("hbWrite").innerHTML = statusIndicator(writeBack.enabled ? "connected" : "failed", writeBack.status || "blocked");
       $("hbWorker").innerHTML = statusIndicator(heartbeatWorker.enabled ? "connected" : "failed", heartbeatWorker.enabled ? `on ${Math.round((heartbeatWorker.intervalMs || 0) / 1000)}s` : "disabled");
       $("syncFlowText").textContent = `Verifone pull: ${localPull.enabled ? "enabled" : "disabled"} (${localPull.status || "idle"}). CStoreSKU link: ${cstoresku.linked ? "linked" : "not linked"} (${cstoresku.status || "not_linked"}). Commander write-back: ${writeBack.enabled ? "enabled" : "blocked"} (${writeBack.mode || "read_only"}).`;
-      showJson("heartbeatJson", { sync, heartbeatWorker });
+      showJson("heartbeatJson", { sync, heartbeatWorker, commanderReports });
     }
     function addChatMessage(role, text, meta = null) {
       const entry = document.createElement("div");
@@ -895,8 +902,9 @@
       $("pingResult").textContent = "Pulling sales from Commander...";
       $("pingResult").className = "hint";
       try {
-        const result = await api("/api/verifone/pull-sales", { method: "POST", body: JSON.stringify({ businessDate: today }) });
-        $("pingResult").textContent = `${result.status}: saved sales snapshot for ${result.businessDate}`;
+        const reportType = $("pullReportType").value;
+        const result = await api("/api/verifone/pull-report", { method: "POST", body: JSON.stringify({ businessDate: today, reportType }) });
+        $("pingResult").textContent = `${result.status}: saved ${result.report?.reportType || reportType} XML for ${result.businessDate}`;
         $("pingResult").className = "hint ok";
       } catch (error) {
         $("pingResult").textContent = error.message || "Sales pull failed.";
