@@ -54,6 +54,9 @@ Connector inbound messages remain protected separately by `CONNECTOR_SHARED_SECR
 
 ## Remaining Recommendations
 
+- Run `scripts/pilot-preflight.ps1 -RequireDocker -RequireCStoreSkuImage` before pilot install.
+- Confirm Docker sidecar uses only the shared runtime mounts required by CStoreSKU.
+- Review the first real-store diagnostics bundle before sharing it externally.
 - Use OS keychain or DPAPI/Keychain/libsecret for the install secret in production installers.
 - Code-sign Windows/macOS installers.
 - Add binary/package checksum verification.

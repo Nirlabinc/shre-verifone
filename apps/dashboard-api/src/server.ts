@@ -25,6 +25,7 @@ const appVersion = process.env.APP_VERSION || process.env.npm_package_version ||
 const buildChannel = process.env.BUILD_CHANNEL || process.env.SHRE_ENV || "local";
 const buildSha = process.env.BUILD_SHA || "dev";
 const uiRoot = resolve("apps/dashboard-ui");
+const landingRoot = resolve("apps/product-landing");
 let store: RuntimeStore;
 
 const retentionOptions = [7, 14, 30, 60, 90, 180, 365];
@@ -4214,6 +4215,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const tenantId = typeof body.tenantId === "string" ? body.tenantId : String(connector.tenantId || "");
       const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId : String(connector.workspaceId || "");
       const storeId = typeof body.storeId === "string" ? body.storeId : String(connector.storeId || "");
+      const source = typeof body.source === "string" && body.source ? body.source : "local-chat";
       const classification = classifyMessage(messageText);
       if (classification.target === "commander" && !commanderWritesAllowed()) {
         sendJson(res, 403, {
@@ -4241,16 +4243,16 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
             answer: "I can answer local sales questions now. Commander write commands and richer model tools are planned for the next phase.",
           };
       const answer = String(connectorResponse.answer || "No answer available.");
-      const usage = recordUsage("local-chat", tenantId, storeId, "local-tool-router", messageText, answer, {
+      const usage = recordUsage(source, tenantId, storeId, "local-tool-router", messageText, answer, {
         intent: classification.intent,
         tool: classification.intent === "sales_query" ? "sales_query" : "local_help",
       });
-      const learning = recordLearningCandidate("local-chat", tenantId, storeId, classification.intent, classification.operation, messageText, answer, {
+      const learning = recordLearningCandidate(source, tenantId, storeId, classification.intent, classification.operation, messageText, answer, {
         dashboard: true,
       });
       const learningExport = exportApprovedLearningExamples(true);
       const audit = store.saveChatAudit({
-        source: "local-chat",
+        source,
         tenantId,
         workspaceId,
         storeId,
@@ -4273,6 +4275,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       });
       sendJson(res, 200, {
         accepted: true,
+        source,
         intent: classification.intent,
         message: answer,
         connectorResponse,
@@ -4392,6 +4395,18 @@ async function serveUi(res: ServerResponse): Promise<void> {
   res.end(html);
 }
 
+async function serveLanding(res: ServerResponse): Promise<void> {
+  const html = await readFile(join(landingRoot, "index.html"), "utf8");
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:;",
+  });
+  res.end(html);
+}
+
 async function main(): Promise<void> {
   await ensureRuntime();
   store = new RuntimeStore(runtimeRoot, { connectorRegistryUrl });
@@ -4432,6 +4447,10 @@ async function main(): Promise<void> {
 async function handleRequest(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (path.startsWith("/api/")) {
     await handleApi(req, res, path);
+    return;
+  }
+  if (path === "/landing" || path === "/landing/") {
+    await serveLanding(res);
     return;
   }
   await serveUi(res);

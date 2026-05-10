@@ -18,6 +18,7 @@
     "alias:remove": "powershell -ExecutionPolicy Bypass -File scripts/configure-local-alias.ps1 -Remove",
     "runtime:protect": "powershell -ExecutionPolicy Bypass -File scripts/protect-runtime.ps1 -MarkProtected -Assert",
     "runtime:check": "powershell -ExecutionPolicy Bypass -File scripts/protect-runtime.ps1 -Assert",
+    "pilot:preflight": "powershell -ExecutionPolicy Bypass -File scripts/pilot-preflight.ps1",
     "update:prod": "powershell -ExecutionPolicy Bypass -File scripts/production-update.ps1",
     "shre:message": "node scripts/shre-cli-message.mjs",
     "test:e2e:download": "powershell -ExecutionPolicy Bypass -File scripts/e2e-download-setup-shrecli.ps1",

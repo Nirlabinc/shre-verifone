@@ -103,6 +103,13 @@
     .chat-msg { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--panel); }
     .chat-msg.user { margin-left: 12%; background: #eaf1ff; }
     .chat-msg.assistant { margin-right: 12%; }
+    .messenger { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; }
+    .messenger-panel { min-height: 560px; display: grid; grid-template-rows: auto 1fr auto; }
+    .chat-msg .label { margin-bottom: 4px; }
+    .chat-msg pre { margin-top: 8px; max-height: 180px; }
+    .quick-prompts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .quick-prompts button { border: 1px solid #cfd7df; background: #fff; border-radius: 999px; padding: 7px 10px; cursor: pointer; color: var(--text); }
+    .messenger-meta { display: grid; gap: 10px; align-content: start; }
     tr.clickable { cursor: pointer; }
     tr.clickable:hover { background: #f8fafc; }
     @media (max-width: 860px) {
@@ -110,6 +117,7 @@
       nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
       nav button { width: auto; white-space: nowrap; }
       header { align-items: flex-start; height: auto; gap: 8px; padding: 14px; flex-direction: column; }
+      .messenger { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -438,14 +446,61 @@
       </section>
 
       <section id="chat">
-        <div class="card">
-          <h2>Local Data Chat</h2>
-          <div id="chatLog" class="chat-log"></div>
-          <form id="chatForm">
-            <label>Message<textarea name="messageText">What were sales today?</textarea></label>
-            <div class="toolbar"><button class="primary" type="submit">Send</button></div>
-          </form>
-          <div class="hint">Current tools: local sales query and local help. Cloud models and remote access through Cloudflare are planned for the next phase.</div>
+        <div class="messenger">
+          <div class="card messenger-panel">
+            <div>
+              <h2>Store Data Messenger</h2>
+              <div class="hint">Ask sales, item, fuel, tank, batch, and health questions against the local Commander database. Future cloud channels use the same message contract.</div>
+            </div>
+            <div>
+              <div class="quick-prompts">
+                <button type="button" data-chat-prompt="What were sales today?">Sales today</button>
+                <button type="button" data-chat-prompt="Show item price for UPC 00011122233344">Item price</button>
+                <button type="button" data-chat-prompt="Show fuel prices">Fuel prices</button>
+                <button type="button" data-chat-prompt="Is Commander connected?">Health</button>
+              </div>
+              <div id="chatLog" class="chat-log"></div>
+            </div>
+            <form id="chatForm">
+              <div class="fields">
+                <label>Source
+                  <select name="source">
+                    <option value="local-chat">Local Dashboard</option>
+                    <option value="shre-chat">Shre Chat</option>
+                    <option value="message-gateway">Message Gateway</option>
+                    <option value="claude">Claude</option>
+                    <option value="codex">Codex</option>
+                    <option value="whatsapp">WhatsApp</option>
+                  </select>
+                </label>
+                <label>Report Type
+                  <select name="reportType">
+                    <option value="">Auto</option>
+                    <option value="sales">Sales</option>
+                    <option value="plu">PLU / Items</option>
+                    <option value="fuel">Fuel</option>
+                    <option value="tank">Tank</option>
+                    <option value="batch">Batch</option>
+                    <option value="journal">Journal / TLog</option>
+                  </select>
+                </label>
+                <label>Business Date<input name="businessDate" type="date"></label>
+              </div>
+              <label>Message<textarea name="messageText">What were sales today?</textarea></label>
+              <div class="toolbar"><button class="primary" type="submit">Send</button><button id="clearChat" class="secondary" type="button">Clear</button></div>
+            </form>
+          </div>
+          <div class="messenger-meta">
+            <div class="card">
+              <h2>Routing</h2>
+              <div class="hint">Local chat calls the same tool router used by Shre Chat, Claude, Codex, WhatsApp, and the message gateway.</div>
+              <pre id="chatRouteJson">No message yet</pre>
+            </div>
+            <div class="card">
+              <h2>Expected Questions</h2>
+              <div class="hint">Sales totals, top items, item/UPC lookups, fuel/tank status, batch summaries, sync health, queue status, and support diagnostics.</div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -924,11 +979,28 @@
       addChatMessage("user", body.messageText);
       try {
         const result = await api("/api/chat/local", { method: "POST", body: JSON.stringify(body) });
-        addChatMessage("assistant", result.message, { intent: result.intent, usage: result.usage });
+        addChatMessage("assistant", result.message, { intent: result.intent, status: result.connectorResponse?.status, auditId: result.auditId });
+        showJson("chatRouteJson", {
+          source: body.source,
+          reportType: body.reportType || "auto",
+          intent: result.intent,
+          usage: result.usage,
+          learningExport: result.learningExport,
+          connectorResponse: result.connectorResponse,
+        });
       } catch (error) {
         addChatMessage("assistant", error.message);
       }
       await refresh();
+    };
+    document.querySelectorAll("[data-chat-prompt]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelector('#chatForm textarea[name="messageText"]').value = button.dataset.chatPrompt;
+      });
+    });
+    $("clearChat").onclick = () => {
+      $("chatLog").innerHTML = "";
+      $("chatRouteJson").textContent = "No message yet";
     };
     $("profileForm").onsubmit = async (event) => { event.preventDefault(); await api("/api/profile", { method: "POST", body: JSON.stringify(formObject(event.target)) }); await refresh(); };
     $("onboardingForm").onsubmit = async (event) => {

@@ -39,7 +39,9 @@ jobs:
       - name: Update script smoke
         run: |
           bash -n scripts/production-update.sh
+          bash -n scripts/pilot-preflight.sh
           test -s scripts/production-update.ps1
+          test -s scripts/pilot-preflight.ps1
 
       - name: Check required docs
         run: |
@@ -66,4 +68,7 @@ jobs:
           test -s docs/local-ai-ollama.md
           test -s docs/security-hardening.md
           test -s docs/login-billing.md
+          test -s docs/pilot-installation-guide.md
+          test -s docs/pilot-production-readiness.md
           test -s marketplace/verifone-commander.connector.json
+          test -s apps/product-landing/index.html

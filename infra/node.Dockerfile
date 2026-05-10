@@ -13,3 +13,4 @@ COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
 COPY apps/dashboard-ui ./apps/dashboard-ui
+COPY apps/product-landing ./apps/product-landing

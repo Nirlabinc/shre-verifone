@@ -74,6 +74,8 @@ Setup, onboarding, support, and specs:
 - [Commander PDK Agent Rules](docs/commander-pdk-agent-rules.md)
 - [Storage, Retention, And Backup](docs/storage-retention-backup.md)
 - [Production Update And Restart](docs/production-update.md)
+- [Pilot Installation Guide](docs/pilot-installation-guide.md)
+- [Pilot Production Readiness](docs/pilot-production-readiness.md)
 - [Verifone PDK Command Catalog](docs/verifone-pdk-command-catalog.md)
 - [Technical Specs](docs/technical-specs.md)
 - [Commander Concurrency](docs/commander-concurrency.md)
@@ -140,6 +142,12 @@ Run the current local-first E2E flow:
 npm run test:e2e
 ```
 
+Run pilot preflight:
+
+```powershell
+npm run pilot:preflight
+```
+
 Run the download/setup/message simulation E2E:
 
 ```powershell
@@ -174,6 +182,12 @@ The E2E test starts the dashboard API against a temporary runtime folder and ver
 
 ```powershell
 docker compose -f infra/docker-compose.yml up --build
+```
+
+Product landing page:
+
+```text
+http://localhost:5480/landing
 ```
 
 Run with the legacy CStoreSKU/Varifone sidecar:

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verifone Commander Shre CStoreSKU</title>
+  <style>
+    :root { --ink:#172033; --muted:#5f6b7a; --line:#d9e2ec; --blue:#175cd3; --green:#137a4b; --panel:#ffffff; --bg:#f5f7fa; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Segoe UI", Arial, sans-serif; color:var(--ink); background:var(--bg); }
+    .hero { min-height:92vh; display:grid; grid-template-rows:auto 1fr; background:#0f172a; color:#fff; position:relative; overflow:hidden; }
+    canvas { position:absolute; inset:0; width:100%; height:100%; opacity:.45; }
+    nav { position:relative; z-index:1; display:flex; justify-content:space-between; align-items:center; padding:18px 6vw; }
+    nav a { color:#dbeafe; text-decoration:none; margin-left:18px; font-size:14px; }
+    .brand { font-weight:700; letter-spacing:0; }
+    .hero-inner { position:relative; z-index:1; display:grid; align-content:center; max-width:1180px; margin:0 auto; padding:40px 6vw 80px; }
+    h1 { font-size:clamp(40px, 7vw, 78px); line-height:.98; margin:0 0 18px; letter-spacing:0; max-width:980px; }
+    .lead { max-width:780px; font-size:20px; line-height:1.5; color:#dbeafe; margin:0 0 28px; }
+    .actions { display:flex; gap:12px; flex-wrap:wrap; }
+    .button { display:inline-flex; align-items:center; min-height:42px; border-radius:6px; padding:10px 14px; text-decoration:none; font-weight:650; }
+    .primary { background:#fff; color:#0f172a; }
+    .secondary { border:1px solid rgba(255,255,255,.42); color:#fff; }
+    .preview { margin-top:34px; width:min(860px,100%); background:rgba(255,255,255,.96); color:var(--ink); border:1px solid rgba(255,255,255,.28); border-radius:8px; box-shadow:0 24px 70px rgba(0,0,0,.32); overflow:hidden; }
+    .preview-bar { display:flex; gap:6px; padding:10px 12px; background:#edf2f7; border-bottom:1px solid var(--line); }
+    .dot { width:10px; height:10px; border-radius:50%; background:#94a3b8; }
+    .preview-grid { display:grid; grid-template-columns:190px 1fr; min-height:290px; }
+    .side { border-right:1px solid var(--line); padding:14px; background:#f8fafc; }
+    .side div { padding:9px 10px; border-radius:6px; margin-bottom:6px; color:var(--muted); }
+    .side .active { background:#eaf1ff; color:var(--blue); font-weight:650; }
+    .dash { padding:16px; display:grid; gap:12px; }
+    .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .metric { border:1px solid var(--line); border-radius:6px; padding:12px; background:#fff; }
+    .metric span { display:block; color:var(--muted); font-size:12px; text-transform:uppercase; }
+    .metric strong { display:block; font-size:22px; margin-top:4px; }
+    .chat { border:1px solid var(--line); border-radius:6px; padding:12px; background:#fff; display:grid; gap:8px; }
+    .bubble { padding:10px; border-radius:6px; max-width:80%; }
+    .user { margin-left:auto; background:#eaf1ff; }
+    .assistant { background:#ecfdf3; }
+    section { padding:54px 6vw; max-width:1180px; margin:0 auto; }
+    h2 { font-size:30px; margin:0 0 16px; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:18px; }
+    .card h3 { margin:0 0 8px; font-size:17px; }
+    .card p, li { color:var(--muted); line-height:1.5; }
+    footer { border-top:1px solid var(--line); padding:22px 6vw; color:var(--muted); }
+    @media (max-width:760px){ .preview-grid{grid-template-columns:1fr}.side{display:none}.metrics{grid-template-columns:1fr} nav{align-items:flex-start;gap:10px;flex-direction:column} }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <canvas id="mesh"></canvas>
+    <nav>
+      <div class="brand">Verifone Commander Shre CStoreSKU</div>
+      <div><a href="/">Dashboard</a><a href="/api/health">Health</a><a href="https://github.com/Nirpat3/Verifone-Commander-Shre-Cstoresku">GitHub</a></div>
+    </nav>
+    <div class="hero-inner">
+      <h1>Local-first Verifone Commander data, CStoreSKU XML sync, and Shre AI messaging.</h1>
+      <p class="lead">An edge connector for store PCs that keeps POS/BOS data local, stages native Commander XML for CStoreSKU, and gives operators a messenger interface for sales and operations questions.</p>
+      <div class="actions"><a class="button primary" href="/">Open Local Dashboard</a><a class="button secondary" href="/api/readiness">Check Readiness</a></div>
+      <div class="preview" aria-label="Dashboard preview">
+        <div class="preview-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <div class="preview-grid">
+          <div class="side"><div class="active">Overview</div><div>Verifone</div><div>Chat</div><div>Health</div></div>
+          <div class="dash">
+            <div class="metrics"><div class="metric"><span>Commander</span><strong>Connected</strong></div><div class="metric"><span>XML</span><strong>Staged</strong></div><div class="metric"><span>Queue</span><strong>0 pending</strong></div></div>
+            <div class="chat"><div class="bubble user">What were sales today?</div><div class="bubble assistant">Local sales data is available from Commander snapshots. Total sales and item movement are answered from SQLite.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <section>
+    <h2>Built For Pilot Stores</h2>
+    <div class="cards">
+      <div class="card"><h3>Local-first database</h3><p>SQLite stores normalized Commander data, queue state, logs, setup, and chat audit data across updates.</p></div>
+      <div class="card"><h3>CStoreSKU legacy sidecar</h3><p>Docker profile mounts `DataSource`, `xml`, and `logs` exactly where the existing Varifone service expects them.</p></div>
+      <div class="card"><h3>Messenger interface</h3><p>Operators ask questions locally today; Shre Chat, Claude, Codex, WhatsApp, and message gateway routes use the same contract.</p></div>
+      <div class="card"><h3>Production controls</h3><p>Runtime protection, backups, readiness checks, usage tracking, and diagnostics are included for support.</p></div>
+    </div>
+  </section>
+  <section>
+    <h2>Pilot Flow</h2>
+    <div class="cards">
+      <div class="card"><h3>1. Install</h3><p>Run preflight, install dependencies, protect runtime, and start the local dashboard.</p></div>
+      <div class="card"><h3>2. Activate</h3><p>Sign up through Shre Auth, map tenant/workspace/store, and configure Commander credentials.</p></div>
+      <div class="card"><h3>3. Validate</h3><p>Ping Commander, pull XML, export CStoreSKU config, and review readiness.</p></div>
+      <div class="card"><h3>4. Go Live</h3><p>Enable sidecar, monitor health, use messenger, and backfill queue/usage when connectivity returns.</p></div>
+    </div>
+  </section>
+  <footer>Rapid Infosoft LLC. Local edge connector for Verifone Commander, CStoreSKU, and Shre AI.</footer>
+  <script>
+    const canvas = document.getElementById("mesh");
+    const ctx = canvas.getContext("2d");
+    function draw(){
+      canvas.width = innerWidth; canvas.height = Math.max(innerHeight * .92, 620);
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const points = Array.from({length:42},(_,i)=>({x:(i*97)%canvas.width,y:(i*173)%canvas.height}));
+      ctx.strokeStyle = "rgba(147,197,253,.42)"; ctx.lineWidth = 1;
+      for(let i=0;i<points.length;i++){ for(let j=i+1;j<points.length;j++){ const a=points[i],b=points[j],d=Math.hypot(a.x-b.x,a.y-b.y); if(d<230){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}}
+      points.forEach((p,i)=>{ctx.fillStyle=i%3===0?"#22c55e":"#60a5fa";ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();});
+    }
+    addEventListener("resize", draw); draw();
+  </script>
+</body>
+</html>
