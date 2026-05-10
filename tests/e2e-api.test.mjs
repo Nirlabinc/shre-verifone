@@ -68,6 +68,17 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
   const runtimeRoot = await mkdtemp(join(tmpdir(), "verifone-shre-e2e-"));
   const backupRoot = await mkdtemp(join(tmpdir(), "verifone-shre-backup-e2e-"));
   const signupRequests = [];
+  const commanderRequests = [];
+  const commanderServer = createServer(async (req, res) => {
+    commanderRequests.push({ url: req.url, authorization: req.headers.authorization });
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({
+      businessDate: "2026-05-09",
+      totalSales: 1842.55,
+      transactionCount: 74,
+      topItems: [{ name: "Coffee", quantity: 31, sales: 77.5 }],
+    }));
+  });
   const shreAuthServer = createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
@@ -88,7 +99,9 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
       billingEndpoint: "https://connector.aros.live/api/usage",
     }));
   });
+  await new Promise((resolve) => commanderServer.listen(0, "127.0.0.1", resolve));
   await new Promise((resolve) => shreAuthServer.listen(0, "127.0.0.1", resolve));
+  const commanderUrl = `http://127.0.0.1:${commanderServer.address().port}`;
   const shreAuthUrl = `http://127.0.0.1:${shreAuthServer.address().port}/signup-activate`;
   const child = spawn(process.execPath, ["dist/apps/dashboard-api/src/server.js"], {
     cwd: process.cwd(),
@@ -243,10 +256,11 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     const config = await json("/api/verifone/config", {
       method: "POST",
       body: JSON.stringify({
-        commanderUrl: "http://192.0.2.10",
+        commanderUrl,
         username: "manager",
         password: "secret-value",
         applicationKey: "app-key",
+        salesEndpoint: "/reports/sales",
       }),
     });
     assert.equal(config.response.status, 200);
@@ -305,6 +319,15 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(heartbeat.response.status, 200);
     assert.equal(heartbeat.body.sync.heartbeat.status, "connected");
     assert.equal(heartbeat.body.sync.localPull.status, "scheduled");
+
+    const livePull = await json("/api/verifone/pull-sales", {
+      method: "POST",
+      body: JSON.stringify({ businessDate: "2026-05-09" }),
+    });
+    assert.equal(livePull.response.status, 200);
+    assert.equal(livePull.body.status, "completed");
+    assert.equal(livePull.body.snapshot.totalSales, 1842.55);
+    assert.equal(commanderRequests.some((request) => request.url.startsWith("/reports/sales")), true);
 
     const syncStatus = await json("/api/sync/status");
     assert.equal(syncStatus.response.status, 200);
@@ -663,6 +686,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.ok(names.includes("verifone_connection_pinged"));
     assert.ok(names.includes("heartbeat_worker_checked"));
     assert.ok(names.includes("verifone_connection_validated"));
+    assert.ok(names.includes("commander_sales_pull_completed"));
     assert.ok(names.includes("sales_snapshot_saved"));
     assert.ok(names.includes("sales_query_answered"));
     assert.ok(names.includes("inbound_message_queued"));
@@ -675,6 +699,7 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     child.kill("SIGTERM");
     await new Promise((resolve) => child.once("exit", resolve));
     await new Promise((resolve) => shreAuthServer.close(resolve));
+    await new Promise((resolve) => commanderServer.close(resolve));
     await rm(runtimeRoot, { recursive: true, force: true });
     await rm(backupRoot, { recursive: true, force: true });
   }

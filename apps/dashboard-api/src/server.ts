@@ -28,6 +28,10 @@ let store: RuntimeStore;
 const retentionOptions = [7, 14, 30, 60, 90, 180, 365];
 const heartbeatWorkerIntervalMs = Math.max(5_000, Number(process.env.HEARTBEAT_WORKER_INTERVAL_MS || 30_000));
 const heartbeatWorkerEnabled = process.env.DISABLE_HEARTBEAT_WORKER !== "true";
+const commanderSalesEndpointCandidates = (process.env.COMMANDER_SALES_ENDPOINTS || "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
 
 async function ensureRuntime(): Promise<void> {
   await mkdir(join(runtimeRoot, "connections"), { recursive: true });
@@ -416,6 +420,16 @@ function markLocalPullScheduled(reason: string): JsonObject {
   });
 }
 
+function markLocalPullResult(status: string, patch: JsonObject): JsonObject {
+  return saveSyncState({
+    localPull: {
+      ...asObject(syncState().localPull || {}),
+      status,
+      ...patch,
+    },
+  });
+}
+
 function markCstoreskuLinked(reason: string): JsonObject {
   return saveSyncState({
     cstoresku: {
@@ -526,6 +540,246 @@ function pingVerifoneConnection(body: JsonObject = {}): JsonObject {
   };
   store.appendActivity("verifone_connection_pinged", { ok, status: result.status });
   return result;
+}
+
+async function pullCommanderSales(body: JsonObject = {}): Promise<JsonObject> {
+  if (!commanderReadsAllowed()) {
+    return {
+      ok: false,
+      status: "blocked",
+      message: "Commander reads are blocked by access mode.",
+      accessMode: accessMode(),
+    };
+  }
+  const owner = typeof body.owner === "string" && body.owner.trim() ? body.owner.trim() : "sales-ingest";
+  const lease = store.acquireCommanderLease(owner, 120);
+  if (lease.acquired !== true) {
+    return {
+      ok: false,
+      status: "lease_blocked",
+      message: "Commander pull is already running.",
+      lease,
+    };
+  }
+  const startedAt = new Date();
+  try {
+    const connection = store.getJson<JsonObject>("connections", "verifone", {});
+    const commanderUrl = String(connection.commanderUrl || "").replace(/\/$/, "");
+    const username = String(connection.username || "");
+    const password = typeof connection.password === "string" ? decryptSecret(connection.password) : "";
+    if (!commanderUrl || !username || !password) {
+      throw new Error("Verifone connection is not configured.");
+    }
+    const businessDate = typeof body.businessDate === "string" && body.businessDate.trim()
+      ? body.businessDate.trim()
+      : new Date().toISOString().slice(0, 10);
+    const configuredEndpoint = typeof connection.salesEndpoint === "string" ? connection.salesEndpoint : "";
+    const requestedEndpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+    const endpoints = uniqueStrings([
+      requestedEndpoint,
+      configuredEndpoint,
+      ...commanderSalesEndpointCandidates,
+      "/api/sales",
+      "/api/reports/sales",
+      "/api/reports/daily-sales",
+      "/reports/sales",
+      "/reports/daily-sales",
+      "/sales",
+      "/cgi-bin/CGILink?cmd=periodList",
+      "/cgi-bin/CGILink?cmd=periodInfo",
+      "/cgi-bin/CGILink?cmd=report",
+      "/cgi-bin/CGILink?cmd=getReport",
+      "/cgi-bin/CGILink?cmd=sales",
+      "/cgi-bin/CGILink?cmd=getSales",
+    ]);
+    const attempts: JsonObject[] = [];
+    for (const endpoint of endpoints) {
+      const url = buildCommanderUrl(commanderUrl, endpoint, businessDate, username, password);
+      try {
+        const response = await fetchCommander(url, username, password, connection);
+        const text = await response.text();
+        attempts.push({
+          endpoint,
+          url: redactCommanderUrl(url),
+          status: response.status,
+          contentType: response.headers.get("content-type") || "",
+          bytes: text.length,
+        });
+        if (!response.ok) continue;
+        const snapshotInput = normalizeCommanderSalesPayload(text, response.headers.get("content-type") || "", businessDate);
+        if (!snapshotInput) continue;
+        const snapshot = store.saveSalesSnapshot({
+          ...snapshotInput,
+          businessDate,
+          source: "verifone-commander-live",
+        });
+        const finishedAt = new Date();
+        markLocalPullResult("completed", {
+          enabled: true,
+          lastPullAt: finishedAt.toISOString(),
+          nextPullAt: new Date(finishedAt.getTime() + 300_000).toISOString(),
+          intervalSeconds: 300,
+          source: "verifone-commander",
+          lastError: null,
+          lastEndpoint: endpoint,
+        });
+        store.appendActivity("commander_sales_pull_completed", {
+          businessDate,
+          endpoint,
+          totalSales: snapshot.totalSales,
+          transactionCount: snapshot.transactionCount,
+          durationMs: finishedAt.getTime() - startedAt.getTime(),
+        });
+        return {
+          ok: true,
+          status: "completed",
+          businessDate,
+          endpoint,
+          snapshot,
+          attempts,
+        };
+      } catch (error) {
+        attempts.push({
+          endpoint,
+          url: redactCommanderUrl(url),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const message = "No Commander sales endpoint returned a recognizable sales payload. Configure the correct sales endpoint path from Commander specs.";
+    markLocalPullResult("failed", {
+      enabled: true,
+      lastError: message,
+      lastAttemptAt: new Date().toISOString(),
+      nextPullAt: new Date(Date.now() + 300_000).toISOString(),
+      source: "verifone-commander",
+    });
+    store.appendActivity("commander_sales_pull_failed", { businessDate, attempts: attempts.length, message });
+    return { ok: false, status: "failed", businessDate, message, attempts };
+  } finally {
+    store.releaseCommanderLease(owner);
+  }
+}
+
+function redactCommanderUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    for (const key of ["passwd", "password", "user", "username", "token", "key"]) {
+      if (url.searchParams.has(key)) url.searchParams.set(key, "***");
+    }
+    return url.toString();
+  } catch {
+    return value.replace(/(passwd|password|user|username|token|key)=([^&]+)/gi, "$1=***");
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function buildCommanderUrl(baseUrl: string, endpoint: string, businessDate: string, username: string, password: string): string {
+  const url = new URL(endpoint.startsWith("http") ? endpoint : `${baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`);
+  if (!url.searchParams.has("businessDate")) url.searchParams.set("businessDate", businessDate);
+  if (!url.searchParams.has("date")) url.searchParams.set("date", businessDate);
+  if (url.pathname.toLowerCase().endsWith("/cgi-bin/cgilink")) {
+    if (!url.searchParams.has("user")) url.searchParams.set("user", username);
+    if (!url.searchParams.has("passwd")) url.searchParams.set("passwd", password);
+  }
+  return url.toString();
+}
+
+async function fetchCommander(url: string, username: string, password: string, connection: JsonObject): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const headers: Record<string, string> = {
+      accept: "application/json, application/xml, text/xml, text/plain;q=0.8, */*;q=0.5",
+      authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+    };
+    if (typeof connection.applicationKey === "string" && connection.applicationKey) {
+      headers["x-application-key"] = decryptSecret(connection.applicationKey);
+    }
+    return await fetch(url, { method: "GET", headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeCommanderSalesPayload(text: string, contentType: string, businessDate: string): JsonObject | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (contentType.includes("json") || trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      return normalizeSalesJson(JSON.parse(trimmed) as JsonValue, businessDate);
+    } catch {
+      return null;
+    }
+  }
+  return normalizeSalesText(trimmed, businessDate);
+}
+
+function normalizeSalesJson(value: JsonValue, businessDate: string): JsonObject | null {
+  const root = Array.isArray(value) ? { items: value } : asObject(value);
+  const data = asObject(root.data || root.sales || root.report || root.summary || root);
+  const totalSales = numberFrom(data.totalSales, data.total, data.netSales, data.grossSales, data.amount, data.salesAmount);
+  const transactionCount = numberFrom(data.transactionCount, data.transactions, data.transaction_count, data.count, data.ticketCount);
+  const itemList = Array.isArray(data.topItems) ? data.topItems : Array.isArray(data.items) ? data.items : Array.isArray(root.items) ? root.items : [];
+  const topItems = itemList.slice(0, 10).map((item) => {
+    const obj = asObject(item);
+    return {
+      name: String(obj.name || obj.description || obj.itemName || obj.sku || "Item"),
+      quantity: numberFrom(obj.quantity, obj.qty, obj.count, obj.units) || 0,
+      sales: numberFrom(obj.sales, obj.total, obj.amount, obj.netSales) || 0,
+    };
+  });
+  if (totalSales === null && transactionCount === null && topItems.length === 0) return null;
+  return {
+    businessDate: String(data.businessDate || data.date || businessDate),
+    totalSales: totalSales || 0,
+    transactionCount: transactionCount || 0,
+    topItems,
+  };
+}
+
+function normalizeSalesText(text: string, businessDate: string): JsonObject | null {
+  if (/<\s*(?:[^:>]+:)?Fault\b/i.test(text) || /<faultCode>/i.test(text)) return null;
+  const xmlTotal = matchXmlNumber(text, ["netSales", "grossSales", "totalSales", "transactionTotalAmt", "salesAmount", "total"]);
+  const xmlCount = matchXmlNumber(text, ["transactionCount", "transactions", "ticketCount", "count"]);
+  const total = matchNumber(text, /(?:total|net|gross)\s*sales[^0-9-]*(-?\$?[0-9,]+(?:\.[0-9]+)?)/i);
+  const count = matchNumber(text, /(?:transactions?|tickets?|count)[^0-9-]*([0-9,]+)/i);
+  if (total === null && count === null && xmlTotal === null && xmlCount === null) return null;
+  return {
+    businessDate,
+    totalSales: total || xmlTotal || 0,
+    transactionCount: count || xmlCount || 0,
+    topItems: [],
+  };
+}
+
+function numberFrom(...values: JsonValue[]): number | null {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number(value.replace(/[$,]/g, ""));
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+}
+
+function matchNumber(text: string, pattern: RegExp): number | null {
+  const match = text.match(pattern);
+  if (!match) return null;
+  return numberFrom(match[1]);
+}
+
+function matchXmlNumber(text: string, names: string[]): number | null {
+  for (const name of names) {
+    const pattern = new RegExp(`<(?:[^:>]+:)?${name}[^>]*>\\s*([^<]+)\\s*</(?:[^:>]+:)?${name}>`, "i");
+    const value = matchNumber(text, pattern);
+    if (value !== null) return value;
+  }
+  return null;
 }
 
 function heartbeatWorkerStatus(): JsonObject {
@@ -1601,6 +1855,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         username: requireString(body, "username"),
         password: encryptSecret(requireString(body, "password")),
         applicationKey: typeof body.applicationKey === "string" && body.applicationKey ? encryptSecret(body.applicationKey) : "",
+        salesEndpoint: optionalString(body, "salesEndpoint"),
         updatedAt: new Date().toISOString(),
       };
       store.setJson("connections", "verifone", connection);
@@ -1701,6 +1956,12 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       sendJson(res, validation.ok ? 200 : 503, { validation, sync: syncState() });
       return;
     }
+  }
+
+  if (path === "/api/verifone/pull-sales" && req.method === "POST") {
+    const result = await pullCommanderSales(asObject(await requestBody(req)));
+    sendJson(res, result.ok === true ? 200 : result.status === "lease_blocked" ? 423 : 502, result);
+    return;
   }
 
   if (path === "/api/sync/status") {

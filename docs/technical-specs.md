@@ -83,11 +83,16 @@ Sales ingest stores normalized summary rows in `sales_snapshots`.
 API:
 
 ```http
+POST /api/verifone/pull-sales
 POST /api/sales/snapshot
 POST /api/sales/query
 POST /api/messages/inbound
 GET  /api/messages/contract
 ```
+
+`POST /api/verifone/pull-sales` is the live Commander ingest adapter. It uses the stored Commander URL, username, and password, acquires the Commander lease, tries the configured sales endpoint first, then fallback candidates, and stores a normalized snapshot in SQLite when a recognizable JSON/XML/text sales payload is returned.
+
+Set `COMMANDER_SALES_ENDPOINTS` to a comma-separated list of endpoint paths when a site-specific Commander report/API path is known. The dashboard also exposes `Sales Pull Path` in Verifone setup. Pending writes are not involved; this is read-only ingest and obeys Commander access mode.
 
 `/api/messages/inbound` classifies sales questions and returns an immediate local SQLite answer when a matching snapshot exists. If no local sales data exists, it queues the request and returns `requiresDataSource: true`.
 

@@ -19,6 +19,7 @@ This runbook is the first place to check when a store reports that Verifone Comm
 | Local login | Browser -> local secure vault | Login secret is local and works offline. Background validation resumes when Shre Auth is reachable. | `GET /api/auth/status` |
 | Runtime database | API -> SQLite runtime | State, queue, logs, sales snapshots, and setup data persist across app updates. | `GET /api/health` and runtime guard |
 | Verifone Commander | API -> Commander | Ping checks immediate reachability. Validate updates connection state. The heartbeat worker retries automatically with backoff and scheduled pulls use the Commander lease. | `POST /api/verifone/ping`, `GET /api/verifone/heartbeat`, `GET /api/heartbeat/worker`, `GET /api/sync/status` |
+| Commander sales ingest | Commander -> local SQLite | Live read pulls use the Commander lease and store normalized snapshots in `sales_snapshots`. | `POST /api/verifone/pull-sales`, `POST /api/sales/query` |
 | Commander concurrency | API scheduler -> Commander | One local lease holder at a time. External POS traffic must be accounted for in polling intervals. | `GET /api/commander/lease/status` |
 | CStoreSKU | API -> CStoreSKU/RapidRMS connector | CStoreSKU key is separate from Verifone credentials. Link it only after local setup is complete. | `GET /api/connector/status` |
 | Shre activation | API -> Shre Auth | Dev/QA uses `https://shre-auth.shre.ai`; beta/prod uses `https://shre-auth.aros.live`. | `POST /api/shre/signup-activate` |

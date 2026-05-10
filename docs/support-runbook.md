@@ -162,6 +162,14 @@ Check:
 - Local Commander sales ingest has written a recent `sales_snapshots` record.
 - If the query returns `requiresDataSource: true`, configure or repair the Commander sales ingest before troubleshooting Shre.
 
+Run a live pull:
+
+```http
+POST /api/verifone/pull-sales
+```
+
+If it fails with “No Commander sales endpoint returned a recognizable sales payload,” set the correct Commander sales report/API path in Verifone setup as `Sales Pull Path`, or configure `COMMANDER_SALES_ENDPOINTS` with known endpoint candidates.
+
 ### Usage Billing Backfill
 
 Check:

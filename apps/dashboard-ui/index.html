@@ -219,6 +219,7 @@
             <label>Commander URL<input name="commanderUrl" placeholder="http://192.168.1.50"></label>
             <label>Username<input name="username" autocomplete="username"></label>
             <label>Password<input name="password" type="password" autocomplete="current-password"></label>
+            <label>Sales Pull Path<input name="salesEndpoint" placeholder="/api/reports/sales"></label>
           </div>
           <div class="hint">This connects to the local Verifone Commander/BOS endpoint. The CStoreSKU application key is stored separately below.</div>
           <div id="verifoneFormStatus" class="hint">Connection status will appear here after save or validate.</div>
@@ -295,7 +296,7 @@
           <div class="mini"><span class="label">Write Back</span><strong id="hbWrite">Blocked</strong></div>
           <div class="mini"><span class="label">Auto Reconnect</span><strong id="hbWorker">Unknown</strong></div>
         </div>
-        <div class="toolbar" style="margin-bottom:12px"><button id="pingCommander" class="secondary" type="button">Ping Commander</button><button id="runHeartbeat" class="primary" type="button">Run Heartbeat</button><button id="refreshHeartbeat" class="secondary" type="button">Refresh</button></div>
+        <div class="toolbar" style="margin-bottom:12px"><button id="pingCommander" class="secondary" type="button">Ping Commander</button><button id="pullSales" class="primary" type="button">Pull Sales Now</button><button id="runHeartbeat" class="secondary" type="button">Run Heartbeat</button><button id="refreshHeartbeat" class="secondary" type="button">Refresh</button></div>
         <div id="pingResult" class="hint">Ping checks current reachability without changing heartbeat schedule.</div>
         <div class="card">
           <h2>Sync Flow</h2>
@@ -886,6 +887,19 @@
         $("pingResult").className = `hint ${result.ok ? "ok" : "bad"}`;
       } catch (error) {
         $("pingResult").textContent = error.message || "Ping failed.";
+        $("pingResult").className = "hint bad";
+      }
+      await refresh();
+    };
+    $("pullSales").onclick = async () => {
+      $("pingResult").textContent = "Pulling sales from Commander...";
+      $("pingResult").className = "hint";
+      try {
+        const result = await api("/api/verifone/pull-sales", { method: "POST", body: JSON.stringify({ businessDate: today }) });
+        $("pingResult").textContent = `${result.status}: saved sales snapshot for ${result.businessDate}`;
+        $("pingResult").className = "hint ok";
+      } catch (error) {
+        $("pingResult").textContent = error.message || "Sales pull failed.";
         $("pingResult").className = "hint bad";
       }
       await refresh();
