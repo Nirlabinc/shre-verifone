@@ -332,6 +332,8 @@ function redactTrainingText(value: string): string {
 }
 
 function recordLearningCandidate(source: string, tenantId: string, storeId: string, intent: string, toolName: string, inputText: string, outputText: string, metadata: JsonObject = {}): JsonObject {
+  const policy = learningPolicy();
+  const autoApproved = policy.autoExportEnabled === true && policy.trainingConsent === "granted";
   return store.saveLearningExample({
     source,
     tenantId,
@@ -345,8 +347,75 @@ function recordLearningCandidate(source: string, tenantId: string, storeId: stri
       rawXmlIncluded: false,
       approvalRequired: true,
       destination: "shre-ai-rag-or-finetune",
+      exportPolicy: policy,
     },
+    status: autoApproved ? "approved" : "candidate",
   });
+}
+
+function learningPolicy(): JsonObject {
+  return store.getJson<JsonObject>("shre-learning", "policy", {
+    autoExportEnabled: false,
+    trainingConsent: "unknown",
+    destinations: ["shre-rag", "shre-finetune", "tool-memory"],
+    rawXmlAllowed: false,
+    minQuality: null,
+    source: "default",
+  });
+}
+
+function saveLearningPolicy(policy: JsonObject): JsonObject {
+  const normalized = {
+    autoExportEnabled: policy.autoExportEnabled === true,
+    trainingConsent: ["granted", "denied", "unknown"].includes(String(policy.trainingConsent)) ? String(policy.trainingConsent) : "unknown",
+    destinations: Array.isArray(policy.destinations) && policy.destinations.length > 0 ? policy.destinations.map(String) : ["shre-rag", "shre-finetune", "tool-memory"],
+    rawXmlAllowed: false,
+    minQuality: typeof policy.minQuality === "number" ? policy.minQuality : null,
+    source: typeof policy.source === "string" ? policy.source : "dashboard-api",
+    updatedAt: new Date().toISOString(),
+  };
+  store.setJson("shre-learning", "policy", normalized);
+  return normalized;
+}
+
+function exportApprovedLearningExamples(markExported = true): JsonObject {
+  const policy = learningPolicy();
+  if (policy.autoExportEnabled !== true || policy.trainingConsent !== "granted") {
+    return { status: "blocked_by_policy", policy, count: 0, records: [] };
+  }
+  const approved = store.learningExamples(100, "approved");
+  const records = approved.map(shreTrainingRecordFromExample);
+  for (const record of records) {
+    const entityId = createHash("sha256").update(JSON.stringify(record)).digest("hex").slice(0, 16);
+    store.enqueue({
+      target: "shre-training",
+      entityType: "training_record",
+      entityId,
+      operation: "write_training_data",
+      payload: {
+        endpoint: process.env.SHRE_TRAINING_ENDPOINT || "shre-sdk/training.writeTrainingData",
+        record,
+        policy,
+      },
+    });
+    store.enqueue({
+      target: "shre-events",
+      entityType: "tool_memory",
+      entityId: `${entityId}-tool`,
+      operation: "learn_tool_selection",
+      payload: {
+        eventName: "tool_memory.learned",
+        tenantId: record.tenantId,
+        intent: record.taskType,
+        domain: record.domain,
+        toolName: asObject(record.meta || {}).toolName || "",
+        edgeNodeId: asObject(record.meta || {}).edgeNodeId || "",
+      },
+    });
+  }
+  const exported = markExported ? store.markLearningExamplesExported(approved.map((item) => String(item.id))) : 0;
+  if (records.length > 0) store.appendActivity("learning_examples_auto_exported", { count: records.length, exported });
+  return { status: "queued", policy, count: records.length, exported, records };
 }
 
 function asObject(value: JsonValue): JsonObject {
@@ -1565,6 +1634,7 @@ function runHeartbeatWorkerOnce(): JsonObject {
     return { checked: false, reason: "backoff_active", nextCheckAt: heartbeat.nextCheckAt || null };
   }
   const result = validateVerifoneConnection({ source: "heartbeat_worker" });
+  const exportResult = exportApprovedLearningExamples(true);
   const latest = syncState();
   const latestHeartbeat = asObject(latest.heartbeat || {});
   saveSyncState({
@@ -1575,7 +1645,7 @@ function runHeartbeatWorkerOnce(): JsonObject {
     },
   });
   store.appendActivity("heartbeat_worker_checked", { status: result.status, ok: result.ok === true });
-  return { checked: true, result };
+  return { checked: true, result, learningExport: exportResult };
 }
 
 function startHeartbeatWorker(): void {
@@ -1617,6 +1687,37 @@ const addonDefinitions: JsonObject[] = [
     dependsOn: ["verifone-commander"],
     scopes: ["loyalty.status.read", "loyalty.sync.write"],
     queueTarget: "verifone-loyalty",
+  },
+];
+
+const pluginDefinitions: JsonObject[] = [
+  {
+    id: "cstoresku-xml",
+    name: "CStoreSKU XML",
+    category: "sync",
+    status: "available",
+    role: "Send native Commander XML to CStoreSKU and receive XML writeback payloads.",
+    scopes: ["cstoresku.xml.write", "commander.xml.read"],
+    endpoint: "/api/cstoresku/key",
+  },
+  {
+    id: "commander-tlog",
+    name: "Commander TLog",
+    category: "tlog",
+    status: "available",
+    role: "Native TLog/XML capture path for transaction log interchange.",
+    scopes: ["tlog.read", "commander.xml.read"],
+    endpoint: "/api/verifone/pull-report",
+  },
+  {
+    id: "message-connectors",
+    name: "Message And Model Connectors",
+    category: "ai",
+    status: "available",
+    role: "Claude, Codex, Gemini, Voice, Shre Chat, WhatsApp, and gateway access through connector/MCP tools.",
+    scopes: ["messages.inbound", "mcp.tools.read", "learning.export"],
+    endpoint: "/api/messages/inbound",
+    channels: ["claude", "codex", "gemini", "voice", "shre-chat", "whatsapp", "message-gateway"],
   },
 ];
 
@@ -2138,6 +2239,33 @@ async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
     refreshedAt: new Date().toISOString(),
   };
   store.setJson("auth", "local-login", auth);
+  const activationLearningPolicy = asObject(activation.learningPolicy || {});
+  const trainingConsent = String(activationLearningPolicy.trainingConsent || activation.trainingConsent || "granted");
+  saveLearningPolicy({
+    autoExportEnabled: activation.autoExportTraining === true || asObject(activation.learning || {}).autoExport === true || activationLearningPolicy.autoExportEnabled === true || trainingConsent === "granted",
+    trainingConsent,
+    destinations: Array.isArray(activationLearningPolicy.destinations) ? activationLearningPolicy.destinations as JsonValue[] : ["shre-rag", "shre-finetune", "tool-memory"],
+    source: shreAuthSignupUrl ? "shre-auth" : "local-simulated-shre-auth",
+  });
+  const meshRegistration = shreMeshNode();
+  store.setJson("shre-mesh", "node", meshRegistration);
+  store.enqueue({
+    target: "shre-events",
+    entityType: "mesh_node",
+    entityId: String(meshRegistration.id),
+    operation: "register_edge_node",
+    payload: {
+      endpoint: process.env.SHRE_EVENTS_ENDPOINT || "https://events.shre.ai/v1/events/batch",
+      event: {
+        eventId: randomUUID(),
+        eventName: "mesh.edge.registered",
+        entityType: "mesh_node",
+        entityId: meshRegistration.id,
+        occurredAt: new Date().toISOString(),
+        data: meshRegistration,
+      },
+    },
+  });
   return {
     ok: true,
     registration,
@@ -2149,6 +2277,8 @@ async function shreSignupActivate(body: JsonObject): Promise<JsonObject> {
     cloudRelayEnabled: registration.cloudRelayEnabled,
     allowedSources: Array.isArray(activation.allowedSources) ? activation.allowedSources : [],
     entitlementState: asObject(auth.remoteValidation || {}).entitlementState || "active",
+    learningPolicy: learningPolicy(),
+    meshNode: meshRegistration,
     simulated: activation.simulated === true,
   };
 }
@@ -3500,6 +3630,23 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/plugins") {
+    sendJson(res, 200, {
+      installModel: "core-plus-marketplace-plugins",
+      defaultPlugins: ["verifone-commander", "message-connectors"],
+      plugins: pluginDefinitions,
+      flow: [
+        "install_app",
+        "shre_auth_signup",
+        "activate_dashboard_and_mesh",
+        "connect_verifone_commander",
+        "enable_cstoresku_xml_or_tlog",
+        "enable_message_model_connectors",
+      ],
+    });
+    return;
+  }
+
   if (path === "/api/messages/contract") {
     sendJson(res, 200, {
       schemaVersion: "2026-05-09",
@@ -3664,6 +3811,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         queueId: queueItem.id,
         gateway: true,
       });
+      const learningExport = exportApprovedLearningExamples(true);
       const response = {
         accepted: true,
         mode: registration.cloudRelayEnabled ? "cloud_relay" : "local_first",
@@ -3677,6 +3825,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         connectorResponse,
         usage,
         learning,
+        learningExport,
         gatewayResponse: {
           schemaVersion: "2026-05-09",
           connectorId: registration.connectorId || "verifone-commander",
@@ -3758,6 +3907,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       const learning = recordLearningCandidate("local-chat", tenantId, storeId, classification.intent, classification.operation, messageText, answer, {
         dashboard: true,
       });
+      const learningExport = exportApprovedLearningExamples(true);
       const audit = store.saveChatAudit({
         source: "local-chat",
         tenantId,
@@ -3772,6 +3922,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
           connectorResponse,
           usage,
           learning,
+          learningExport,
         },
       });
       store.appendActivity("local_chat_answered", {
@@ -3786,6 +3937,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         connectorResponse,
         usage,
         learning,
+        learningExport,
         auditId: audit.id,
       });
     } catch (error) {
@@ -3815,6 +3967,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
+  if (path === "/api/learning/policy") {
+    if (req.method === "GET") {
+      sendJson(res, 200, learningPolicy());
+      return;
+    }
+    if (req.method === "POST") {
+      const policy = saveLearningPolicy(asObject(await requestBody(req)));
+      store.appendActivity("learning_policy_updated", { autoExportEnabled: policy.autoExportEnabled, trainingConsent: policy.trainingConsent });
+      sendJson(res, 200, policy);
+      return;
+    }
+  }
+
   if (path === "/api/learning/approve" && req.method === "POST") {
     const body = asObject(await requestBody(req));
     const id = requireString(body, "id");
@@ -3832,24 +3997,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     const approved = store.learningExamples(100, "approved");
     const records = approved.map(shreTrainingRecordFromExample);
     if (req.method === "POST") {
-      for (const record of records) {
-        const entityId = createHash("sha256").update(JSON.stringify(record)).digest("hex").slice(0, 16);
-        store.enqueue({
-          target: "shre-training",
-          entityType: "training_record",
-          entityId,
-          operation: "write_training_data",
-          payload: {
-            endpoint: process.env.SHRE_TRAINING_ENDPOINT || "shre-sdk/training.writeTrainingData",
-            record,
-          },
-        });
-      }
-      store.appendActivity("learning_examples_export_queued", { count: records.length });
-      sendJson(res, 200, { status: "queued", count: records.length, records });
+      const result = exportApprovedLearningExamples(true);
+      sendJson(res, 200, result);
       return;
     }
-    sendJson(res, 200, { status: "preview", count: records.length, records });
+    sendJson(res, 200, { status: "preview", policy: learningPolicy(), count: records.length, records });
     return;
   }
 

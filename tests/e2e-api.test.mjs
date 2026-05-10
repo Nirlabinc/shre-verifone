@@ -260,6 +260,9 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(shreSignup.body.workspaceId, "workspace_ops_001");
     assert.equal(shreSignup.body.storeId, "store_shre_auth_001");
     assert.equal(shreSignup.body.cloudRelayEnabled, true);
+    assert.equal(shreSignup.body.learningPolicy.autoExportEnabled, true);
+    assert.equal(shreSignup.body.learningPolicy.trainingConsent, "granted");
+    assert.equal(shreSignup.body.meshNode.role, "edge");
     assert.equal(signupRequests.length, 1);
     assert.equal(signupRequests[0].workspaceName, "Operations");
 
@@ -646,6 +649,12 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(meshRegister.body.status, "registered_locally");
     assert.equal(meshRegister.body.queuedForShre, true);
 
+    const plugins = await json("/api/plugins");
+    assert.equal(plugins.response.status, 200);
+    assert.ok(plugins.body.plugins.some((plugin) => plugin.id === "cstoresku-xml"));
+    assert.ok(plugins.body.plugins.some((plugin) => plugin.id === "commander-tlog"));
+    assert.ok(plugins.body.plugins.some((plugin) => plugin.id === "message-connectors" && plugin.channels.includes("gemini")));
+
     const manifest = await json("/api/connector/manifest");
     assert.equal(manifest.response.status, 200);
     assert.equal(manifest.body.connectorId, "verifone-commander");
@@ -763,9 +772,14 @@ test("local-first onboarding, password, queue, and diagnostics flow", async () =
     assert.equal(localChat.response.status, 200);
     assert.equal(localChat.body.intent, "sales_query");
     assert.match(localChat.body.message, /\$1842\.55/);
-    assert.equal(localChat.body.learning.status, "candidate");
+    assert.equal(localChat.body.learning.status, "approved");
+    assert.equal(localChat.body.learningExport.status, "queued");
 
-    const learningExamples = await json("/api/learning/examples?status=candidate");
+    const learningPolicy = await json("/api/learning/policy");
+    assert.equal(learningPolicy.response.status, 200);
+    assert.equal(learningPolicy.body.autoExportEnabled, true);
+
+    const learningExamples = await json("/api/learning/examples?status=exported");
     assert.equal(learningExamples.response.status, 200);
     assert.equal(learningExamples.body.policy.rawXmlIncluded, false);
     assert.ok(learningExamples.body.examples.some((item) => item.intent === "sales_query" && item.toolName === "query_sales"));

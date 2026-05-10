@@ -163,11 +163,15 @@ POST /api/usage/replay
 POST /api/chat/local
 GET  /api/learning/examples
 POST /api/learning/approve
+GET  /api/learning/policy
+POST /api/learning/policy
+GET  /api/learning/export
+POST /api/learning/export
 ```
 
 Local login works offline from an encrypted local hash. Once configured, sensitive local APIs require either a valid local login session or `LOCAL_ADMIN_TOKEN`. Remote validation is best-effort and retries in the background when `SHRE_AUTH_VALIDATE_URL` is configured. `POST /api/shre/signup-activate` is the preferred first-run cloud setup path: it uses Shre Auth signup/login details to create or find tenant/workspace/store records, activate the connector, store the returned signing secret locally, and avoid manual tenant/secret entry. Usage events are stored locally and queued to `shre-cost` for billing. `POST /api/usage/replay` backfills pending usage reports and marks local usage rows as `reported` when replay succeeds.
 
-The first chat implementation uses local tools only. Sales questions use the local SQLite sales snapshot/query tool. Commander data questions use normalized local entity rows. Future model calls should be routed through the same usage metering path. Every local chat or signed gateway message also creates an encrypted, redacted learning candidate in `learning_examples`; candidates require approval before Shre AI RAG or fine-tuning export.
+The first chat implementation uses local tools only. Sales questions use the local SQLite sales snapshot/query tool. Commander data questions use normalized local entity rows. Future model calls should be routed through the same usage metering path. Every local chat or signed gateway message also creates an encrypted, redacted learning example in `learning_examples`. If Shre Auth grants training consent, examples are auto-approved, exported to the local Shre training/tool-memory queue, and marked `exported`; otherwise they stay as local candidates until approval.
 
 ## Commander Concurrency
 
@@ -202,11 +206,14 @@ GET  /api/mcp/tools
 GET  /api/mcp/client-config
 GET  /api/shre/mesh/node
 POST /api/shre/mesh/register
+GET  /api/plugins
 ```
 
 FCC and Loyalty are marketplace add-ons. They are disabled by default and depend on `verifone-commander`. `/api/adapters` reports core/add-on/future adapter readiness for the edge device. `/api/remote-access` stores Cloudflare or equivalent tunnel metadata. `/api/mcp/tools` exposes the local HTTP and stdio tool contract. The stdio MCP server runs with `npm run start:mcp` and wraps the same local APIs. `/api/mcp/client-config` returns Claude Desktop/Codex launch snippets.
 
 Each installed edge machine can register as a ShreAI mesh node through `/api/shre/mesh/register`. The local node record follows the Shre SDK mesh model: edge role, services, tenant/workspace/store mapping, local MCP command, health/status, and capabilities. Registration queues a Shre event instead of requiring cloud connectivity on the critical path.
+
+`/api/plugins` exposes the install-time marketplace/plugin structure: CStoreSKU XML, Commander TLog, and message/model connectors for Claude, Codex, Gemini, Voice, Shre Chat, WhatsApp, and gateway routing.
 
 All local Commander-facing work should be:
 

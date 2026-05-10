@@ -813,6 +813,30 @@ export class RuntimeStore {
       ],
       addOns: [
         {
+          id: "cstoresku-xml",
+          name: "CStoreSKU XML",
+          bundled: false,
+          enabledByDefault: false,
+          installSource: "marketplace",
+          scopes: ["cstoresku.xml.write", "commander.xml.read"],
+        },
+        {
+          id: "commander-tlog",
+          name: "Commander TLog",
+          bundled: false,
+          enabledByDefault: false,
+          installSource: "marketplace",
+          scopes: ["tlog.read", "commander.xml.read"],
+        },
+        {
+          id: "message-connectors",
+          name: "Claude/Codex/Gemini/Voice/Shre Connectors",
+          bundled: true,
+          enabledByDefault: true,
+          installSource: "core",
+          scopes: ["messages.inbound", "mcp.tools.read", "learning.export"],
+        },
+        {
           id: "verifone-fcc",
           name: "FCC",
           bundled: false,
@@ -1238,6 +1262,20 @@ export class RuntimeStore {
       where id = ?
     `).get(id) as LearningExampleRow | undefined;
     return row ? this.mapLearningExample(row) : null;
+  }
+
+  markLearningExamplesExported(ids: string[]): number {
+    if (ids.length === 0) return 0;
+    const now = new Date().toISOString();
+    const update = this.db.prepare("update learning_examples set status = 'exported', approved_at = coalesce(approved_at, ?) where id = ?");
+    const tx = this.db.transaction((items: string[]) => {
+      let count = 0;
+      for (const id of items) {
+        count += update.run(now, id).changes;
+      }
+      return count;
+    });
+    return tx(ids);
   }
 
   saveChatAudit(entry: {

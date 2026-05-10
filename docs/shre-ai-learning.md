@@ -18,6 +18,8 @@ chat/gateway message
 Implemented local endpoints:
 
 ```http
+GET  /api/learning/policy
+POST /api/learning/policy
 GET  /api/learning/examples
 POST /api/learning/approve
 ```
@@ -34,6 +36,8 @@ Every local chat or signed inbound gateway message stores a candidate example wi
 - approval status
 
 The local database encrypts candidate input/output text at rest.
+
+When Shre Auth returns or implies `trainingConsent=granted`, the edge app enables policy-driven auto export. New chat/tool examples are stored as approved, converted into Shre training-record shape, queued for `shre-training`, and marked `exported`. If consent is denied or unknown, examples remain local candidates until manually approved and exported.
 
 ## What Can Be Learned
 
@@ -96,3 +100,24 @@ edge node
 ```
 
 Raw XML remains local. Approved export records include `meta.rawXmlIncluded=false`.
+
+## Install And Plugin Flow
+
+Recommended production flow:
+
+```text
+install app
+-> open local dashboard
+-> sign up / login with Shre Auth
+-> Shre Auth activates tenant/workspace/store and learning policy
+-> edge node registers into ShreAI mesh
+-> connect Verifone Commander
+-> enable CStoreSKU XML and/or TLog plugins
+-> enable message/model connector plugin for Claude, Codex, Gemini, Voice, Shre Chat, WhatsApp
+```
+
+Plugin catalog:
+
+```http
+GET /api/plugins
+```
