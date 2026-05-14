@@ -124,10 +124,10 @@ export class QueueDrain {
       return { shipped: events.length, failed: 0, pending: this.countPending() };
     }
     // failure — bump attempt_count, keep status='pending', record last_error
-    const errMsg = result.error ?? "unknown";
+    const errMsg = result.error ?? `accepted=${result.accepted} rejected=${result.rejected} (no error)`;
     for (const row of valid) this.bumpAttempt(row.id, errMsg);
     this.log.warn("queue drain batch failed — will retry", {
-      count: events.length, error: errMsg,
+      count: events.length, accepted: result.accepted, rejected: result.rejected, error: errMsg,
     });
     return { shipped: 0, failed: events.length, pending: this.countPending() };
   }

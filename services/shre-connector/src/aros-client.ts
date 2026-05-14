@@ -117,9 +117,15 @@ export class ArosClient {
       const data = await this.http("POST", `${this.cfg.eventsEndpoint}/v1/events/batch`, { events });
       this.retryAttempt = 0;
       this.nextRetryAt = 0;
+      // Server response shape varies — support both number counts and id arrays.
+      const acceptedN = countOrLen(data.accepted);
+      const rejectedN = countOrLen(data.rejected);
+      // If neither is set, assume server accepted everything implicitly.
+      const accepted = acceptedN > 0 || rejectedN > 0 ? acceptedN : events.length;
+      this.cfg.log.debug("aros ship response", { accepted, rejected: rejectedN, raw: data });
       return {
-        accepted: Number(data.accepted ?? events.length),
-        rejected: Number(data.rejected ?? 0),
+        accepted,
+        rejected: rejectedN,
         nextFlushSeconds: typeof data.nextFlushSeconds === "number" ? data.nextFlushSeconds : undefined,
       };
     } catch (err) {
@@ -209,4 +215,11 @@ export class ArosClient {
 interface HttpError extends Error {
   status: number;
   cause?: unknown;
+}
+
+/** AROS may return accepted/rejected as numbers OR as id arrays. Normalize. */
+function countOrLen(v: unknown): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (Array.isArray(v)) return v.length;
+  return 0;
 }
