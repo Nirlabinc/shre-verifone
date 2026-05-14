@@ -61,7 +61,7 @@ export class ArosClient {
     this.cfg.endpoint = cfg.endpoint.replace(/\/$/, "");
     this.cfg.eventsEndpoint = cfg.eventsEndpoint.replace(/\/$/, "");
     this.cfg.sdkVersion = cfg.sdkVersion ?? SDK_VERSION;
-    this.cfg.timeoutMs = cfg.timeoutMs ?? 8000;
+    this.cfg.timeoutMs = cfg.timeoutMs ?? 20_000;
   }
 
   get isTrackingEnabled(): boolean { return this.trackingEnabled; }
