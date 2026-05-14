@@ -63,8 +63,8 @@ export class QueueDrain {
     return Boolean(row?.name);
   }
 
-  /** One drain pass. Returns counts. Caller schedules the loop. */
-  async drainOnce(): Promise<{ shipped: number; failed: number; pending: number }> {
+  /** One drain pass. Returns counts plus any server-suggested next flush cadence. */
+  async drainOnce(): Promise<{ shipped: number; failed: number; pending: number; nextFlushSeconds?: number }> {
     if (!this.tableExists()) return { shipped: 0, failed: 0, pending: 0 };
     if (!this.client.isTrackingEnabled) return { shipped: 0, failed: 0, pending: this.countPending() };
     if (this.client.inBackoff) return { shipped: 0, failed: 0, pending: this.countPending() };
@@ -112,7 +112,10 @@ export class QueueDrain {
       const ids = valid.map(r => r.id);
       this.markShipped(ids);
       this.log.info("queue drain shipped batch", { count: events.length });
-      return { shipped: events.length, failed: 0, pending: this.countPending() };
+      return {
+        shipped: events.length, failed: 0,
+        pending: this.countPending(), nextFlushSeconds: result.nextFlushSeconds,
+      };
     }
     if (result.accepted > 0 && !result.error) {
       // partial — server returned counts but no error; we can't tell which were rejected
@@ -121,7 +124,10 @@ export class QueueDrain {
       this.log.warn("queue drain partial accept (treating as shipped to avoid duplication)", {
         accepted: result.accepted, rejected: result.rejected,
       });
-      return { shipped: events.length, failed: 0, pending: this.countPending() };
+      return {
+        shipped: events.length, failed: 0,
+        pending: this.countPending(), nextFlushSeconds: result.nextFlushSeconds,
+      };
     }
     // failure — bump attempt_count, keep status='pending', record last_error
     const errMsg = result.error ?? `accepted=${result.accepted} rejected=${result.rejected} (no error)`;
@@ -129,7 +135,10 @@ export class QueueDrain {
     this.log.warn("queue drain batch failed — will retry", {
       count: events.length, accepted: result.accepted, rejected: result.rejected, error: errMsg,
     });
-    return { shipped: 0, failed: events.length, pending: this.countPending() };
+    return {
+      shipped: 0, failed: events.length,
+      pending: this.countPending(), nextFlushSeconds: result.nextFlushSeconds,
+    };
   }
 
   countPending(): number {

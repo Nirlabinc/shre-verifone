@@ -76,6 +76,25 @@ async function main(): Promise<void> {
       log.warn("aros bootstrap failed at boot — drain loop will retry", { error: (err as Error).message });
     }
     try { await aros.refreshConfig(); } catch { /* logged inside */ }
+    // Send a connector-signed marker event so the Shre team has a clear data
+    // point to verify against (independent of outbound_queue contents).
+    const onlineEvent = {
+      eventId: nodeId + ":" + Date.now(),
+      eventName: "connector.online",
+      entityType: "connector",
+      entityId: nodeId,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        service: SERVICE_NAME, tenantId, app, mode, storeId, env,
+        host: hostname(), pid: process.pid, sdkVersion: SDK_VERSION,
+      },
+    };
+    try {
+      const r = await aros.ship([onlineEvent]);
+      log.info("connector.online shipped", r);
+    } catch (err) {
+      log.warn("connector.online ship failed", { error: (err as Error).message });
+    }
   }
 
   // Queue drain — opens runtime.sqlite (WAL mode, shared with dashboard-api)
@@ -104,6 +123,7 @@ async function main(): Promise<void> {
   await beat();
   heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
 
+  let currentDrainMs = DRAIN_INTERVAL_MS;
   const drainTick = async () => {
     if (stopped || !drain) return;
     try {
@@ -111,13 +131,21 @@ async function main(): Promise<void> {
       if (r.shipped > 0 || r.failed > 0) {
         log.info("drain tick", r);
       }
+      // Respect server-suggested flush cadence if it differs from current.
+      if (r.nextFlushSeconds && r.nextFlushSeconds * 1000 !== currentDrainMs) {
+        const newMs = r.nextFlushSeconds * 1000;
+        log.info("adjusting drain interval per server hint", { fromMs: currentDrainMs, toMs: newMs });
+        currentDrainMs = newMs;
+        if (drainTimer) clearInterval(drainTimer);
+        drainTimer = setInterval(drainTick, currentDrainMs);
+      }
     } catch (err) {
       log.warn("drain tick failed", { error: (err as Error).message });
     }
   };
   if (drain) {
     void drainTick();
-    drainTimer = setInterval(drainTick, DRAIN_INTERVAL_MS);
+    drainTimer = setInterval(drainTick, currentDrainMs);
   }
 
   if (aros) {
