@@ -12,7 +12,7 @@ services:
       SHRE_ENDPOINT: ${SHRE_ENDPOINT:-https://apiauth.shre.ai}
       SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://events.shre.ai}
       SHRE_TENANT_ID: ${SHRE_TENANT_ID:-}
-      SHRE_APP: ${SHRE_APP:-verifone_cstoresku}
+      SHRE_APP: ${SHRE_APP:-verifone_commander_cstoresku}
       SHRE_MODE: ${SHRE_MODE:-read_only}
       CONNECTOR_REGISTRY_URL: ${CONNECTOR_REGISTRY_URL:-https://connector.aros.live}
       CONNECTOR_SHARED_SECRET: ${CONNECTOR_SHARED_SECRET:-}
@@ -73,7 +73,7 @@ services:
       SHRE_ENDPOINT: ${SHRE_ENDPOINT:-https://apiauth.shre.ai}
       SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://events.shre.ai}
       SHRE_TENANT_ID: ${SHRE_TENANT_ID:-}
-      SHRE_APP: ${SHRE_APP:-verifone_cstoresku}
+      SHRE_APP: ${SHRE_APP:-verifone_commander_cstoresku}
       SHRE_MODE: ${SHRE_MODE:-read_only}
       SHRE_BOOTSTRAP_KEY: ${SHRE_BOOTSTRAP_KEY:-}
       CONNECTOR_REGISTRY_URL: ${CONNECTOR_REGISTRY_URL:-https://connector.aros.live}

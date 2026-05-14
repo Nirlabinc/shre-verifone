@@ -20,7 +20,7 @@ const cortexPersistPath = join(queueDir, "shre-cortex-lite.json");
 const dbPath = process.env.SHRE_RUNTIME_DB || join(runtimeRoot, "runtime.sqlite");
 
 const tenantId = process.env.SHRE_TENANT_ID || "";
-const app = process.env.SHRE_APP || "verifone_cstoresku";
+const app = process.env.SHRE_APP || "verifone_commander_cstoresku";
 const mode = (process.env.SHRE_MODE === "read_write" ? "read_write" : "read_only") as
   | "read_only"
   | "read_write";
