@@ -7,14 +7,21 @@
 import Database from "better-sqlite3";
 import type { Logger } from "@shreai/sdk/logger";
 import { ArosClient, ArosEvent } from "./aros-client.js";
+import { decryptText } from "./crypto.js";
 
 const ALLOWED_TARGETS = new Set(["shre", "shre-events", "shre-cost", "shre-leads"]);
 const SHRE_PREFIX = "shre";
+
+/** Map sqlite `target` (kebab) to AROS-style namespace (snake), e.g. `shre-cost` → `shre_cost`. */
+function normalizeNamespace(target: string): string {
+  return target.replace(/-/g, "_");
+}
 
 export interface DrainConfig {
   dbPath: string;
   log: Logger;
   client: ArosClient;
+  encryptionKey: Buffer;
   batchSize?: number;
 }
 
@@ -35,10 +42,12 @@ export class QueueDrain {
   private readonly batchSize: number;
   private readonly log: Logger;
   private readonly client: ArosClient;
+  private readonly encryptionKey: Buffer;
 
   constructor(cfg: DrainConfig) {
     this.log = cfg.log;
     this.client = cfg.client;
+    this.encryptionKey = cfg.encryptionKey;
     this.batchSize = cfg.batchSize ?? 50;
     this.db = new Database(cfg.dbPath, { fileMustExist: false });
     this.db.pragma("journal_mode = WAL");
@@ -74,18 +83,19 @@ export class QueueDrain {
       }
       let metadata: Record<string, unknown>;
       try {
-        metadata = JSON.parse(row.payload_json) as Record<string, unknown>;
+        const plaintext = decryptText(row.payload_json, this.encryptionKey);
+        metadata = JSON.parse(plaintext) as Record<string, unknown>;
       } catch (err) {
-        this.log.warn("queue row has invalid payload_json — marking failed", {
+        this.log.warn("queue row decrypt/parse failed — marking failed", {
           rowId: row.id, error: (err as Error).message,
         });
-        this.markFailed(row.id, `payload parse: ${(err as Error).message}`);
+        this.markFailed(row.id, `payload decrypt/parse: ${(err as Error).message}`);
         continue;
       }
       const event: ArosEvent = {
         eventId: row.id,
-        eventName: `${row.target}.${row.operation}`,
-        metadata: { ...metadata, target: row.target },
+        eventName: `${normalizeNamespace(row.target)}.${row.operation}`,
+        metadata: { ...metadata, _source_target: row.target },
         timestamp: row.created_at || new Date().toISOString(),
       };
       if (row.entity_type) event.entityType = row.entity_type;

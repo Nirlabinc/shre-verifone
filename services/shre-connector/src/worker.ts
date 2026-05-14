@@ -7,6 +7,7 @@ import { createLiteCortexClient, createLiteEventBus } from "@shreai/sdk/lite";
 
 import { ArosClient, SDK_VERSION } from "./aros-client.js";
 import { QueueDrain } from "./queue-drain.js";
+import { loadEncryptionKey } from "./crypto.js";
 
 const SERVICE_NAME = "verifone-commander";
 const HEARTBEAT_INTERVAL_MS = Number(process.env.SHRE_HEARTBEAT_INTERVAL_MS || 30_000);
@@ -78,7 +79,10 @@ async function main(): Promise<void> {
   }
 
   // Queue drain — opens runtime.sqlite (WAL mode, shared with dashboard-api)
-  const drain = aros ? new QueueDrain({ dbPath, log, client: aros }) : null;
+  // and decrypts payloads using the shared install-secret key.
+  const drain = aros
+    ? new QueueDrain({ dbPath, log, client: aros, encryptionKey: loadEncryptionKey(runtimeRoot) })
+    : null;
   if (drain) {
     log.info("queue drain enabled", {
       dbPath, drainIntervalMs: DRAIN_INTERVAL_MS, pending: drain.countPending(),
