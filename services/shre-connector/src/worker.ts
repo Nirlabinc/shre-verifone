@@ -91,7 +91,10 @@ async function main(): Promise<void> {
     };
     try {
       const r = await aros.ship([onlineEvent]);
-      log.info("connector.online shipped", r);
+      log.info("connector.online shipped", {
+        accepted: r.accepted, rejected: r.rejected,
+        nextFlushSeconds: r.nextFlushSeconds, error: r.error,
+      });
     } catch (err) {
       log.warn("connector.online ship failed", { error: (err as Error).message });
     }
