@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Vendored packages ship pre-built dist/, must not be ignored
+!vendor/**
 .env
 .env.*
 !.env.example

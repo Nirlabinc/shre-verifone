@@ -1,0 +1,524 @@
+{
+  "name": "@shreai/sdk",
+  "version": "1.0.0",
+  "description": "SDK for building services on the Shre AI platform \u00e2\u20ac\u201d structured logging, database clients, event bus, RAG, execution tracking, and more.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "import": "./dist/logger.js",
+      "default": "./dist/logger.js"
+    },
+    "./cortex": {
+      "types": "./dist/cortex.d.ts",
+      "import": "./dist/cortex.js",
+      "default": "./dist/cortex.js"
+    },
+    "./cortex-dma": {
+      "types": "./dist/cortex-dma.d.ts",
+      "import": "./dist/cortex-dma.js",
+      "default": "./dist/cortex-dma.js"
+    },
+    "./events": {
+      "types": "./dist/events.d.ts",
+      "import": "./dist/events.js",
+      "default": "./dist/events.js"
+    },
+    "./discovery": {
+      "types": "./dist/discovery.d.ts",
+      "import": "./dist/discovery.js",
+      "default": "./dist/discovery.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js",
+      "default": "./dist/auth.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js",
+      "default": "./dist/config.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js",
+      "default": "./dist/types.js"
+    },
+    "./startup": {
+      "types": "./dist/startup.d.ts",
+      "import": "./dist/startup.js",
+      "default": "./dist/startup.js"
+    },
+    "./execution": {
+      "types": "./dist/execution.d.ts",
+      "import": "./dist/execution.js",
+      "default": "./dist/execution.js"
+    },
+    "./rag": {
+      "types": "./dist/rag.d.ts",
+      "import": "./dist/rag.js",
+      "default": "./dist/rag.js"
+    },
+    "./vectorless-rag": {
+      "types": "./dist/vectorless-rag.d.ts",
+      "import": "./dist/vectorless-rag.js",
+      "default": "./dist/vectorless-rag.js"
+    },
+    "./circuit-breaker": {
+      "types": "./dist/circuit-breaker.d.ts",
+      "import": "./dist/circuit-breaker.js",
+      "default": "./dist/circuit-breaker.js"
+    },
+    "./lifecycle": {
+      "types": "./dist/lifecycle.d.ts",
+      "import": "./dist/lifecycle.js",
+      "default": "./dist/lifecycle.js"
+    },
+    "./lite": {
+      "types": "./dist/lite.d.ts",
+      "import": "./dist/lite.js",
+      "default": "./dist/lite.js"
+    },
+    "./platform": {
+      "types": "./dist/platform.d.ts",
+      "import": "./dist/platform.js",
+      "default": "./dist/platform.js"
+    },
+    "./probe": {
+      "types": "./dist/probe.d.ts",
+      "import": "./dist/probe.js",
+      "default": "./dist/probe.js"
+    },
+    "./device-bridge": {
+      "types": "./dist/device-bridge.d.ts",
+      "import": "./dist/device-bridge.js",
+      "default": "./dist/device-bridge.js"
+    },
+    "./feed": {
+      "types": "./dist/feed.d.ts",
+      "import": "./dist/feed.js",
+      "default": "./dist/feed.js"
+    },
+    "./rbac": {
+      "types": "./dist/rbac.d.ts",
+      "import": "./dist/rbac.js",
+      "default": "./dist/rbac.js"
+    },
+    "./passport-client": {
+      "types": "./dist/passport-client.d.ts",
+      "import": "./dist/passport-client.js",
+      "default": "./dist/passport-client.js"
+    },
+    "./feedback": {
+      "types": "./dist/feedback.d.ts",
+      "import": "./dist/feedback.js",
+      "default": "./dist/feedback.js"
+    },
+    "./marketplace": {
+      "types": "./dist/marketplace.d.ts",
+      "import": "./dist/marketplace.js",
+      "default": "./dist/marketplace.js"
+    },
+    "./audit": {
+      "types": "./dist/audit.d.ts",
+      "import": "./dist/audit.js",
+      "default": "./dist/audit.js"
+    },
+    "./tenant": {
+      "types": "./dist/tenant.d.ts",
+      "import": "./dist/tenant.js",
+      "default": "./dist/tenant.js"
+    },
+    "./service-identity": {
+      "types": "./dist/service-identity.d.ts",
+      "import": "./dist/service-identity.js",
+      "default": "./dist/service-identity.js"
+    },
+    "./degradation": {
+      "types": "./dist/degradation.d.ts",
+      "import": "./dist/degradation.js",
+      "default": "./dist/degradation.js"
+    },
+    "./durable-writer": {
+      "types": "./dist/durable-writer.d.ts",
+      "import": "./dist/durable-writer.js",
+      "default": "./dist/durable-writer.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "default": "./dist/core.js"
+    },
+    "./tool-permissions": {
+      "types": "./dist/tool-permissions.d.ts",
+      "import": "./dist/tool-permissions.js",
+      "default": "./dist/tool-permissions.js"
+    },
+    "./consistency": {
+      "types": "./dist/consistency.d.ts",
+      "import": "./dist/consistency.js",
+      "default": "./dist/consistency.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "import": "./dist/context.js",
+      "default": "./dist/context.js"
+    },
+    "./router-client": {
+      "types": "./dist/router-client.d.ts",
+      "import": "./dist/router-client.js",
+      "default": "./dist/router-client.js"
+    },
+    "./training": {
+      "types": "./dist/training.d.ts",
+      "import": "./dist/training.js",
+      "default": "./dist/training.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry.d.ts",
+      "import": "./dist/telemetry.js",
+      "default": "./dist/telemetry.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js",
+      "default": "./dist/contracts.js"
+    },
+    "./heartbeat": {
+      "types": "./dist/heartbeat.d.ts",
+      "import": "./dist/heartbeat.js",
+      "default": "./dist/heartbeat.js"
+    },
+    "./leader-election": {
+      "types": "./dist/leader-election.d.ts",
+      "import": "./dist/leader-election.js",
+      "default": "./dist/leader-election.js"
+    },
+    "./predictive-degradation": {
+      "types": "./dist/predictive-degradation.d.ts",
+      "import": "./dist/predictive-degradation.js",
+      "default": "./dist/predictive-degradation.js"
+    },
+    "./self-healing": {
+      "types": "./dist/self-healing.d.ts",
+      "import": "./dist/self-healing.js",
+      "default": "./dist/self-healing.js"
+    },
+    "./external-monitor": {
+      "types": "./dist/external-monitor.d.ts",
+      "import": "./dist/external-monitor.js",
+      "default": "./dist/external-monitor.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "default": "./dist/testing.js"
+    },
+    "./sso": {
+      "types": "./dist/sso.d.ts",
+      "import": "./dist/sso.js",
+      "default": "./dist/sso.js"
+    },
+    "./rate-limit": {
+      "types": "./dist/rate-limit.d.ts",
+      "import": "./dist/rate-limit.js",
+      "default": "./dist/rate-limit.js"
+    },
+    "./field-encryption": {
+      "types": "./dist/field-encryption.d.ts",
+      "import": "./dist/field-encryption.js",
+      "default": "./dist/field-encryption.js"
+    },
+    "./security-headers": {
+      "types": "./dist/security-headers.d.ts",
+      "import": "./dist/security-headers.js",
+      "default": "./dist/security-headers.js"
+    },
+    "./trust": {
+      "types": "./dist/trust.d.ts",
+      "import": "./dist/trust.js",
+      "default": "./dist/trust.js"
+    },
+    "./identity": {
+      "types": "./dist/identity.d.ts",
+      "import": "./dist/identity.js",
+      "default": "./dist/identity.js"
+    },
+    "./resilience": {
+      "types": "./dist/resilience.d.ts",
+      "import": "./dist/resilience.js",
+      "default": "./dist/resilience.js"
+    },
+    "./service-client": {
+      "types": "./dist/service-client.d.ts",
+      "import": "./dist/service-client.js",
+      "default": "./dist/service-client.js"
+    },
+    "./redis": {
+      "types": "./dist/redis.d.ts",
+      "import": "./dist/redis.js",
+      "default": "./dist/redis.js"
+    },
+    "./agent-scope": {
+      "types": "./dist/agent-scope.d.ts",
+      "import": "./dist/agent-scope.js",
+      "default": "./dist/agent-scope.js"
+    },
+    "./cost": {
+      "types": "./dist/cost.d.ts",
+      "import": "./dist/cost.js",
+      "default": "./dist/cost.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.ts",
+      "import": "./dist/hooks.js",
+      "default": "./dist/hooks.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js",
+      "default": "./dist/plugin.js"
+    },
+    "./plugin-bus": {
+      "types": "./dist/plugin-bus.d.ts",
+      "import": "./dist/plugin-bus.js",
+      "default": "./dist/plugin-bus.js"
+    },
+    "./plugin-adapters": {
+      "types": "./dist/plugin-adapters.d.ts",
+      "import": "./dist/plugin-adapters.js",
+      "default": "./dist/plugin-adapters.js"
+    },
+    "./connectors": {
+      "types": "./dist/connectors.d.ts",
+      "import": "./dist/connectors.js",
+      "default": "./dist/connectors.js"
+    },
+    "./trace": {
+      "types": "./dist/trace.d.ts",
+      "import": "./dist/trace.js",
+      "default": "./dist/trace.js"
+    },
+    "./changelog": {
+      "types": "./dist/changelog.d.ts",
+      "import": "./dist/changelog.js",
+      "default": "./dist/changelog.js"
+    },
+    "./infra-monitor": {
+      "types": "./dist/infra-monitor.d.ts",
+      "import": "./dist/infra-monitor.js",
+      "default": "./dist/infra-monitor.js"
+    },
+    "./service-fetch": {
+      "types": "./dist/service-fetch.d.ts",
+      "import": "./dist/service-fetch.js",
+      "default": "./dist/service-fetch.js"
+    },
+    "./safe-fetch": {
+      "types": "./dist/safe-fetch.d.ts",
+      "import": "./dist/safe-fetch.js",
+      "default": "./dist/safe-fetch.js"
+    },
+    "./internal-client": {
+      "types": "./dist/internal-client.d.ts",
+      "import": "./dist/internal-client.js",
+      "default": "./dist/internal-client.js"
+    },
+    "./vault-client": {
+      "types": "./dist/vault-client.d.ts",
+      "import": "./dist/vault-client.js",
+      "default": "./dist/vault-client.js"
+    },
+    "./vfs": {
+      "types": "./dist/vfs.d.ts",
+      "import": "./dist/vfs.js",
+      "default": "./dist/vfs.js"
+    },
+    "./content-sanitizer": {
+      "types": "./dist/content-sanitizer.d.ts",
+      "import": "./dist/content-sanitizer.js",
+      "default": "./dist/content-sanitizer.js"
+    },
+    "./blockos-callback": {
+      "types": "./dist/blockos-callback.d.ts",
+      "import": "./dist/blockos-callback.js",
+      "default": "./dist/blockos-callback.js"
+    },
+    "./task-memory": {
+      "types": "./dist/task-memory.d.ts",
+      "import": "./dist/task-memory.js",
+      "default": "./dist/task-memory.js"
+    },
+    "./shre-client": {
+      "types": "./dist/shre-client.d.ts",
+      "import": "./dist/shre-client.js",
+      "require": "./src/shre-client.js",
+      "default": "./dist/shre-client.js"
+    },
+    "./external-api-client": {
+      "types": "./dist/external-api-client.d.ts",
+      "import": "./dist/external-api-client.js",
+      "default": "./dist/external-api-client.js"
+    },
+    "./smart-query": {
+      "types": "./dist/smart-query.d.ts",
+      "import": "./dist/smart-query.js",
+      "default": "./dist/smart-query.js"
+    },
+    "./dashboard-builder": {
+      "types": "./dist/dashboard-builder.d.ts",
+      "import": "./dist/dashboard-builder.js",
+      "default": "./dist/dashboard-builder.js"
+    },
+    "./agent-collaboration": {
+      "types": "./dist/agent-collaboration.d.ts",
+      "import": "./dist/agent-collaboration.js",
+      "default": "./dist/agent-collaboration.js"
+    },
+    "./signal-correlation": {
+      "types": "./dist/signal-correlation.d.ts",
+      "import": "./dist/signal-correlation.js",
+      "default": "./dist/signal-correlation.js"
+    },
+    "./causal-engine": {
+      "types": "./dist/causal-engine.d.ts",
+      "import": "./dist/causal-engine.js",
+      "default": "./dist/causal-engine.js"
+    },
+    "./diagnostic-engine": {
+      "types": "./dist/diagnostic-engine.d.ts",
+      "import": "./dist/diagnostic-engine.js",
+      "default": "./dist/diagnostic-engine.js"
+    },
+    "./state-reconciler": {
+      "types": "./dist/state-reconciler.d.ts",
+      "import": "./dist/state-reconciler.js",
+      "default": "./dist/state-reconciler.js"
+    },
+    "./loop-tracker": {
+      "types": "./dist/loop-tracker.d.ts",
+      "import": "./dist/loop-tracker.js",
+      "default": "./dist/loop-tracker.js"
+    },
+    "./tool-memory": {
+      "types": "./dist/tool-memory.d.ts",
+      "import": "./dist/tool-memory.js",
+      "default": "./dist/tool-memory.js"
+    },
+    "./task-ack": {
+      "types": "./dist/task-ack.d.ts",
+      "import": "./dist/task-ack.js",
+      "default": "./dist/task-ack.js"
+    },
+    "./heal-actions": {
+      "types": "./dist/heal-actions.d.ts",
+      "import": "./dist/heal-actions.js",
+      "default": "./dist/heal-actions.js"
+    },
+    "./agent-rights": {
+      "types": "./dist/agent-rights.d.ts",
+      "import": "./dist/agent-rights.js",
+      "default": "./dist/agent-rights.js"
+    },
+    "./task-lifecycle": {
+      "types": "./dist/task-lifecycle.d.ts",
+      "import": "./dist/task-lifecycle.js",
+      "default": "./dist/task-lifecycle.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js",
+      "default": "./dist/errors.js"
+    },
+    "./power-management": {
+      "types": "./dist/power-management.d.ts",
+      "import": "./dist/power-management.js",
+      "default": "./dist/power-management.js"
+    },
+    "./api-version": {
+      "types": "./dist/api-version.d.ts",
+      "import": "./dist/api-version.js",
+      "default": "./dist/api-version.js"
+    },
+    "./domain-boundary": {
+      "types": "./dist/domain-boundary.d.ts",
+      "import": "./dist/domain-boundary.js",
+      "default": "./dist/domain-boundary.js"
+    },
+    "./r2": {
+      "types": "./dist/r2.d.ts",
+      "import": "./dist/r2.js",
+      "default": "./dist/r2.js"
+    },
+    "./ttl-cache": {
+      "types": "./dist/ttl-cache.d.ts",
+      "import": "./dist/ttl-cache.js",
+      "default": "./dist/ttl-cache.js"
+    },
+    "./platform-resilience": {
+      "types": "./dist/platform-resilience.d.ts",
+      "import": "./dist/platform-resilience.js",
+      "default": "./dist/platform-resilience.js"
+    },
+    "./ml-diagnostics": {
+      "types": "./dist/ml-diagnostics.d.ts",
+      "import": "./dist/ml-diagnostics.js",
+      "default": "./dist/ml-diagnostics.js"
+    },
+    "./ml-degradation-signals": {
+      "types": "./dist/ml-degradation-signals.d.ts",
+      "import": "./dist/ml-degradation-signals.js",
+      "default": "./dist/ml-degradation-signals.js"
+    }
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nirlab-inc/shreai.git",
+    "directory": "shre-sdk"
+  },
+  "homepage": "https://github.com/nirlab-inc/shreai/tree/main/shre-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/nirlab-inc/shreai/issues"
+  },
+  "keywords": [
+    "shre",
+    "ai",
+    "sdk",
+    "multi-agent",
+    "cortex",
+    "rag",
+    "event-bus"
+  ],
+  "author": "Nirlab Inc",
+  "license": "MIT",
+  "dependencies": {
+    "ioredis": "^5.10.1",
+    "pg": "^8.20.0",
+    "zod": "^3.25.76"
+  },
+  "optionalDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.56.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.57.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/sdk-metrics": "^1.30.0",
+    "@opentelemetry/sdk-node": "^0.57.0",
+    "@opentelemetry/semantic-conventions": "^1.30.0"
+  }
+}

@@ -30,13 +30,11 @@
     "@types/node": "^20.12.12",
     "typescript": "^5.7.3"
   },
-  "optionalDependencies": {
-    "@shreai/sdk": "^1.0.0"
-  },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@shreai/sdk": "file:./vendor/shreai-sdk",
     "better-sqlite3": "^12.9.0"
   }
 }

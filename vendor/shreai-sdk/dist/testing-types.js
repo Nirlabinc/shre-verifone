@@ -1,0 +1,38 @@
+export const TEST_LAYERS = [
+    {
+        id: 'L1',
+        name: 'Contract Tests',
+        description: 'Schema validation, collision detection, dependency cycle checks, wave computation, rollback validation',
+        maxDurationMs: 1_000,
+        frequency: 'every-commit',
+        requiresLLM: false,
+        blocksMerge: true,
+    },
+    {
+        id: 'L2',
+        name: 'Determinism Tests',
+        description: 'N-run consistency, state mutation diffs, tool call oracle validation',
+        maxDurationMs: 30_000,
+        frequency: 'pr',
+        requiresLLM: false,
+        blocksMerge: true,
+    },
+    {
+        id: 'L3',
+        name: 'Semantic Tests',
+        description: 'Rubric-based LLM-as-judge evaluation, golden case regression, hallucination probing',
+        maxDurationMs: 300_000,
+        frequency: 'nightly',
+        requiresLLM: true,
+        blocksMerge: false,
+    },
+    {
+        id: 'L4',
+        name: 'Adversarial Tests',
+        description: 'Prompt injection resistance, safety violation scanning, tenant isolation, fault injection',
+        maxDurationMs: 300_000,
+        frequency: 'nightly',
+        requiresLLM: true,
+        blocksMerge: false,
+    },
+];
