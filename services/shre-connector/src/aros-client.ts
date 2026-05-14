@@ -21,6 +21,10 @@ export interface ArosConfig {
   userId?: string;
   role?: string;
   bootstrapKey?: string;
+  /** Stable per-install UUID — survives hostname/PID changes. */
+  deviceId?: string;
+  /** User-supplied friendly name like "Front Counter Register". */
+  deviceAlias?: string;
   sdkVersion?: string;
   timeoutMs?: number;
   log: Logger;
@@ -79,6 +83,8 @@ export class ArosClient {
     if (this.cfg.userId) body.userId = this.cfg.userId;
     if (this.cfg.role) body.role = this.cfg.role;
     if (this.cfg.bootstrapKey) body.bootstrapKey = this.cfg.bootstrapKey;
+    if (this.cfg.deviceId) body.deviceId = this.cfg.deviceId;
+    if (this.cfg.deviceAlias) body.deviceAlias = this.cfg.deviceAlias;
     const data = await this.http("POST", `${this.cfg.endpoint}/v1/sdk/session`, body);
     this.sdkToken = (data.sdkToken as string) ?? null;
     this.sessionId = (data.sessionId as string) ?? null;
@@ -146,7 +152,7 @@ export class ArosClient {
     }
   }
 
-  async heartbeat(eventsQueued: number, deviceId?: string): Promise<void> {
+  async heartbeat(eventsQueued: number, deviceIdOverride?: string): Promise<void> {
     const body: Record<string, unknown> = {
       tenantId: this.cfg.tenantId,
       app: this.cfg.app,
@@ -154,7 +160,9 @@ export class ArosClient {
       eventsQueued,
     };
     if (this.cfg.storeId) body.storeId = this.cfg.storeId;
+    const deviceId = deviceIdOverride ?? this.cfg.deviceId;
     if (deviceId) body.deviceId = deviceId;
+    if (this.cfg.deviceAlias) body.deviceAlias = this.cfg.deviceAlias;
     try {
       await this.http("POST", `${this.cfg.eventsEndpoint}/v1/sdk/heartbeat`, body);
     } catch (err) {

@@ -8,6 +8,9 @@ import { createLiteCortexClient, createLiteEventBus } from "@shreai/sdk/lite";
 import { ArosClient, SDK_VERSION } from "./aros-client.js";
 import { QueueDrain } from "./queue-drain.js";
 import { loadEncryptionKey } from "./crypto.js";
+import {
+  loadArosConfig, loadOrCreateDeviceId, resolveField, resolveDeviceAlias,
+} from "./install-config.js";
 
 const SERVICE_NAME = "verifone-commander";
 const HEARTBEAT_INTERVAL_MS = Number(process.env.SHRE_HEARTBEAT_INTERVAL_MS || 30_000);
@@ -19,18 +22,27 @@ const queueDir = join(runtimeRoot, "queue");
 const cortexPersistPath = join(queueDir, "shre-cortex-lite.json");
 const dbPath = process.env.SHRE_RUNTIME_DB || join(runtimeRoot, "runtime.sqlite");
 
-const tenantId = process.env.SHRE_TENANT_ID || "";
-const app = process.env.SHRE_APP || "verifone_commander_cstoresku";
-const mode = (process.env.SHRE_MODE === "read_write" ? "read_write" : "read_only") as
-  | "read_only"
-  | "read_write";
-const storeId = process.env.SHRE_STORE_ID || "";
+// Resolution order for tenantId / app / mode / storeId / bootstrapKey / deviceAlias:
+//   env var  >  aros-config.json  >  default
+// aros-config.json is the persistent install state (written by setup wizard
+// or install script). Env wins so operators can override per-deploy.
+const installConfig = loadArosConfig(process.env.VERIFONE_SHRE_HOME || join(homedir(), ".verifone-shre-cstoresku"));
+const tenantId = resolveField(process.env.SHRE_TENANT_ID, installConfig.tenantId, "");
+const app = resolveField(process.env.SHRE_APP, installConfig.app, "verifone_commander_cstoresku");
+const modeRaw = resolveField<"read_only" | "read_write">(
+  process.env.SHRE_MODE as "read_only" | "read_write" | undefined,
+  installConfig.mode,
+  "read_only",
+);
+const mode = (modeRaw === "read_write" ? "read_write" : "read_only") as "read_only" | "read_write";
+const storeId = resolveField(process.env.SHRE_STORE_ID, installConfig.storeId, "");
 const userId = process.env.SHRE_USER_ID || "";
 const role = process.env.SHRE_ROLE || "";
 const env = process.env.SHRE_ENV || process.env.BUILD_CHANNEL || "local";
-const bootstrapKey = process.env.SHRE_BOOTSTRAP_KEY || "";
+const bootstrapKey = resolveField(process.env.SHRE_BOOTSTRAP_KEY, installConfig.bootstrapKey, "");
 const endpoint = process.env.SHRE_ENDPOINT || "https://apiauth.shre.ai";
 const eventsEndpoint = process.env.SHRE_EVENTS_ENDPOINT || "https://events.shre.ai";
+const deviceAlias = resolveDeviceAlias(process.env.SHRE_DEVICE_ALIAS, installConfig.deviceAlias);
 
 let stopped = false;
 let heartbeatTimer: NodeJS.Timeout | undefined;
@@ -41,7 +53,8 @@ async function main(): Promise<void> {
   await mkdir(queueDir, { recursive: true });
   await mkdir(join(runtimeRoot, "logs"), { recursive: true });
 
-  const log = createLogger(SERVICE_NAME, { tenantId, app, mode, storeId, env });
+  const deviceId = loadOrCreateDeviceId(runtimeRoot);
+  const log = createLogger(SERVICE_NAME, { tenantId, app, mode, storeId, deviceId, deviceAlias, env });
   const cortex = createLiteCortexClient(SERVICE_NAME, { persistPath: cortexPersistPath });
   const events = createLiteEventBus(SERVICE_NAME, { logger: log });
 
@@ -52,9 +65,11 @@ async function main(): Promise<void> {
     log.warn("read_write mode without SHRE_BOOTSTRAP_KEY — server may reject write operations");
   }
 
-  const nodeId = `${app}:${hostname()}:${process.pid}`;
+  // nodeId uses the stable deviceId so it survives PID/hostname churn.
+  const nodeId = `${app}:${deviceId}`;
   const registration = {
     nodeId, service: SERVICE_NAME, tenantId, app, mode, storeId, env,
+    deviceId, deviceAlias,
     host: hostname(), pid: process.pid, sdkTier: "lite" as const,
     arosEndpoint: endpoint, arosEventsEndpoint: eventsEndpoint,
     bootedAt: new Date().toISOString(),
@@ -67,7 +82,7 @@ async function main(): Promise<void> {
   const aros = tenantId
     ? new ArosClient({
         endpoint, eventsEndpoint, tenantId, app, mode, storeId, userId, role,
-        bootstrapKey, sdkVersion: SDK_VERSION, log,
+        bootstrapKey, deviceId, deviceAlias, sdkVersion: SDK_VERSION, log,
       })
     : null;
   if (aros) {
@@ -86,6 +101,7 @@ async function main(): Promise<void> {
       timestamp: new Date().toISOString(),
       metadata: {
         service: SERVICE_NAME, tenantId, app, mode, storeId, env,
+        deviceId, deviceAlias,
         host: hostname(), pid: process.pid, sdkVersion: SDK_VERSION,
       },
     };
@@ -120,7 +136,7 @@ async function main(): Promise<void> {
     } catch (err) { log.warn("heartbeat publish failed", { error: (err as Error).message }); }
     if (aros) {
       const queued = drain ? drain.countPending() : 0;
-      await aros.heartbeat(queued, hostname());
+      await aros.heartbeat(queued);
     }
   };
   await beat();
