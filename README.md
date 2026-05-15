@@ -186,6 +186,55 @@ The E2E test starts the dashboard API against a temporary runtime folder and ver
 - Diagnostics bundle generation.
 - Activity log events.
 
+## Pilot install on a real store device
+
+For deploying to an actual store (mac or windows), use the per-store installer instead of the dev quick-start above. Pick the path that fits the operator:
+
+### 1. Browser download → double-click (no CLI knowledge required)
+
+1. Open the release page in a browser (requires GitHub login since the repo is private):
+   <https://github.com/Nirpat3/Verifone-Commander-Shre-Cstoresku/releases/latest>
+2. Download **Source code (zip)** and unzip it anywhere (Desktop, Downloads).
+3. Double-click the installer for the OS:
+   - **macOS:** `scripts/setup.command` — right-click → Open the first time (Gatekeeper).
+   - **Windows:** `scripts/setup.cmd` — accept the UAC prompt to elevate.
+4. The setup script asks for the **Shre tenant ID** (from the customer's marketplace signup) and a **device alias** (e.g. "Front Counter Register"), then installs and starts the service.
+
+### 2. Command line (one-shot, for ops folks)
+
+```bash
+# macOS / Linux, in any shell with git + node 20+
+gh release download pilot-v0.1.2 -R Nirpat3/Verifone-Commander-Shre-Cstoresku -A zip
+unzip Verifone-Commander-Shre-Cstoresku-pilot-v0.1.2.zip
+cd Verifone-Commander-Shre-Cstoresku-pilot-v0.1.2
+./scripts/setup.sh --tenant-id <id> --device-alias "Front Counter"
+```
+
+```powershell
+# Windows, in an Administrator PowerShell with git + node 20+
+gh release download pilot-v0.1.2 -R Nirpat3/Verifone-Commander-Shre-Cstoresku -A zip
+Expand-Archive Verifone-Commander-Shre-Cstoresku-pilot-v0.1.2.zip
+cd Verifone-Commander-Shre-Cstoresku-pilot-v0.1.2
+.\scripts\setup.ps1 -TenantId <id> -DeviceAlias "Front Counter"
+```
+
+### 3. Git clone (for developers / dev installs)
+
+```bash
+git clone --branch pilot-v0.1.2 https://github.com/Nirpat3/Verifone-Commander-Shre-Cstoresku.git
+cd Verifone-Commander-Shre-Cstoresku
+./scripts/setup.sh --tenant-id <id> --device-alias "Front Counter"
+```
+
+The setup script:
+1. Checks for Node 20+, git
+2. Runs `npm install && npm run build`
+3. Calls `scripts/install-shre-connector.sh` (mac/linux) or `.ps1` (windows) which writes `aros-config.json`, generates the service unit (launchd / systemd / Scheduled Task), and starts it.
+
+Idempotent — re-running updates the config and restarts the service. To remove, run `./scripts/install-shre-connector.sh --uninstall` (or the `.ps1` equivalent).
+
+For credential rotation, on-disk file inventory, and incident response, see [`SECURITY.md`](SECURITY.md).
+
 ## Docker
 
 ## One-Click Pilot Install
