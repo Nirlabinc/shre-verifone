@@ -10,7 +10,7 @@ services:
       VERIFONE_SHRE_HOME: /runtime
       CSTORESKU_RUNTIME_ROOT: /runtime/cstoresku-runtime
       SHRE_ENDPOINT: ${SHRE_ENDPOINT:-https://apiauth.shre.ai}
-      SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://events.shre.ai}
+      SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://apiauth.shre.ai}
       SHRE_TENANT_ID: ${SHRE_TENANT_ID:-}
       SHRE_APP: ${SHRE_APP:-verifone_commander_cstoresku}
       SHRE_MODE: ${SHRE_MODE:-read_only}
@@ -71,7 +71,7 @@ services:
     environment:
       VERIFONE_SHRE_HOME: /runtime
       SHRE_ENDPOINT: ${SHRE_ENDPOINT:-https://apiauth.shre.ai}
-      SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://events.shre.ai}
+      SHRE_EVENTS_ENDPOINT: ${SHRE_EVENTS_ENDPOINT:-https://apiauth.shre.ai}
       SHRE_TENANT_ID: ${SHRE_TENANT_ID:-}
       SHRE_APP: ${SHRE_APP:-verifone_commander_cstoresku}
       SHRE_MODE: ${SHRE_MODE:-read_only}

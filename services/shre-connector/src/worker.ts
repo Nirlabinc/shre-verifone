@@ -41,7 +41,10 @@ const role = process.env.SHRE_ROLE || "";
 const env = process.env.SHRE_ENV || process.env.BUILD_CHANNEL || "local";
 const bootstrapKey = resolveField(process.env.SHRE_BOOTSTRAP_KEY, installConfig.bootstrapKey, "");
 const endpoint = process.env.SHRE_ENDPOINT || "https://apiauth.shre.ai";
-const eventsEndpoint = process.env.SHRE_EVENTS_ENDPOINT || "https://events.shre.ai";
+// AROS consolidated events plane onto apiauth.shre.ai. The legacy events.shre.ai
+// host returns sinkReason:"sink_unconfigured" for every batch. Override via
+// SHRE_EVENTS_ENDPOINT if Shre splits planes again.
+const eventsEndpoint = process.env.SHRE_EVENTS_ENDPOINT || "https://apiauth.shre.ai";
 const deviceAlias = resolveDeviceAlias(process.env.SHRE_DEVICE_ALIAS, installConfig.deviceAlias);
 
 let stopped = false;
