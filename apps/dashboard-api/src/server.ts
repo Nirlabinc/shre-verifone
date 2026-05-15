@@ -177,7 +177,7 @@ function enforceLocalAdmin(req: IncomingMessage, res: ServerResponse, path: stri
   if (path.startsWith("/api/auth/")) return true;
   if (path === "/api/setup/first-run") return true;
   if (path === "/api/leads/capture") return true;
-  if (path === "/api/health" || path === "/api/version" || path === "/api/capabilities" || path === "/api/connector/manifest" || path === "/api/messages/inbound") return true;
+  if (path === "/api/health" || path === "/api/version" || path === "/api/capabilities" || path === "/api/connector/manifest" || path === "/api/messages/inbound" || path === "/api/readiness/public") return true;
   if (validSession(req)) return true;
   if (localAdminToken) {
     const provided = String(req.headers["x-local-admin-token"] || "");
@@ -3698,6 +3698,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       messageAudit: "/api/messages/audit",
       notifications: "/api/notifications",
       readiness: "/api/readiness",
+      readinessPublic: "/api/readiness/public",
       accessMode: "/api/access-mode",
       addons: "/api/addons",
       adapters: "/api/adapters",
@@ -3748,6 +3749,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/readiness") {
     sendJson(res, 200, currentReadiness());
+    return;
+  }
+
+  if (path === "/api/readiness/public") {
+    // Minimal unauthenticated probe for monitoring / uptime checks.
+    // Reveals readiness booleans + version only — no tenant/connector/queue detail.
+    const r = currentReadiness();
+    sendJson(res, 200, {
+      ready: r.ready === true,
+      productionReady: r.productionReady === true,
+      version: versionInfo(),
+      timestamp: new Date().toISOString(),
+    });
     return;
   }
 
