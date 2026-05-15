@@ -204,24 +204,24 @@ For deploying to an actual store (mac or windows), use the per-store installer i
 
 ```bash
 # macOS / Linux, in any shell with git + node 20+
-gh release download pilot-v0.1.3 -R Nirlabinc/shre-verifone -A zip
-unzip shre-verifone-pilot-v0.1.3.zip
-cd shre-verifone-pilot-v0.1.3
+gh release download pilot-v0.1.4 -R Nirlabinc/shre-verifone -A zip
+unzip shre-verifone-pilot-v0.1.4.zip
+cd shre-verifone-pilot-v0.1.4
 ./scripts/setup.sh --tenant-id <id> --device-alias "Front Counter"
 ```
 
 ```powershell
 # Windows, in an Administrator PowerShell with git + node 20+
-gh release download pilot-v0.1.3 -R Nirlabinc/shre-verifone -A zip
-Expand-Archive shre-verifone-pilot-v0.1.3.zip
-cd shre-verifone-pilot-v0.1.3
+gh release download pilot-v0.1.4 -R Nirlabinc/shre-verifone -A zip
+Expand-Archive shre-verifone-pilot-v0.1.4.zip
+cd shre-verifone-pilot-v0.1.4
 .\scripts\setup.ps1 -TenantId <id> -DeviceAlias "Front Counter"
 ```
 
 ### 3. Git clone (for developers / dev installs)
 
 ```bash
-git clone --branch pilot-v0.1.3 https://github.com/Nirlabinc/shre-verifone.git
+git clone --branch pilot-v0.1.4 https://github.com/Nirlabinc/shre-verifone.git
 cd shre-verifone
 ./scripts/setup.sh --tenant-id <id> --device-alias "Front Counter"
 ```
