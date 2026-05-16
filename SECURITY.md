@@ -28,6 +28,10 @@ If `.install-secret` leaks, treat all encrypted state as compromised: revoke any
 
 If `aros-config.json` leaks, rotate `bootstrapKey` with the Shre admin (mandatory if mode is `read_write`), and consider regenerating `deviceId` since the leaked install may continue impersonating until the tenant invalidates the device.
 
+## Authentication model
+
+This pilot uses a **single local admin per install** — one `loginSecret` is the entire login credential. There are no per-user accounts, no roles, and no SSO. Anyone who knows the secret can act as admin on that device. See [`docs/customer-onboarding.md`](docs/customer-onboarding.md#login-model-single-local-admin) for the operator-facing explanation. Multi-user / role-based access is post-pilot work.
+
 ## Credential rotation
 
 | Credential | How to rotate |

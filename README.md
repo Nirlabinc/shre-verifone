@@ -233,7 +233,9 @@ The setup script:
 
 Idempotent — re-running updates the config and restarts the service. To remove, run `./scripts/install-shre-connector.sh --uninstall` (or the `.ps1` equivalent).
 
-For credential rotation, on-disk file inventory, and incident response, see [`SECURITY.md`](SECURITY.md).
+### Login model: single local admin
+
+The pilot uses **one local admin per device** — the `loginSecret` set at first-run is the only login credential. No multi-user accounts, no roles, no SSO. See [`docs/customer-onboarding.md`](docs/customer-onboarding.md#login-model-single-local-admin) and [`SECURITY.md`](SECURITY.md) for the full operator-facing explanation, rotation, and incident-response steps.
 
 ## Docker
 
