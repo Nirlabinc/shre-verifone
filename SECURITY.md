@@ -30,7 +30,7 @@ If `aros-config.json` leaks, rotate `bootstrapKey` with the Shre admin (mandator
 
 ## Authentication model
 
-This pilot uses a **single local admin per install** — one `loginSecret` is the entire login credential. There are no per-user accounts, no roles, and no SSO. Anyone who knows the secret can act as admin on that device. See [`docs/customer-onboarding.md`](docs/customer-onboarding.md#login-model-single-local-admin) for the operator-facing explanation. Multi-user / role-based access is post-pilot work.
+This pilot provisions **one workspace and one user per install**, and that user is the workspace admin. The `loginSecret` set at first-run is the entire login credential. There is no second user, no role distinction, no SSO. Anyone with the secret has full admin access on the device. Multi-user / role-based access (separate admin / manager / cashier logins) is post-pilot work. See [`docs/customer-onboarding.md`](docs/customer-onboarding.md#login-model-one-workspace-one-user-one-password) for the operator-facing explanation.
 
 ## Credential rotation
 
