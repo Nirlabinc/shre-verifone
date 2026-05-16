@@ -45,6 +45,7 @@ echo
 TENANT_ID=""
 DEVICE_ALIAS=""
 STORE_ID=""
+USER_ID=""
 BOOTSTRAP_KEY=""
 MODE="read_only"
 APP=""
@@ -55,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     --tenant-id) TENANT_ID="$2"; shift 2;;
     --device-alias) DEVICE_ALIAS="$2"; shift 2;;
     --store-id) STORE_ID="$2"; shift 2;;
+    --user-id) USER_ID="$2"; shift 2;;
     --bootstrap-key) BOOTSTRAP_KEY="$2"; shift 2;;
     --mode) MODE="$2"; shift 2;;
     --app) APP="$2"; shift 2;;
@@ -79,6 +81,11 @@ if [[ -z "$STORE_ID" ]]; then
   printf "Store ID (e.g., store_acme_001, or leave blank for 'default'): " >&2
   read -r STORE_ID || true
   [[ -z "$STORE_ID" ]] && STORE_ID="default"
+fi
+
+if [[ -z "$USER_ID" ]]; then
+  printf "User ID for AROS event attribution (your work email or chosen handle, leave blank to skip): " >&2
+  read -r USER_ID || true
 fi
 
 if [[ "$MODE" = "read_write" && -z "$BOOTSTRAP_KEY" ]]; then
@@ -106,6 +113,7 @@ CONNECTOR_ARGS=(
   --mode "$MODE"
   --install-root "$REPO_ROOT"
 )
+[[ -n "$USER_ID" ]] && CONNECTOR_ARGS+=(--user-id "$USER_ID")
 [[ -n "$BOOTSTRAP_KEY" ]] && CONNECTOR_ARGS+=(--bootstrap-key "$BOOTSTRAP_KEY")
 [[ -n "$APP" ]] && CONNECTOR_ARGS+=(--app "$APP")
 CONNECTOR_ARGS+=("${EXTRA_ARGS[@]}")

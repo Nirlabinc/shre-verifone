@@ -23,6 +23,7 @@ param(
   [string]$TenantId,
   [string]$DeviceAlias,
   [string]$StoreId = "default",
+  [string]$UserId = "",
   [string]$BootstrapKey = "",
   [ValidateSet("read_only", "read_write")][string]$Mode = "read_only",
   [string]$App = "verifone_commander_cstoresku",
@@ -89,6 +90,8 @@ Write-Host "app           = $App"
 Write-Host "mode          = $Mode"
 Write-Host "store-id      = $StoreId"
 Write-Host "device-alias  = $DeviceAlias"
+$userIdDisplay = if ([string]::IsNullOrWhiteSpace($UserId)) { "(unset — events will carry no userId)" } else { $UserId }
+Write-Host "user-id       = $userIdDisplay"
 Write-Host "task-name     = $TaskName"
 Write-Host ""
 
@@ -104,6 +107,7 @@ $cfg = [ordered]@{
   storeId     = $StoreId
   deviceAlias = $DeviceAlias
 }
+if (-not [string]::IsNullOrWhiteSpace($UserId))       { $cfg.userId = $UserId }
 if (-not [string]::IsNullOrWhiteSpace($BootstrapKey)) { $cfg.bootstrapKey = $BootstrapKey }
 if ($DryRun) {
   Write-Host "[dry-run] would write $configPath :"

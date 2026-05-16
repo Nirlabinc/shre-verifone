@@ -36,7 +36,7 @@ const modeRaw = resolveField<"read_only" | "read_write">(
 );
 const mode = (modeRaw === "read_write" ? "read_write" : "read_only") as "read_only" | "read_write";
 const storeId = resolveField(process.env.SHRE_STORE_ID, installConfig.storeId, "");
-const userId = process.env.SHRE_USER_ID || "";
+const userId = resolveField(process.env.SHRE_USER_ID, installConfig.userId, "");
 const role = process.env.SHRE_ROLE || "";
 const env = process.env.SHRE_ENV || process.env.BUILD_CHANNEL || "local";
 const bootstrapKey = resolveField(process.env.SHRE_BOOTSTRAP_KEY, installConfig.bootstrapKey, "");

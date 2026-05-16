@@ -23,6 +23,7 @@ set -euo pipefail
 TENANT_ID=""
 DEVICE_ALIAS=""
 STORE_ID="default"
+USER_ID=""
 BOOTSTRAP_KEY=""
 MODE="read_only"
 APP="verifone_commander_cstoresku"
@@ -42,6 +43,7 @@ while [[ $# -gt 0 ]]; do
     --tenant-id) TENANT_ID="$2"; shift 2;;
     --device-alias) DEVICE_ALIAS="$2"; shift 2;;
     --store-id) STORE_ID="$2"; shift 2;;
+    --user-id) USER_ID="$2"; shift 2;;
     --bootstrap-key) BOOTSTRAP_KEY="$2"; shift 2;;
     --mode) MODE="$2"; shift 2;;
     --app) APP="$2"; shift 2;;
@@ -118,6 +120,7 @@ echo "app           = $APP"
 echo "mode          = $MODE"
 echo "store-id      = $STORE_ID"
 echo "device-alias  = $DEVICE_ALIAS"
+echo "user-id       = ${USER_ID:-(unset — events will carry no userId)}"
 echo "label         = $LABEL"
 echo
 
@@ -125,13 +128,8 @@ echo
 mkdir -p "$RUNTIME_ROOT" "$LOG_DIR" "$HOME/Library/LaunchAgents" 2>/dev/null || true
 CONFIG_PATH="$RUNTIME_ROOT/aros-config.json"
 
-# JSON-encode bootstrap_key only if provided (avoid empty-string write)
-KEY_FIELD=""
-if [[ -n "$BOOTSTRAP_KEY" ]]; then
-  KEY_FIELD=$(printf ',\n  "bootstrapKey": %s' "$(printf '%s' "$BOOTSTRAP_KEY" | "$NODE_BIN" -e 'process.stdout.write(JSON.stringify(require("fs").readFileSync(0,"utf8")))')")
-fi
-
-# Use node for JSON encoding to handle quoting safely
+# Use node for JSON encoding to handle quoting safely. userId / bootstrapKey
+# are written only when explicitly provided — empty strings are dropped.
 "$NODE_BIN" -e "
 const fs = require('fs');
 const cfg = {
@@ -141,9 +139,10 @@ const cfg = {
   storeId:     process.argv[4],
   deviceAlias: process.argv[5],
 };
-if (process.argv[6]) cfg.bootstrapKey = process.argv[6];
-fs.writeFileSync(process.argv[7], JSON.stringify(cfg, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
-" "$TENANT_ID" "$APP" "$MODE" "$STORE_ID" "$DEVICE_ALIAS" "$BOOTSTRAP_KEY" "$CONFIG_PATH"
+if (process.argv[6]) cfg.userId = process.argv[6];
+if (process.argv[7]) cfg.bootstrapKey = process.argv[7];
+fs.writeFileSync(process.argv[8], JSON.stringify(cfg, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+" "$TENANT_ID" "$APP" "$MODE" "$STORE_ID" "$DEVICE_ALIAS" "$USER_ID" "$BOOTSTRAP_KEY" "$CONFIG_PATH"
 chmod 600 "$CONFIG_PATH" 2>/dev/null || true
 echo "wrote $CONFIG_PATH"
 

@@ -10,6 +10,7 @@ param(
   [string]$TenantId,
   [string]$DeviceAlias,
   [string]$StoreId,
+  [string]$UserId,
   [string]$BootstrapKey,
   [ValidateSet("read_only", "read_write")][string]$Mode = "read_only",
   [string]$App = ""
@@ -66,6 +67,9 @@ if ([string]::IsNullOrWhiteSpace($StoreId)) {
   $StoreId = Read-Host "Store ID (or leave blank for 'default')"
   if ([string]::IsNullOrWhiteSpace($StoreId)) { $StoreId = "default" }
 }
+if ([string]::IsNullOrWhiteSpace($UserId)) {
+  $UserId = Read-Host "User ID for AROS event attribution (your work email or chosen handle, leave blank to skip)"
+}
 if ($Mode -eq "read_write" -and [string]::IsNullOrWhiteSpace($BootstrapKey)) {
   $secure = Read-Host "Bootstrap key (required for read_write mode)" -AsSecureString
   $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
@@ -94,6 +98,7 @@ $installerArgs = @{
   Mode        = $Mode
   InstallRoot = $repoRoot
 }
+if (-not [string]::IsNullOrWhiteSpace($UserId))       { $installerArgs.UserId = $UserId }
 if (-not [string]::IsNullOrWhiteSpace($BootstrapKey)) { $installerArgs.BootstrapKey = $BootstrapKey }
 if (-not [string]::IsNullOrWhiteSpace($App))          { $installerArgs.App = $App }
 

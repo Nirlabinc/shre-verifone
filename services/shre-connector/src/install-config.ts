@@ -22,6 +22,10 @@ export interface ArosInstallConfig {
   tenantId?: string;
   bootstrapKey?: string;
   storeId?: string;
+  /** End-user identity tag included on every AROS event. Derived from the
+   *  onboarded profile.email during first-run-setup (see dashboard-api/server.ts),
+   *  but the env var SHRE_USER_ID still takes priority for ops overrides. */
+  userId?: string;
   deviceAlias?: string;
   app?: string;
   mode?: "read_only" | "read_write";
